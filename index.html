@@ -954,7 +954,7 @@
       <h2>② 或直接输入症状文字</h2>
       <p class="sub" style="margin-bottom:4px;">可一次输入多个，用顿号或空格隔开，如：发烧、头痛、咳嗽。</p>
       <div class="inputrow">
-        <input class="inp" id="symInput" placeholder="如：发烧、头痛" onkeydown="if(event.key==='Enter')symTextSubmit()">
+        <input class="inp" id="symInput" placeholder="如：发烧、头痛" onkeydown="if(event.key==='Enter')symTextSubmit()" maxlength="200">
         <button class="btn line" onclick="voiceToInput('symInput')" title="语音输入症状">🎤</button>
       </div>
       <button class="btn block" style="margin-top:10px;" onclick="symTextSubmit()">✅ 识别并选中症状</button>
@@ -995,13 +995,13 @@
       <h2>＋ 添加用药</h2>
       <label class="f">药品名称（可说名字或拍照识别）</label>
       <div class="inputrow">
-        <input class="inp" id="medName" placeholder="如：阿司匹林">
+        <input class="inp" id="medName" placeholder="如：阿司匹林" maxlength="50" autocomplete="off">
         <button class="btn line" onclick="voiceToInput('medName')" title="语音输入药名">🎤</button>
         <button class="btn line" onclick="scanMed()" title="拍照识别药盒">📷</button>
       </div>
       <label class="f" style="margin-top:12px;">剂量 / 说明</label>
       <div class="inputrow">
-        <input class="inp" id="medDose" placeholder="如：每次1片，饭后">
+        <input class="inp" id="medDose" placeholder="如：每次1片，饭后" maxlength="50" autocomplete="off">
         <button class="btn line" onclick="voiceToInput('medDose')" title="语音输入剂量">🎤</button>
       </div>
       <label class="f" style="margin-top:12px;">频率
@@ -1028,7 +1028,7 @@
     <div class="card">
       <h2>🔎 查药</h2>
       <div class="inputrow">
-        <input class="inp" id="drugSearch" placeholder="如：阿司匹林 / 拜阿司匹灵">
+        <input class="inp" id="drugSearch" placeholder="如：阿司匹林 / 拜阿司匹灵" maxlength="50" autocomplete="off">
         <button class="btn line" onclick="voiceDrugSearch()" title="语音输入药名">🎤</button>
       </div>
       <div class="sym-list" id="drugCats" style="margin-top:12px;"></div>
@@ -1055,7 +1055,7 @@
       <h2 style="font-size:19px;margin-bottom:2px;">🔎 输入地点查医院</h2>
       <p class="sub" style="margin-bottom:4px;">输入小区、街道或地标名称，以该位置推荐附近医院。</p>
       <div class="inputrow">
-        <input class="inp" id="addrInput" placeholder="如：天府广场" onkeydown="if(event.key==='Enter')searchPlace()">
+        <input class="inp" id="addrInput" placeholder="如：天府广场" onkeydown="if(event.key==='Enter')searchPlace()" maxlength="100" autocomplete="off">
         <button class="btn line" onclick="voiceToInput('addrInput')" title="语音输入地点">🎤</button>
       </div>
       <button class="btn block" style="margin-top:10px;" onclick="searchPlace()">🔍 按这个地点找医院</button>
@@ -1085,7 +1085,7 @@
       <p class="sub" id="bindCardDesc">输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。支持绑定多位老人。</p>
       <div id="boundList"></div>
       <div class="gap6" id="bindFormArea">
-        <input class="inp" id="bindCode" placeholder="输入老人的 6 位邀请码">
+        <input class="inp" id="bindCode" placeholder="输入老人的 6 位邀请码" maxlength="6" autocomplete="off" inputmode="numeric">
         <button class="btn block" onclick="bindFamily()">添加绑定</button>
       </div>
     </div>
@@ -1130,11 +1130,25 @@
   <div class="sheet">
     <h3 id="authTitle">登录 / 注册</h3>
     <label class="f">手机号 / 账号
-      <input class="inp" id="authUser" placeholder="请输入手机号或账号">
+      <input class="inp" id="authUser" placeholder="请输入手机号或账号 (3-30位)" maxlength="30" autocomplete="off">
     </label>
     <label class="f">密码
-      <input class="inp" id="authPass" type="password" placeholder="请输入密码">
+      <input class="inp" id="authPass" type="password" placeholder="请输入密码 (至少6位)" maxlength="128" oninput="checkPassStrength(this.value)" autocomplete="new-password">
     </label>
+    <div id="passStrength" style="display:none;margin:-6px 0 8px;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;">
+      <div id="passStrengthBar" style="height:100%;width:0%;background:#ef4444;border-radius:2px;transition:all .2s;"></div>
+    </div>
+    <label class="f" id="confirmPassLabel" style="display:none;">确认密码
+      <input class="inp" id="authPass2" type="password" placeholder="请再次输入密码" maxlength="128" autocomplete="new-password">
+    </label>
+    <div style="font-size:13px;display:flex;gap:6px;margin-bottom:4px;">
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+        <input type="radio" name="authMode" value="login" checked onchange="switchAuthMode()"> 登录
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+        <input type="radio" name="authMode" value="register" onchange="switchAuthMode()"> 注册
+      </label>
+    </div>
     <label class="f" id="rolePick">我的身份
       <div class="gap6">
         <button class="btn block" id="roleElder" onclick="pickRole('elder')">👵 我是老人</button>
@@ -1142,10 +1156,10 @@
       </div>
     </label>
     <div class="gap6">
-      <button class="btn block" onclick="doLogin()">登录</button>
-      <button class="btn block ghost" onclick="doRegister()">注册新账号</button>
+      <button class="btn block" id="authSubmitBtn" onclick="doLogin()">登录</button>
+      <button class="btn block ghost" id="authRegisterBtn" style="display:none;" onclick="doRegister()">确认注册</button>
     </div>
-    <p class="hint">首次使用请先注册。账号保存在云端，换设备也能登录。</p>
+    <p class="hint" id="authHint">首次使用请先注册。账号保存在云端，换设备也能登录。</p>
   </div>
 </div>
 
@@ -1184,7 +1198,7 @@
       3. 粘贴到下方输入框
     </p>
     <label class="f">PushPlus Token
-      <input class="inp" id="ppTokenInput" placeholder="粘贴你的 Token">
+      <input class="inp" id="ppTokenInput" placeholder="粘贴你的 Token" maxlength="200" autocomplete="off">
     </label>
     <div class="gap6" style="margin-top:12px;">
       <button class="btn block" onclick="confirmPushPlus()">保存绑定</button>
@@ -1962,6 +1976,68 @@ function saveFamilyBinds(){
 
 const $ = id => document.getElementById(id);
 
+/* ==================== 输入安全消毒 ==================== */
+function sanitizeInput(str, maxLen){
+  if(typeof str !== 'string') return '';
+  let s = str.trim();
+  // 移除 SQL 注入危险字符
+  s = s.replace(/['";\\]/g, '');
+  s = s.replace(/--/g, '');
+  s = s.replace(/\/\*|\*\//g, '');
+  s = s.replace(/;\s*/g, '');
+  // 移除 XSS 危险标签和事件
+  s = s.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/<\/?script[^>]*>/gi, '');
+  s = s.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '');
+  s = s.replace(/javascript:/gi, '');
+  s = s.replace(/<\s*iframe[^>]*>/gi, '');
+  s = s.replace(/<\s*img[^>]*on\w+\s*=[^>]*>/gi, '');
+  // 移除控制字符
+  s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  // 合并多余空白
+  s = s.replace(/\s{3,}/g, '  ');
+  // 长度限制
+  if(maxLen && s.length > maxLen) s = s.substring(0, maxLen);
+  return s;
+}
+function sanitizeUsername(str){
+  if(typeof str !== 'string') return '';
+  let s = str.trim();
+  s = s.replace(/['";\\`]/g, '');
+  s = s.replace(/--/g, '');
+  s = s.replace(/\s+/g, '');
+  s = s.replace(/<[^>]*>/g, '');
+  if(s.length > 30) s = s.substring(0, 30);
+  return s;
+}
+function sanitizeCode(str){
+  if(typeof str !== 'string') return '';
+  let s = str.trim();
+  s = s.replace(/\D/g, '');
+  if(s.length > 6) s = s.substring(0, 6);
+  return s;
+}
+function sanitizePass(str){
+  if(typeof str !== 'string') return '';
+  let s = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  if(s.length > 128) s = s.substring(0, 128);
+  return s;
+}
+function isValidUsername(u){
+  if(!u || typeof u !== 'string') return {ok:false, msg:'请输入账号'};
+  if(u.length < 3) return {ok:false, msg:'账号至少3位'};
+  if(u.length > 30) return {ok:false, msg:'账号不能超过30位'};
+  if(/[<>'"";\\]/.test(u)) return {ok:false, msg:'账号包含非法字符'};
+  if(/^\s|\s$/.test(u)) return {ok:false, msg:'账号不能以空格开头或结尾'};
+  return {ok:true};
+}
+function isValidPassword(p){
+  if(!p) return {ok:false, msg:'请输入密码'};
+  if(p.length < 6) return {ok:false, msg:'密码至少6位'};
+  if(p.length > 128) return {ok:false, msg:'密码不能超过128位'};
+  return {ok:true};
+}
+
 /* ==================== IndexedDB 数据库 ==================== */
 const DB = {
   db: null,
@@ -2162,7 +2238,7 @@ async function showPushPlusMask(){
 }
 
 async function confirmPushPlus(){
-  const token = $('ppTokenInput').value;
+  const token = sanitizeInput($('ppTokenInput').value, 200);
   const r = await savePushPlusToken(token);
   toast(r.msg);
   if(r.ok){ $('pushplusMask').classList.remove('show'); updatePPBadge(); }
@@ -2714,8 +2790,51 @@ function openAuth(){
   $('authMask').classList.add('show');
   $('authTitle').textContent = currentUser ? '切换账号' : '登录 / 注册';
   pickRole(myRole);
+  switchAuthMode();
 }
 function closeAuth(){ $('authMask').classList.remove('show'); }
+function switchAuthMode(){
+  const mode = document.querySelector('input[name="authMode"]:checked')?.value || 'login';
+  const isReg = mode === 'register';
+  const confirmLabel = $('confirmPassLabel');
+  const submitBtn = $('authSubmitBtn');
+  const regBtn = $('authRegisterBtn');
+  const hint = $('authHint');
+  const title = $('authTitle');
+  const strength = $('passStrength');
+  if(isReg){
+    title.textContent = '注册新账号';
+    confirmLabel.style.display = '';
+    submitBtn.style.display = 'none';
+    regBtn.style.display = '';
+    strength.style.display = '';
+    hint.textContent = '密码至少6位，需两次输入一致。账号保存在云端。';
+  } else {
+    title.textContent = currentUser ? '切换账号' : '登录';
+    confirmLabel.style.display = 'none';
+    submitBtn.style.display = '';
+    regBtn.style.display = 'none';
+    strength.style.display = 'none';
+    hint.textContent = '首次使用请先注册。账号保存在云端，换设备也能登录。';
+  }
+}
+function checkPassStrength(val){
+  const bar = $('passStrengthBar');
+  const strength = $('passStrength');
+  if(!bar || !strength) return;
+  if(!val){ strength.style.display = 'none'; return; }
+  strength.style.display = '';
+  let score = 0;
+  if(val.length >= 6) score++;
+  if(val.length >= 10) score++;
+  if(/[A-Z]/.test(val) && /[a-z]/.test(val)) score++;
+  if(/\d/.test(val)) score++;
+  if(/[^A-Za-z0-9]/.test(val)) score++;
+  const pct = Math.min(score / 4, 1) * 100;
+  bar.style.width = pct + '%';
+  const colors = ['#ef4444','#f97316','#eab308','#22c55e','#10b981'];
+  bar.style.background = colors[Math.min(score, colors.length - 1)];
+}
 function resetAppState(){
   selectedSyms.clear();
   flowIndex = 0;
@@ -2736,9 +2855,15 @@ function resetAppState(){
   renderTimeInputs($('medFreq')?.value || 'daily');
 }
 async function doRegister(){
-  const u = $('authUser').value.trim(), p = $('authPass').value;
-  if(!u || !p){ toast('请输入账号和密码'); return; }
-  if(u.length < 3){ toast('账号至少3位'); return; }
+  const u = sanitizeUsername($('authUser').value);
+  const p = sanitizePass($('authPass').value);
+  const p2 = sanitizePass($('authPass2')?.value || '');
+  const uv = isValidUsername(u);
+  if(!uv.ok){ toast(uv.msg); return; }
+  const pv = isValidPassword(p);
+  if(!pv.ok){ toast(pv.msg); return; }
+  if(!p2){ toast('请再次输入密码'); return; }
+  if(p !== p2){ toast('两次密码输入不一致'); return; }
   if(await DB.get('users', u)){ toast('该账号已存在，请直接登录'); return; }
   const code = String(Math.floor(100000 + Math.random()*900000));
   let h = null, note = '已保存本机';
@@ -2753,7 +2878,6 @@ async function doRegister(){
         body: JSON.stringify({id:u, pass_hash:h, family_code:code, role:pickedRole})
       });
       if(!res.ok && res.status === 400){
-        // 云端尚未加 role 列，降级重试
         res = await sbFetch('users', {
           method: 'POST',
           headers: {'Prefer': 'return=minimal'},
@@ -2787,8 +2911,12 @@ async function localVerify(rec, p){
   return rec.pass === p;
 }
 async function doLogin(){
-  const u = $('authUser').value.trim(), p = $('authPass').value;
-  if(!u || !p){ toast('请输入账号和密码'); return; }
+  const u = sanitizeUsername($('authUser').value);
+  const p = sanitizePass($('authPass').value);
+  const uv = isValidUsername(u);
+  if(!uv.ok){ toast(uv.msg); return; }
+  const pv = isValidPassword(p);
+  if(!pv.ok){ toast(pv.msg); return; }
   let code = null, role = null, boundElder = null, wrongPass = false, netFail = false;
   if(cloudUsable()){
     try{
@@ -3005,7 +3133,7 @@ function matchSymptoms(txt){
 }
 function symTextSubmit(){
   const el = $('symInput');
-  const raw = el ? el.value.trim() : '';
+  const raw = el ? sanitizeInput(el.value, 200) : '';
   if(!raw){ toast('请先输入症状文字，如：发烧、头痛'); speak('请先输入症状文字'); return; }
   const hits = matchSymptoms(raw);
   if(hits.length){
@@ -3235,9 +3363,9 @@ function timePoints(med){
 }
 
 async function addMed(){
-  const name = $('medName').value.trim();
-  const dose = $('medDose').value.trim();
-  const freq = $('medFreq').value;
+  const name = sanitizeInput($('medName').value, 50);
+  const dose = sanitizeInput($('medDose').value, 50);
+  const freq = sanitizeInput($('medFreq').value, 20);
   const times = collectTimes();
   if(!name){ toast('请填写药品名称'); return; }
   if(times.length === 0){ toast('请至少设置一个提醒时间'); return; }
@@ -3308,7 +3436,7 @@ function showDrugAdvice(drug){
 }
 async function showAllAdvice(){
   const meds = await DB.all('meds');
-  const curDrug = matchDrug($('medName').value.trim());
+  const curDrug = matchDrug(sanitizeInput($('medName').value, 50));
   const seen = new Set();
   const unique = [];
   meds.forEach(m=>{
@@ -3369,7 +3497,7 @@ function setDrugCat(c){
 function renderDrugLib(){
   const el = $('drugList');
   if(!el) return;
-  const q = ($('drugSearch') ? $('drugSearch').value : '').toLowerCase().replace(/\s/g,'');
+  const q = sanitizeInput(($('drugSearch') ? $('drugSearch').value : ''), 50).toLowerCase().replace(/\s/g,'');
   const list = DRUG_DB.filter(d=>{
     if(drugCat !== '全部' && d.cat !== drugCat) return false;
     if(!q) return true;
@@ -3559,7 +3687,7 @@ function locate(){
 }
 function searchPlace(){
   const el = $('addrInput');
-  const kw = el ? el.value.trim() : '';
+  const kw = el ? sanitizeInput(el.value, 100) : '';
   if(!kw){
     toast('请先输入地点，如小区、街道或地标名');
     speak('请先输入地点名称');
@@ -3901,7 +4029,7 @@ function unbindFamily(){
   toast('已解除所有绑定');
 }
 function bindFamily(){
-  const code = $('bindCode').value.trim();
+  const code = sanitizeCode($('bindCode').value);
   if(code.length !== 6){ toast('请输入 6 位邀请码'); return; }
   if(familyBinds.includes(code)){ toast('该老人已绑定'); return; }
   familyBinds.push(code);
