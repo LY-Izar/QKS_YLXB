@@ -975,6 +975,10 @@
   <div class="view" id="view-med">
     <h1>用药提醒</h1>
     <p class="lead">录入医嘱后，到点会用声音和通知提醒您吃药。</p>
+    <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <span class="badge" id="timeOffsetBadge" style="background:#e6f4ea;color:#1a7a3a;">时间校准中…</span>
+      <span id="beijingTime" style="font-size:20px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums;">--:--:--</span>
+    </div>
     <div class="card">
       <h2>＋ 添加用药</h2>
       <label class="f">药品名称（可说名字或拍照识别）</label>
@@ -2721,6 +2725,72 @@ function speakFlow(){
   speak('就医全流程共8步。' + txt);
 }
 
+/* ==================== 北京时间校准 ==================== */
+let _timeOffset = 0;
+async function calibrateTime(){
+  const t0 = Date.now();
+  let serverTime = 0;
+  const urls = [
+    'https://timeapi.io/api/Time/current/zone?timeZone=Asia/Shanghai',
+    'https://worldtimeapi.org/api/timezone/Asia/Shanghai',
+  ];
+  for(const url of urls){
+    try{
+      const res = await fetch(url, {cache:'no-store'});
+      if(!res.ok) continue;
+      const data = await res.json();
+      const t1 = Date.now();
+      const rtt = (t1 - t0) / 2;
+      if(url.includes('timeapi.io')){
+        serverTime = new Date(data.dateTime).getTime() + rtt;
+      }else{
+        serverTime = new Date(data.datetime).getTime() + rtt;
+      }
+      if(serverTime > 0){ _timeOffset = serverTime - Date.now(); localStorage.setItem('med_time_offset', String(_timeOffset)); break; }
+    }catch(e){ continue; }
+  }
+  if(serverTime === 0){
+    const saved = localStorage.getItem('med_time_offset');
+    if(saved !== null) _timeOffset = parseFloat(saved);
+    else {
+      const now = new Date();
+      const utcBeijing = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds());
+      _timeOffset = utcBeijing - now;
+    }
+  }
+  const badge = $('timeOffsetBadge');
+  if(badge){
+    const offsetSec = Math.round(_timeOffset / 1000);
+    if(Math.abs(offsetSec) <= 2){
+      badge.textContent = '北京时间已校准';
+      badge.style.background = '#e6f4ea';
+      badge.style.color = '#1a7a3a';
+    }else if(Math.abs(offsetSec) <= 30){
+      badge.textContent = '已校准（本机偏差' + (offsetSec>=0?'+':'') + offsetSec + '秒）';
+      badge.style.background = '#fff3d6';
+      badge.style.color = '#9a6a00';
+    }else{
+      badge.textContent = '⚠️ 本机时差过大（偏差' + (offsetSec>=0?'+':'') + offsetSec + '秒）';
+      badge.style.background = '#fde8e8';
+      badge.style.color = '#c53030';
+    }
+  }
+}
+function nowBeijing(){
+  return new Date(Date.now() + _timeOffset);
+}
+function startBeijingClock(){
+  const el = $('beijingTime');
+  if(!el) return;
+  function tick(){
+    const d = nowBeijing();
+    const pad = n => String(n).padStart(2,'0');
+    el.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' 北京时间';
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
 /* ==================== 用药提醒 ==================== */
 function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
 function addTime(t, hours){ let m = timeToMin(t) + hours*60; m = ((m%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
@@ -2939,7 +3009,7 @@ async function scanMed(){
 async function checkMeds(){
   if(!currentUser || !DB.db) return; // 仅登录用户提醒
   const meds = await DB.all('meds');
-  const now = new Date();
+  const now = nowBeijing();
   const today = now.toDateString();
   const curMin = now.getHours()*60 + now.getMinutes();
   meds.forEach(med=>{
@@ -3301,6 +3371,8 @@ function bindFamily(){
 async function init(){
   applyMode();
   updateUserUI();
+  await calibrateTime();
+  startBeijingClock();
   renderSyms();
   renderFlow();
   $('drugCount').textContent = DRUG_DB.length;
