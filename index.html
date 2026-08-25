@@ -1158,8 +1158,9 @@
         <button class="btn sm line" onclick="renderChart('30d')">近30天</button>
         <button class="btn sm line" onclick="renderChart('90d')">近90天</button>
       </div>
-      <div style="position:relative;height:300px;">
+      <div style="position:relative;height:300px;width:100%;min-width:0;">
         <canvas id="chronicChart"></canvas>
+        <div id="chronicChartEmpty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);font-size:15px;">该时段暂无数据</div>
       </div>
       <div class="hint" id="chartHint" style="margin-top:8px;"></div>
     </div>
@@ -1260,6 +1261,7 @@
       </div>
       <div style="position:relative;height:280px;width:100%;min-width:0;">
         <canvas id="familyChart"></canvas>
+        <div id="familyChartEmpty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);font-size:14px;">该指标暂无数据</div>
       </div>
       <div class="divider"></div>
       <h2>📋 全部指标记录（近90天）</h2>
@@ -4659,34 +4661,46 @@ function destroyFamilyChart(){
   if(_familyChart){ try { _familyChart.destroy(); } catch(e){} _familyChart = null; }
 }
 
-function drawFamilyChart(){
-  if(!window.Chart || !_familyChartCache) return;
+function drawFamilyChart(retry){
+  if(!window.Chart) return;
   const typeSel = $('familyChartType');
-  if(!typeSel) return;
-  const targetType = typeSel.value;
   const canvas = $('familyChart');
-  if(!canvas) return;
+  const emptyEl = $('familyChartEmpty');
+  if(!typeSel || !canvas) return;
+  const targetType = typeSel.value;
   const parent = canvas.parentElement;
   if(parent){
     parent.style.position = 'relative';
     parent.style.minHeight = '280px';
     parent.style.height = '280px';
+    parent.style.width = '100%';
+    parent.style.minWidth = '0';
   }
-  const cw = parent ? (parent.clientWidth || 600) : 600;
-  canvas.width = cw; canvas.height = 280;
-  canvas.style.width = '100%'; canvas.style.height = '100%';
+  let pw = parent ? (parent.clientWidth || parent.getBoundingClientRect().width || 0) : 0;
+  if(pw <= 0){
+    // 可能容器还没布局，再等一次
+    if(!retry){ setTimeout(() => drawFamilyChart(true), 250); return; }
+    pw = 600;
+  }
+  canvas.width = pw; canvas.height = 280;
+  canvas.style.width = '100%'; canvas.style.height = '280px'; canvas.style.display = 'block';
   destroyFamilyChart();
   const ctx = canvas.getContext('2d');
-  if(!ctx) return;
+  if(!ctx){
+    if(emptyEl){ emptyEl.style.display = 'flex'; emptyEl.textContent = '图表初始化失败，请刷新页面'; }
+    return;
+  }
+  if(!_familyChartCache || !_familyChartCache.length){
+    if(emptyEl){ emptyEl.style.display = 'flex'; emptyEl.textContent = '近90天暂无指标数据'; }
+    return;
+  }
   const rows = _familyChartCache.filter(r => r.metric_type === targetType)
     .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
   if(!rows.length){
-    ctx.fillStyle = 'var(--muted, #999)';
-    ctx.font = '14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('该指标暂无数据', cw/2, 140);
+    if(emptyEl){ emptyEl.style.display = 'flex'; emptyEl.textContent = '该指标暂无数据'; }
     return;
   }
+  if(emptyEl){ emptyEl.style.display = 'none'; }
   const labels = rows.map(r => new Date(r.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
   const d1 = rows.map(r => Number(r.value1));
   const d2 = rows.map(r => (r.value2 !== null && r.value2 !== undefined) ? Number(r.value2) : null);
@@ -4723,40 +4737,59 @@ function drawFamilyChart(){
       }
     }
   });
+  try{ if(_familyChart) _familyChart.resize(); } catch(e){}
 }
 
 async function renderChronicSummary(elderCode){
   const card = $('cardChronicSummary');
   const el = $('chronicSummaryContent');
   if(!card || !el) return;
-  if(myRole !== 'family' || !elderCode || !cloudUsable()){
-    card.style.display = 'none';
-    return;
-  }
+  // 只要 selectElder 触发就展开卡片，不再隐藏；条件不满足就写诊断提示
   card.style.display = 'block';
-  el.innerHTML = '<p class="hint">加载中…</p>';
   destroyFamilyChart();
   _familyChartCache = null;
   if($('familyMetricList')) $('familyMetricList').innerHTML = '<p class="hint">加载中…</p>';
+  if($('familyChartEmpty')){ $('familyChartEmpty').style.display = 'flex'; $('familyChartEmpty').textContent = '加载中…'; }
+  // 前置校验，不满足就写友好提示+诊断
+  if(myRole !== 'family'){
+    el.innerHTML = '<p class="hint">当前账号身份是「老人端」，请切换到家属端（"我是家属"）并登录家属账号后查看绑定老人的慢病档案。</p>';
+    return;
+  }
+  if(!elderCode){
+    el.innerHTML = '<p class="hint">请先点击上方已绑定的老人卡片，选择要查看的老人。</p>';
+    return;
+  }
+  if(!cloudUsable()){
+    el.innerHTML = '<p class="hint">当前浏览器不支持云端读取功能（需要 fetch + crypto.subtle）。请使用最新版 Chrome 或 Edge 浏览器，并在 HTTPS / localhost 环境下打开。</p>';
+    return;
+  }
+  el.innerHTML = '<p class="hint">正在从云端读取老人数据…</p>';
   try{
     const elderUser = await getElderUsername(elderCode);
     if(!elderUser){
-      el.innerHTML = '<p class="hint">无法获取老人账号信息</p>';
+      el.innerHTML = '<p class="hint">无法获取老人账号信息（邀请码 ' + elderCode + ' 在云端 users 表未找到）。请确认老人账号已在该设备登录过并同步到云端。</p>';
       return;
     }
-    // 查近90天全部指标
+    // 查近90天全部指标+未读预警+慢病档案（并行）
     const since = new Date(Date.now() - 90 * 86400000).toISOString();
     const [metricRes, alertRes, profRes] = await Promise.all([
       sbFetch('health_metrics?username=eq.' + encodeURIComponent(elderUser) + '&measured_at=gte.' + since + '&order=measured_at.desc&limit=500'),
       sbFetch('chronic_alerts?username=eq.' + encodeURIComponent(elderUser) + '&is_read=eq.false&order=created_at.desc&limit=10'),
       sbFetch('chronic_profiles?username=eq.' + encodeURIComponent(elderUser) + '&select=disease_type,diagnose_date,hospital')
     ]);
+    let metricCount = 0, alertCount = 0, profCount = 0;
+    let metricOk = metricRes && metricRes.ok, alertOk = alertRes && alertRes.ok, profOk = profRes && profRes.ok;
     let html = '';
+    // 诊断条：显示读取情况
+    html += '<div class="med-item" style="margin-bottom:10px;border-left:3px solid ' + (metricOk ? '#22c55e' : '#ef4444') + ';padding:8px 12px;font-size:13px;">'
+      + '老人账号: <b>' + elderUser + '</b> ｜ '
+      + '档案:' + (profOk ? '✔' : '✘') + ' 指标:' + (metricOk ? '✔' : '✘') + ' 预警:' + (alertOk ? '✔' : '✘')
+      + '</div>';
     // 慢病档案清单
-    if(profRes && profRes.ok){
+    if(profOk){
       const profs = await profRes.json();
-      if(profs && profs.length){
-        html += '<p class="sub" style="margin-bottom:6px;">老人慢病档案</p><div class="gap6" style="margin-bottom:8px;">';
+      if(profs && profs.length){ profCount = profs.length;
+        html += '<p class="sub" style="margin-bottom:6px;">👤 老人慢病档案（'+ profCount +'项）</p><div class="gap6" style="margin-bottom:8px;">';
         profs.forEach(p => {
           html += '<div class="med-item" style="padding:10px 14px;"><div style="flex:1;">'
             + '<b style="font-size:16px;color:var(--primary-deep);">' + (DISEASE_LABELS[p.disease_type] || p.disease_type) + '</b>'
@@ -4764,16 +4797,20 @@ async function renderChronicSummary(elderCode){
             + '</div></div>';
         });
         html += '</div><div class="divider"></div>';
+      } else {
+        html += '<p class="hint">👤 老人暂未创建慢病档案（可在老人端 → 慢病管理 → 新建档案中创建）。</p>';
       }
+    } else {
+      html += '<p class="hint">👤 慢病档案读取失败（HTTP ' + (profRes?profRes.status:'?') + '，可能 RLS 未开启）</p>';
     }
     let rows = [];
-    if(metricRes && metricRes.ok){ rows = await metricRes.json(); }
+    if(metricOk){ rows = await metricRes.json(); metricCount = rows.length; }
     _familyChartCache = rows;
     // 最近值摘要：按类型取最新一条
     const byType = {};
     rows.forEach(r => { if(!byType[r.metric_type]) byType[r.metric_type] = r; });
     if(Object.keys(byType).length){
-      html += '<p class="sub" style="margin-bottom:6px;">最近各指标值</p><div class="gap6">';
+      html += '<p class="sub" style="margin-bottom:6px;">📌 最近各指标值</p><div class="gap6">';
       for(const [type, m] of Object.entries(byType)){
         const label = METRIC_LABELS[type] || type;
         const val = type === 'bp' ? (m.value1 + '/' + (m.value2 || '-') + ' mmHg')
@@ -4789,13 +4826,14 @@ async function renderChronicSummary(elderCode){
       }
       html += '</div>';
     } else {
-      html += '<p class="hint">老人近90天暂未录入指标</p>';
+      html += '<p class="hint">📌 老人近90天暂未录入指标（共 '+ metricCount +' 条云端记录）。</p>';
     }
     // 未读预警
-    if(alertRes && alertRes.ok){
+    if(alertOk){
       const alerts = await alertRes.json();
+      alerts && alerts.length && (alertCount = alerts.length);
       if(alerts && alerts.length){
-        html += '<div class="divider"></div><p class="sub" style="margin-bottom:4px;">未读预警（' + alerts.length + '）</p>';
+        html += '<div class="divider"></div><p class="sub" style="margin-bottom:4px;">🔔 未读预警（' + alerts.length + '）</p>';
         alerts.forEach(a => {
           const color = a.alert_level === 'critical' ? '#ef4444' : (a.alert_level === 'warning' ? '#eab308' : '#3b82f6');
           html += '<div class="med-item" style="border-left:3px solid ' + color + ';"><div style="font-weight:700;color:' + color + ';">' + (a.title || '预警') + '</div><div>' + (a.message || '') + '</div>'
@@ -4804,13 +4842,13 @@ async function renderChronicSummary(elderCode){
       }
     }
     el.innerHTML = html || '<p class="hint">暂无慢病数据</p>';
-    // 完整记录列表（近90天，按时间倒序）
+    // 完整记录列表（近90天）
     const listEl = $('familyMetricList');
     if(listEl){
       if(!rows.length){
-        listEl.innerHTML = '<p class="hint">老人近90天暂无指标记录</p>';
+        listEl.innerHTML = '<p class="hint">老人近90天暂无指标记录（'+metricCount+' 条）。</p>';
       } else {
-        listEl.innerHTML = rows.map(m => {
+        listEl.innerHTML = '<p class="sub" style="margin:0 0 6px 0;">共 '+ metricCount +' 条记录，按紧急性标记：</p>' + rows.map(m => {
           const label = METRIC_LABELS[m.metric_type] || m.metric_type;
           const val = m.metric_type === 'bp' ? (m.value1 + '/' + (m.value2 || '-') + ' mmHg')
             : m.value1 + (m.metric_type === 'weight' ? ' kg' : (m.metric_type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
@@ -4827,11 +4865,11 @@ async function renderChronicSummary(elderCode){
         }).join('');
       }
     }
-    // 趋势图：延迟到下一帧绘制，确保容器尺寸
-    setTimeout(() => drawFamilyChart(), 150);
+    // 趋势图：延迟+重试保证容器可见
+    setTimeout(() => drawFamilyChart(false), 200);
   }catch(e){
-    console.warn(e);
-    el.innerHTML = '<p class="hint">数据加载失败，请稍后重试</p>';
+    console.warn('renderChronicSummary err:', e);
+    el.innerHTML = '<p class="hint" style="color:#ef4444;">数据加载出错：' + (e.message || String(e)) + '<br>请刷新页面或稍后重试。</p>';
   }
 }
 
@@ -5245,44 +5283,41 @@ async function renderChart(range){
   const mine = all.filter(m => m.disease_id === selectedChronicId && new Date(m.measured_at) >= since)
     .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
   const el = $('chronicChart');
+  const emptyEl = $('chronicChartEmpty');
   if(!el) return;
   const parent = el.parentElement;
   if(parent){
-    // 确保容器有实际尺寸
     parent.style.position = 'relative';
     parent.style.minHeight = '300px';
     parent.style.height = '300px';
+    parent.style.width = '100%';
+    parent.style.minWidth = '0';
+    parent.style.display = parent.style.display === 'none' ? 'block' : parent.style.display;
   }
-  // 强制给 canvas 尺寸，避免 display:none 时 context 尺寸 0x0 导致空白
-  const cw = parent ? (parent.clientWidth || 600) : 600;
-  el.width = cw;
-  el.height = 300;
-  el.style.width = '100%';
-  el.style.height = '100%';
+  // 强制给 canvas 实际尺寸（用 parent.clientWidth 但不可 0）
+  const pw = parent ? (parent.clientWidth || parent.getBoundingClientRect().width || 0) : 0;
+  const cw = pw > 0 ? pw : 600;
+  el.width = cw; el.height = 300;
+  el.style.width = '100%'; el.style.height = '300px'; el.style.display = 'block';
   if(chronicChart){ try { chronicChart.destroy(); } catch(e){} chronicChart = null; }
   const ctx = el.getContext('2d');
   if(!ctx){
     $('chartHint').textContent = '图表初始化失败，请刷新页面';
+    if(emptyEl){ emptyEl.style.display = 'flex'; }
     return;
   }
   if(!mine.length){
-    // 空状态：画"暂无数据"文字占位
-    ctx.fillStyle = 'var(--muted, #999)';
-    ctx.font = '16px sans-serif';
-    ctx.textAlign = 'center';
-    const ph = parseInt(el.height || 300, 10);
-    ctx.fillText('该时段暂无数据', cw / 2, ph / 2);
     $('chartHint').textContent = '该时段暂无数据';
+    if(emptyEl){ emptyEl.style.display = 'flex'; }
     return;
   }
+  if(emptyEl){ emptyEl.style.display = 'none'; }
   $('chartHint').textContent = '';
   const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
-  const targets = chronic ? JSON.parse(chronic.target_json || '{}') : {};
   const labels = mine.map(m => new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
   const d1 = mine.map(m => Number(m.value1));
   const d2 = mine.map(m => m.value2 !== null && m.value2 !== undefined ? Number(m.value2) : null);
   const firstType = mine[0].metric_type;
-  // 每个数据点根据阈值上色
   const pColors1 = mine.map(m => {
     const a = assessMetricLevel(m, chronic);
     return a.color;
@@ -5333,6 +5368,8 @@ async function renderChart(range){
       }
     }
   });
+  // Chart.js 在首次 init 后 resize 一下，保证填充父容器
+  try{ if(chronicChart) chronicChart.resize(); } catch(e){}
 }
 
 async function renderCompliance(targetUser, statsId, calId){
