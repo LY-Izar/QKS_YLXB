@@ -4656,17 +4656,62 @@ function familyAssessLevel(type, v1, v2){
 
 let _familyChart = null;
 let _familyChartCache = null; // 缓存最近指标 rows，供切换下拉重绘
+let _familyChartRetryTimer = null;
+let _familyChartFallbackW = 0; // >0 表示当前用的是兜底固定宽 px
 
 function destroyFamilyChart(){
+  if(_familyChartRetryTimer){ clearTimeout(_familyChartRetryTimer); _familyChartRetryTimer = null; }
   if(_familyChart){ try { _familyChart.destroy(); } catch(e){} _familyChart = null; }
+  _familyChartFallbackW = 0;
 }
 
-function drawFamilyChart(retry){
+function _familyShowEmpty(emptyEl, text){
+  if(!emptyEl) return;
+  emptyEl.style.display = 'flex';
+  emptyEl.style.alignItems = 'center';
+  emptyEl.style.justifyContent = 'center';
+  emptyEl.style.zIndex = '5';
+  emptyEl.style.background = 'rgba(127,127,127,0.06)';
+  emptyEl.style.borderRadius = '8px';
+  emptyEl.style.color = 'var(--text, #1f2937)';
+  emptyEl.style.fontSize = '14px';
+  emptyEl.textContent = text;
+}
+
+function _familyHideEmpty(emptyEl){
+  if(!emptyEl) return;
+  emptyEl.style.display = 'none';
+}
+
+// 兜底时画完图后，监听父容器是否终于有了真实宽；如果有，切回 100% 并 resize
+function _familyWatchParentResize(parent, canvas){
+  if(!parent || !('ResizeObserver' in window)) return;
+  try{
+    const ob = new ResizeObserver(entries => {
+      for(const e of entries){
+        const w = e.contentRect && e.contentRect.width;
+        if(w && w > 100 && _familyChartFallbackW > 0){
+          _familyChartFallbackW = 0;
+          canvas.style.width = '100%';
+          try{ if(_familyChart) _familyChart.resize(); } catch(err){}
+          ob.disconnect();
+          return;
+        }
+      }
+    });
+    ob.observe(parent);
+    // 最多观察 3 秒，避免泄漏
+    setTimeout(() => { try{ ob.disconnect(); } catch(e){} }, 3000);
+  }catch(e){}
+}
+
+function drawFamilyChart(attempt){
   if(!window.Chart) return;
   const typeSel = $('familyChartType');
   const canvas = $('familyChart');
   const emptyEl = $('familyChartEmpty');
   if(!typeSel || !canvas) return;
+  attempt = attempt || 0; // 0..3
   const targetType = typeSel.value;
   const parent = canvas.parentElement;
   if(parent){
@@ -4675,32 +4720,50 @@ function drawFamilyChart(retry){
     parent.style.height = '280px';
     parent.style.width = '100%';
     parent.style.minWidth = '0';
+    parent.style.overflow = 'hidden'; // 防止兜底 600px 撑出滚动条
   }
-  let pw = parent ? (parent.clientWidth || parent.getBoundingClientRect().width || 0) : 0;
-  if(pw <= 0){
-    // 可能容器还没布局，再等一次
-    if(!retry){ setTimeout(() => drawFamilyChart(true), 250); return; }
-    pw = 600;
+  // 多种方式读真实宽度（兜底到最后用 600）
+  let pw = 0;
+  if(parent){
+    pw = parent.clientWidth
+      || (parent.getBoundingClientRect && parent.getBoundingClientRect().width)
+      || parent.offsetWidth
+      || 0;
+    pw = Math.round(pw);
   }
-  canvas.width = pw; canvas.height = 280;
-  canvas.style.width = '100%'; canvas.style.height = '280px'; canvas.style.display = 'block';
+  const delays = [100, 300, 700, 1200]; // 4 次尝试，覆盖 transition 最大 1s
+  if(pw <= 0 && attempt < delays.length){
+    _familyShowEmpty(emptyEl, '图表加载中…（' + (attempt+1) + '/' + delays.length + '）');
+    _familyChartRetryTimer = setTimeout(() => drawFamilyChart(attempt + 1), delays[attempt]);
+    return;
+  }
+  const usedFallback = pw <= 0;
+  if(usedFallback){ pw = 600; _familyChartFallbackW = pw; } else { _familyChartFallbackW = 0; }
+  canvas.width = pw;
+  canvas.height = 280;
+  // 核心修复：兜底场景不能写 100%，否则父容器 0 宽会把 canvas 压成 0 宽看不见
+  canvas.style.width = usedFallback ? (pw + 'px') : '100%';
+  canvas.style.height = '280px';
+  canvas.style.display = 'block';
+  canvas.style.zIndex = '1';
   destroyFamilyChart();
+  if(usedFallback) _familyChartFallbackW = pw; // destroy 里会清零，这里重设
   const ctx = canvas.getContext('2d');
   if(!ctx){
-    if(emptyEl){ emptyEl.style.display = 'flex'; emptyEl.textContent = '图表初始化失败，请刷新页面'; }
+    _familyShowEmpty(emptyEl, '图表初始化失败，请刷新页面');
     return;
   }
   if(!_familyChartCache || !_familyChartCache.length){
-    if(emptyEl){ emptyEl.style.display = 'flex'; emptyEl.textContent = '近90天暂无指标数据'; }
+    _familyShowEmpty(emptyEl, '近90天暂无指标数据');
     return;
   }
   const rows = _familyChartCache.filter(r => r.metric_type === targetType)
     .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
   if(!rows.length){
-    if(emptyEl){ emptyEl.style.display = 'flex'; emptyEl.textContent = '该指标暂无数据'; }
+    _familyShowEmpty(emptyEl, '该指标暂无数据（可切换下拉选择其他指标）');
     return;
   }
-  if(emptyEl){ emptyEl.style.display = 'none'; }
+  _familyHideEmpty(emptyEl);
   const labels = rows.map(r => new Date(r.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
   const d1 = rows.map(r => Number(r.value1));
   const d2 = rows.map(r => (r.value2 !== null && r.value2 !== undefined) ? Number(r.value2) : null);
@@ -4722,22 +4785,30 @@ function drawFamilyChart(retry){
     });
   }
   const care = body.classList.contains('care');
-  _familyChart = new Chart(ctx, {
-    type:'line',
-    data:{ labels, datasets },
-    options:{
-      responsive:true, maintainAspectRatio:false, animation:{duration:400},
-      plugins:{
-        legend:{ labels:{ font:{ size: care?16:12 } } },
-        tooltip:{ bodyFont:{ size: care?16:12 }, titleFont:{ size: care?16:12 } }
-      },
-      scales:{
-        x:{ ticks:{ font:{ size: care?14:10 }, maxRotation:45 } },
-        y:{ ticks:{ font:{ size: care?14:10 } } }
+  try{
+    _familyChart = new Chart(ctx, {
+      type:'line',
+      data:{ labels, datasets },
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:{duration:400},
+        plugins:{
+          legend:{ labels:{ font:{ size: care?16:12 } } },
+          tooltip:{ bodyFont:{ size: care?16:12 }, titleFont:{ size: care?16:12 } }
+        },
+        scales:{
+          x:{ ticks:{ font:{ size: care?14:10 }, maxRotation:45 } },
+          y:{ ticks:{ font:{ size: care?14:10 } } }
+        }
       }
-    }
-  });
-  try{ if(_familyChart) _familyChart.resize(); } catch(e){}
+    });
+    try{ if(_familyChart) _familyChart.resize(); } catch(e){}
+  }catch(err){
+    console.warn('drawFamilyChart chart init err:', err);
+    _familyShowEmpty(emptyEl, '图表绘制失败：' + (err.message || String(err)));
+    return;
+  }
+  // 如果是用了兜底宽（600px 固定），等父容器真的有宽度后切回 100% 并 resize
+  if(usedFallback) _familyWatchParentResize(parent, canvas);
 }
 
 async function renderChronicSummary(elderCode){
@@ -4865,8 +4936,8 @@ async function renderChronicSummary(elderCode){
         }).join('');
       }
     }
-    // 趋势图：延迟+重试保证容器可见
-    setTimeout(() => drawFamilyChart(false), 200);
+    // 趋势图：让重试链条尽早启动（0ms → 100ms → 300ms → 700ms → 1200ms）
+    setTimeout(() => drawFamilyChart(0), 0);
   }catch(e){
     console.warn('renderChronicSummary err:', e);
     el.innerHTML = '<p class="hint" style="color:#ef4444;">数据加载出错：' + (e.message || String(e)) + '<br>请刷新页面或稍后重试。</p>';
@@ -5273,8 +5344,56 @@ async function delMetric(id){
   renderChart(currentChronicRange);
 }
 
-async function renderChart(range){
-  if(!window.Chart){ return; }
+let chronicChart = null;
+let chronicChartRetryTimer = null;
+let chronicChartFallbackW = 0;
+
+function _chronicShowEmpty(emptyEl, text){
+  if(!emptyEl) return;
+  emptyEl.style.display = 'flex';
+  emptyEl.style.alignItems = 'center';
+  emptyEl.style.justifyContent = 'center';
+  emptyEl.style.zIndex = '5';
+  emptyEl.style.background = 'rgba(127,127,127,0.06)';
+  emptyEl.style.borderRadius = '8px';
+  emptyEl.style.color = 'var(--text, #1f2937)';
+  emptyEl.style.fontSize = '14px';
+  emptyEl.textContent = text;
+}
+
+function _chronicHideEmpty(emptyEl){
+  if(!emptyEl) return;
+  emptyEl.style.display = 'none';
+}
+
+function _chronicWatchParentResize(parent, canvas){
+  if(!parent || !('ResizeObserver' in window)) return;
+  try{
+    const ob = new ResizeObserver(entries => {
+      for(const e of entries){
+        const w = e.contentRect && e.contentRect.width;
+        if(w && w > 100 && chronicChartFallbackW > 0){
+          chronicChartFallbackW = 0;
+          canvas.style.width = '100%';
+          try{ if(chronicChart) chronicChart.resize(); } catch(err){}
+          ob.disconnect();
+          return;
+        }
+      }
+    });
+    ob.observe(parent);
+    setTimeout(() => { try{ ob.disconnect(); } catch(e){} }, 3000);
+  }catch(e){}
+}
+
+function _destroyChronicChart(){
+  if(chronicChartRetryTimer){ clearTimeout(chronicChartRetryTimer); chronicChartRetryTimer = null; }
+  if(chronicChart){ try { chronicChart.destroy(); } catch(e){} chronicChart = null; }
+  chronicChartFallbackW = 0;
+}
+
+async function _renderChartCore(range){
+  if(!window.Chart){ return false; }
   currentChronicRange = range || '30d';
   const days = currentChronicRange === '7d' ? 7 : (currentChronicRange === '90d' ? 90 : 30);
   const now = new Date();
@@ -5284,7 +5403,7 @@ async function renderChart(range){
     .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
   const el = $('chronicChart');
   const emptyEl = $('chronicChartEmpty');
-  if(!el) return;
+  if(!el) return false;
   const parent = el.parentElement;
   if(parent){
     parent.style.position = 'relative';
@@ -5292,26 +5411,39 @@ async function renderChart(range){
     parent.style.height = '300px';
     parent.style.width = '100%';
     parent.style.minWidth = '0';
+    parent.style.overflow = 'hidden';
     parent.style.display = parent.style.display === 'none' ? 'block' : parent.style.display;
   }
-  // 强制给 canvas 实际尺寸（用 parent.clientWidth 但不可 0）
-  const pw = parent ? (parent.clientWidth || parent.getBoundingClientRect().width || 0) : 0;
-  const cw = pw > 0 ? pw : 600;
-  el.width = cw; el.height = 300;
-  el.style.width = '100%'; el.style.height = '300px'; el.style.display = 'block';
-  if(chronicChart){ try { chronicChart.destroy(); } catch(e){} chronicChart = null; }
+  let pw = 0;
+  if(parent){
+    pw = parent.clientWidth
+      || (parent.getBoundingClientRect && parent.getBoundingClientRect().width)
+      || parent.offsetWidth
+      || 0;
+    pw = Math.round(pw);
+  }
+  const usedFallback = pw <= 0;
+  if(usedFallback){ pw = 600; chronicChartFallbackW = pw; } else { chronicChartFallbackW = 0; }
+  el.width = pw; el.height = 300;
+  // 关键：兜底宽时不能用 100%，否则父容器 0 宽会把 canvas 压成 0 宽看不见
+  el.style.width = usedFallback ? (pw + 'px') : '100%';
+  el.style.height = '300px';
+  el.style.display = 'block';
+  el.style.zIndex = '1';
+  _destroyChronicChart();
+  if(usedFallback) chronicChartFallbackW = pw;
   const ctx = el.getContext('2d');
   if(!ctx){
     $('chartHint').textContent = '图表初始化失败，请刷新页面';
-    if(emptyEl){ emptyEl.style.display = 'flex'; }
-    return;
+    _chronicShowEmpty(emptyEl, '图表初始化失败，请刷新页面');
+    return true;
   }
   if(!mine.length){
     $('chartHint').textContent = '该时段暂无数据';
-    if(emptyEl){ emptyEl.style.display = 'flex'; }
-    return;
+    _chronicShowEmpty(emptyEl, '该时段暂无数据');
+    return true;
   }
-  if(emptyEl){ emptyEl.style.display = 'none'; }
+  _chronicHideEmpty(emptyEl);
   $('chartHint').textContent = '';
   const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
   const labels = mine.map(m => new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
@@ -5351,25 +5483,56 @@ async function renderChart(range){
     });
   }
   const care = body.classList.contains('care');
-  chronicChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels, datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 400 },
-      plugins: {
-        legend: { labels: { font:{ size: care ? 16 : 12 } } },
-        tooltip: { bodyFont:{ size: care ? 16 : 12 }, titleFont:{ size: care ? 16 : 12 } }
-      },
-      scales: {
-        x: { ticks: { font:{ size: care ? 14 : 10 }, maxRotation:45 } },
-        y: { ticks: { font:{ size: care ? 14 : 10 } } }
+  try{
+    chronicChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
+        plugins: {
+          legend: { labels: { font:{ size: care ? 16 : 12 } } },
+          tooltip: { bodyFont:{ size: care ? 16 : 12 }, titleFont:{ size: care ? 16 : 12 } }
+        },
+        scales: {
+          x: { ticks: { font:{ size: care ? 14 : 10 }, maxRotation:45 } },
+          y: { ticks: { font:{ size: care ? 14 : 10 } } }
+        }
       }
-    }
-  });
-  // Chart.js 在首次 init 后 resize 一下，保证填充父容器
-  try{ if(chronicChart) chronicChart.resize(); } catch(e){}
+    });
+    try{ if(chronicChart) chronicChart.resize(); } catch(e){}
+  }catch(err){
+    console.warn('renderChart chart init err:', err);
+    $('chartHint').textContent = '图表绘制失败：' + (err.message || String(err));
+    _chronicShowEmpty(emptyEl, '图表绘制失败：' + (err.message || String(err)));
+    return true;
+  }
+  if(usedFallback) _chronicWatchParentResize(parent, el);
+  return true;
+}
+
+async function renderChart(range, attempt){
+  if(!window.Chart){ return; }
+  attempt = attempt || 0;
+  const el = $('chronicChart');
+  const emptyEl = $('chronicChartEmpty');
+  const parent = el ? el.parentElement : null;
+  let pw = 0;
+  if(parent){
+    pw = parent.clientWidth
+      || (parent.getBoundingClientRect && parent.getBoundingClientRect().width)
+      || parent.offsetWidth
+      || 0;
+    pw = Math.round(pw);
+  }
+  const delays = [100, 300, 700, 1200];
+  if(pw <= 0 && attempt < delays.length){
+    _chronicShowEmpty(emptyEl, '图表加载中…（' + (attempt+1) + '/' + delays.length + '）');
+    chronicChartRetryTimer = setTimeout(() => renderChart(range, attempt + 1), delays[attempt]);
+    return;
+  }
+  await _renderChartCore(range);
 }
 
 async function renderCompliance(targetUser, statsId, calId){
