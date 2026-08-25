@@ -1,0 +1,2536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>医路相伴 · 老年人智能就医导航</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    /* 普通模式（清爽医护蓝绿） */
+    --bg:#f4f7f6;
+    --surface:#ffffff;
+    --surface-2:#eef4f2;
+    --border:#dde6e3;
+    --ink:#1c2b28;
+    --muted:#5c6f6a;
+    --primary:#0f9d8f;
+    --primary-deep:#0b7d73;
+    --primary-soft:#e0f2ef;
+    --accent:#f59e0b;      /* 暖橙，用于紧急/强调 */
+    --danger:#e53e3e;
+    --warn:#dd6b20;
+    --ok:#38a169;
+    --radius:14px;
+    --radius-lg:20px;
+    --fs-base:17px;
+    --fs-title:25px;
+    --fs-h1:30px;
+    --btn-h:52px;
+    --shadow:0 2px 12px rgba(16,58,50,0.08);
+    --shadow-lg:0 8px 28px rgba(16,58,50,0.12);
+  }
+  /* 关怀模式（大字·高对比·暖色） */
+  body.care{
+    --bg:#fff8ec;
+    --surface:#ffffff;
+    --surface-2:#fff1d6;
+    --border:#e8d5ae;
+    --ink:#221500;
+    --muted:#5c4a22;
+    --primary:#c0560a;
+    --primary-deep:#8f3d00;
+    --primary-soft:#ffe6c2;
+    --accent:#d9480f;
+    --danger:#c53030;
+    --warn:#c0560a;
+    --ok:#2f7d32;
+    --fs-base:23px;
+    --fs-title:32px;
+    --fs-h1:40px;
+    --btn-h:72px;
+    --radius:18px;
+    --radius-lg:26px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+    background:var(--bg);color:var(--ink);
+    font-size:var(--fs-base);line-height:1.6;
+    transition:background .3s,color .3s;
+  }
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:inherit;}
+  input,select,textarea{font-family:inherit;font-size:inherit;color:var(--ink);}
+  .hidden{display:none !important;}
+
+  /* ===== 顶部栏 ===== */
+  .topbar{
+    position:sticky;top:0;z-index:50;
+    display:flex;align-items:center;gap:12px;
+    padding:14px 18px;
+    background:var(--surface);
+    border-bottom:1px solid var(--border);
+  }
+  .topbar .logo{
+    width:40px;height:40px;border-radius:12px;flex:none;
+    background:var(--primary);color:#fff;
+    display:grid;place-items:center;font-size:20px;font-weight:700;
+  }
+  body.care .topbar .logo{width:52px;height:52px;border-radius:14px;font-size:26px;}
+  .topbar .tt{font-weight:700;font-size:18px;line-height:1.2;}
+  body.care .topbar .tt{font-size:24px;}
+  .topbar .st{font-size:12px;color:var(--muted);}
+  body.care .topbar .st{font-size:15px;}
+  .topbar .sp{flex:1;}
+  .mode-btn{
+    flex:none;font-weight:700;padding:10px 16px;border-radius:999px;
+    border:2px solid var(--primary);color:var(--primary);
+    font-size:14px;white-space:nowrap;
+    transition:.2s;
+  }
+  body.care .mode-btn{font-size:18px;padding:12px 18px;border-width:3px;}
+  .mode-btn:hover{background:var(--primary);color:#fff;}
+
+  /* ===== 内容区 ===== */
+  main{max-width:640px;margin:0 auto;padding:18px 16px 120px;min-height:calc(100vh - 70px);}
+  .view{display:none;animation:fade .25s ease;}
+  .view.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+  h1{font-size:var(--fs-h1);font-weight:800;margin-bottom:8px;letter-spacing:.3px;}
+  .lead{color:var(--muted);font-size:var(--fs-base);margin-bottom:20px;}
+  body.care .lead{font-size:19px;}
+
+  /* ===== 卡片 ===== */
+  .card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius);padding:18px;margin-bottom:16px;
+    box-shadow:var(--shadow);
+  }
+  .card h2{font-size:var(--fs-title);margin-bottom:6px;}
+  .card .sub{color:var(--muted);font-size:14px;margin-bottom:14px;}
+  body.care .card .sub{font-size:17px;}
+
+  /* ===== 按钮 ===== */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:var(--btn-h);padding:0 22px;border-radius:var(--radius);
+    font-weight:700;font-size:18px;transition:.15s;
+    background:var(--primary);color:#fff;
+  }
+  body.care .btn{font-size:25px;padding:0 30px;min-height:72px;}
+  .btn:active{transform:scale(.97);}
+  .btn.block{display:flex;width:100%;}
+  .btn.ghost{background:var(--primary-soft);color:var(--primary-deep);}
+  .btn.line{background:transparent;border:2px solid var(--primary);color:var(--primary);}
+  .btn.warn{background:var(--accent);color:#fff;}
+  .btn.danger{background:var(--danger);color:#fff;}
+  .btn.sm{min-height:40px;padding:0 14px;font-size:14px;border-radius:10px;}
+  body.care .btn.sm{min-height:54px;font-size:19px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+
+  /* ===== 宫格 ===== */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .tile{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:20px 16px;text-align:left;box-shadow:var(--shadow);transition:.15s;
+    display:flex;flex-direction:column;gap:10px;min-height:120px;
+  }
+  body.care .tile{min-height:160px;padding:24px 18px;}
+  .tile:active{transform:scale(.97);}
+  .tile .ic{font-size:34px;line-height:1;}
+  body.care .tile .ic{font-size:44px;}
+  .tile .nm{font-weight:700;font-size:19px;}
+  body.care .tile .nm{font-size:26px;}
+  .tile .ds{font-size:14px;color:var(--muted);}
+  body.care .tile .ds{font-size:18px;}
+  .tile.feature{border-color:var(--primary);background:var(--primary-soft);}
+
+  /* ===== 表单 ===== */
+  label.f{display:block;margin-bottom:14px;font-weight:600;font-size:17px;}
+  body.care label.f{font-size:22px;}
+  .inp{
+    width:100%;min-height:var(--btn-h);padding:12px 14px;margin-top:6px;
+    border:2px solid var(--border);border-radius:12px;background:var(--surface);
+    font-size:18px;outline:none;transition:.15s;
+  }
+  body.care .inp{font-size:24px;min-height:72px;border-width:3px;}
+  .inp:focus{border-color:var(--primary);}
+  textarea.inp{min-height:90px;resize:vertical;}
+  .inputrow{display:flex;gap:10px;align-items:center;margin-top:6px;}
+  .inputrow .inp{flex:1;margin-top:0;}
+  .inputrow .btn{flex:none;min-width:var(--btn-h);width:var(--btn-h);padding:0;font-size:22px;}
+  body.care .inputrow .btn{min-width:72px;width:72px;font-size:30px;}
+  .advice-box{background:var(--primary-soft);border:1px solid var(--primary);border-radius:12px;padding:14px;margin-top:12px;font-size:16px;line-height:1.7;}
+  body.care .advice-box{font-size:21px;padding:16px;}
+  .advice-box .av-t{font-weight:800;color:var(--primary-deep);margin-bottom:4px;font-size:17px;}
+  body.care .advice-box .av-t{font-size:22px;}
+
+  /* ===== 症状选项 ===== */
+  .sym-list{display:flex;flex-wrap:wrap;gap:10px;}
+  body.care .sym-list{gap:14px;}
+  .sym-chip{
+    padding:10px 16px;border-radius:999px;border:2px solid var(--border);
+    background:var(--surface);font-size:17px;font-weight:600;transition:.15s;
+  }
+  body.care .sym-chip{font-size:22px;padding:14px 22px;border-width:3px;}
+  .sym-chip.on{background:var(--primary);border-color:var(--primary);color:#fff;}
+
+  /* ===== 紧急度徽章 ===== */
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-weight:700;font-size:14px;}
+  body.care .badge{font-size:19px;padding:6px 16px;}
+  .badge.green{background:#e6f4ea;color:#1a7a3a;}
+  .badge.yellow{background:#fff3d6;color:#9a6a00;}
+  .badge.red{background:#fde8e8;color:#c53030;}
+  .badge.big{padding:8px 18px;font-size:17px;}
+  body.care .badge.big{padding:12px 22px;font-size:24px;}
+
+  /* ===== 结果卡片 ===== */
+  .cond{border-left:4px solid var(--primary);background:var(--surface-2);border-radius:10px;padding:14px;margin-bottom:12px;}
+  .cond .cn{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  body.care .cond .cn{font-size:23px;}
+  .cond .rows{margin-top:8px;display:grid;gap:6px;font-size:15px;}
+  body.care .cond .rows{font-size:20px;gap:10px;}
+  .cond .rows div{display:flex;gap:8px;}
+  .cond .rows .k{color:var(--muted);flex:none;width:64px;}
+  body.care .cond .rows .k{width:80px;}
+
+  /* ===== 步骤引导 ===== */
+  .steps{display:flex;flex-direction:column;gap:12px;}
+  .step{
+    display:flex;gap:14px;align-items:flex-start;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);padding:16px;
+    box-shadow:var(--shadow);
+  }
+  .step .num{
+    flex:none;width:36px;height:36px;border-radius:50%;background:var(--primary-soft);
+    color:var(--primary-deep);display:grid;place-items:center;font-weight:800;font-size:17px;
+  }
+  body.care .step .num{width:48px;height:48px;font-size:24px;}
+  .step .bd{flex:1;}
+  .step .sn{font-weight:700;font-size:18px;margin-bottom:4px;}
+  body.care .step .sn{font-size:24px;}
+  .step .sd{font-size:15px;color:var(--muted);}
+  body.care .step .sd{font-size:20px;}
+  .step.done .num{background:var(--ok);color:#fff;}
+  .step.current{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft);}
+
+  /* ===== 用药提醒 ===== */
+  .med-item{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .med-item .t{flex:1;}
+  .med-item .nm{font-weight:700;font-size:19px;}
+  body.care .med-item .nm{font-size:24px;}
+  .med-item .tm{font-size:15px;color:var(--muted);}
+  body.care .med-item .tm{font-size:19px;}
+  .med-item .pill{font-family:ui-monospace,monospace;background:var(--primary);color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;font-size:17px;}
+  body.care .med-item .pill{font-size:24px;padding:8px 14px;}
+
+  /* ===== 地图 ===== */
+  #map{height:380px;border-radius:var(--radius);border:1px solid var(--border);width:100%;background:var(--surface-2);}
+  body.care #map{height:440px;}
+  .hosp-item{display:flex;gap:12px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--surface);}
+  .hosp-item .dist{flex:none;font-weight:800;color:var(--primary);font-size:20px;text-align:center;min-width:64px;}
+  body.care .hosp-item .dist{font-size:26px;min-width:84px;}
+  .hosp-item .nm{font-weight:700;font-size:18px;}
+  body.care .hosp-item .nm{font-size:22px;}
+  .hosp-item .ds{font-size:14px;color:var(--muted);}
+  body.care .hosp-item .ds{font-size:18px;}
+
+  /* ===== 底部导航 ===== */
+  .tabbar{
+    position:fixed;bottom:0;left:0;right:0;z-index:40;
+    display:flex;background:var(--surface);border-top:1px solid var(--border);
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+  }
+  .tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    color:var(--muted);font-size:14px;font-weight:600;padding:6px 0;border-radius:10px;
+  }
+  body.care .tab{font-size:18px;}
+  .tab .ic{font-size:24px;line-height:1;}
+  body.care .tab .ic{font-size:30px;}
+  .tab.on{color:var(--primary);}
+  .tab.on .ic{transform:scale(1.05);}
+
+  /* ===== 悬浮语音按钮 ===== */
+  .voice-fab{
+    position:fixed;right:16px;bottom:100px;z-index:60;
+    width:58px;height:58px;border-radius:50%;
+    background:var(--primary);color:#fff;font-size:26px;
+    display:grid;place-items:center;box-shadow:var(--shadow-lg);
+    transition:.15s;border:3px solid #fff;
+  }
+  body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:120px;}
+  .voice-fab:active{transform:scale(.92);}
+  .voice-fab.listening{background:var(--danger);animation:pulse 1s infinite;}
+  @keyframes pulse{50%{box-shadow:0 0 0 10px rgba(229,62,62,.2);}}
+
+  /* ===== 弹层 ===== */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:70;display:none;align-items:center;justify-content:center;padding:20px;}
+  .mask.show{display:flex;}
+  .sheet{background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:420px;max-height:86vh;overflow:auto;box-shadow:var(--shadow-lg);}
+  body.care .sheet{max-width:520px;padding:30px;}
+  .sheet h3{font-size:var(--fs-title);margin-bottom:16px;}
+
+  /* ===== 语音提示条 ===== */
+  .voicebar{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:180px;z-index:65;
+    background:var(--ink);color:#fff;padding:12px 20px;border-radius:999px;
+    font-size:15px;display:none;align-items:center;gap:10px;max-width:90vw;
+  }
+  body.care .voicebar{font-size:19px;bottom:200px;}
+  .voicebar.show{display:flex;}
+  .voicebar .mic{color:var(--danger);font-weight:800;}
+  .voicebar #voiceText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .voicebar .vdone{background:#fff;color:var(--ink);border:none;border-radius:999px;padding:6px 14px;font-size:14px;font-weight:700;cursor:pointer;flex:none;}
+  body.care .voicebar .vdone{font-size:17px;padding:8px 16px;}
+
+  /* ===== 提醒弹窗 ===== */
+  .notify-banner{
+    position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:80;
+    background:var(--primary);color:#fff;padding:14px 20px;border-radius:14px;
+    font-weight:700;font-size:18px;box-shadow:var(--shadow-lg);display:none;
+    max-width:92vw;text-align:center;cursor:pointer;
+  }
+  body.care .notify-banner{font-size:23px;}
+  .notify-banner.show{display:block;}
+
+  .divider{height:1px;background:var(--border);margin:18px 0;}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;}
+  body.care .hint{font-size:15px;}
+  .tag{display:inline-block;background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;margin-left:6px;vertical-align:middle;}
+  body.care .tag{font-size:14px;}
+  .center{text-align:center;}
+  .gap6{display:flex;flex-direction:column;gap:6px;}
+</style>
+</head>
+<body>
+
+<!-- 顶部栏 -->
+<div class="topbar">
+  <div class="logo">医</div>
+  <div class="tt">医路相伴<span class="st"> · 老年人智能就医导航</span></div>
+  <div class="sp"></div>
+  <button class="mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
+</div>
+
+<main>
+  <!-- 欢迎 / 登录 -->
+  <div class="view active" id="view-welcome">
+    <h1>欢迎使用<br>「医路相伴」</h1>
+    <p class="lead">帮老人看懂病、挂对号、记对药，让就医不再难。</p>
+    <div class="card center">
+      <div style="font-size:46px;">🏥</div>
+      <h2 id="welcomeMsg" style="margin:8px 0;">您好，请先登录</h2>
+      <p class="sub">登录后可保存病例、医嘱与用药提醒</p>
+      <div class="gap6">
+        <button class="btn block" id="btnLogin" onclick="openAuth()">登录 / 注册</button>
+        <button class="btn block ghost" id="btnQuick" onclick="quickUse()">先看看，暂不登录</button>
+      </div>
+    </div>
+    <div class="card feature">
+      <h2>👴 建议开启「关怀模式」</h2>
+      <p class="sub">字体更大、按钮更醒目、颜色更柔和，并自动语音播报，专为长辈优化。</p>
+      <button class="btn block warn" onclick="enableCare()">一键开启关怀模式</button>
+    </div>
+    <p class="hint center">本平台提供的信息仅供健康参考，不能替代专业医生诊断。急重症请立即拨打 120。</p>
+  </div>
+
+  <!-- 首页 -->
+  <div class="view" id="view-home">
+    <h1 id="homeHi">您好</h1>
+    <p class="lead">今天身体感觉怎么样？需要什么帮助？</p>
+    <div class="grid">
+      <button class="tile feature" onclick="go('symptom')"><span class="ic">🔍</span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
+      <button class="tile" onclick="go('flow')"><span class="ic">🗺️</span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
+      <button class="tile" onclick="go('med')"><span class="ic">💊</span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
+      <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
+      <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
+      <button class="tile" onclick="speakCurrent()"><span class="ic">🔊</span><span class="nm">语音助手</span><span class="ds">听我说 · 读出内容</span></button>
+      <button class="tile" onclick="go('family')"><span class="ic">👨‍👩‍👧</span><span class="nm">家属端</span><span class="ds">家人实时查看我的情况</span></button>
+    </div>
+  </div>
+
+  <!-- 症状自查 -->
+  <div class="view" id="view-symptom">
+    <h1>症状自查</h1>
+    <p class="lead">点选或输入您的症状（可多选），为您判断紧急程度和该挂的科室。</p>
+    <div class="card">
+      <h2>① 选择您的症状</h2>
+      <div class="sym-list" id="symList"></div>
+      <div class="divider"></div>
+      <h2>② 或直接输入症状文字</h2>
+      <p class="sub" style="margin-bottom:4px;">可一次输入多个，用顿号或空格隔开，如：发烧、头痛、咳嗽。</p>
+      <div class="inputrow">
+        <input class="inp" id="symInput" placeholder="如：发烧、头痛" onkeydown="if(event.key==='Enter')symTextSubmit()">
+        <button class="btn line" onclick="voiceToInput('symInput')" title="语音输入症状">🎤</button>
+      </div>
+      <button class="btn block" style="margin-top:10px;" onclick="symTextSubmit()">✅ 识别并选中症状</button>
+      <div class="divider"></div>
+      <button class="btn block" id="btnSym" onclick="analyzeSym()">查看分析结果</button>
+    </div>
+    <div id="symResult"></div>
+  </div>
+
+  <!-- 就医流程 -->
+  <div class="view" id="view-flow">
+    <h1>就医流程引导</h1>
+    <p class="lead">跟着步骤走，看病不慌张。</p>
+    <div class="card">
+      <div class="gap6">
+        <button class="btn block warn" id="btnFlowStart" onclick="startFlow()">开始引导（带语音）</button>
+        <button class="btn block line sm" onclick="speakFlow()">🔊 朗读全流程</button>
+      </div>
+    </div>
+    <div class="steps" id="flowSteps"></div>
+    <div class="gap6" style="margin-top:14px;">
+      <button class="btn block ghost" id="btnFlowNext" onclick="flowNext()" style="display:none;">下一步 →</button>
+    </div>
+  </div>
+
+  <!-- 用药提醒 -->
+  <div class="view" id="view-med">
+    <h1>用药提醒</h1>
+    <p class="lead">录入医嘱后，到点会用声音和通知提醒您吃药。</p>
+    <div class="card">
+      <h2>＋ 添加用药</h2>
+      <label class="f">药品名称（可说名字或拍照识别）</label>
+      <div class="inputrow">
+        <input class="inp" id="medName" placeholder="如：阿司匹林">
+        <button class="btn line" onclick="voiceToInput('medName')" title="语音输入药名">🎤</button>
+        <button class="btn line" onclick="scanMed()" title="拍照识别药盒">📷</button>
+      </div>
+      <label class="f" style="margin-top:12px;">剂量 / 说明</label>
+      <div class="inputrow">
+        <input class="inp" id="medDose" placeholder="如：每次1片，饭后">
+        <button class="btn line" onclick="voiceToInput('medDose')" title="语音输入剂量">🎤</button>
+      </div>
+      <label class="f" style="margin-top:12px;">提醒时间
+        <input class="inp" type="time" id="medTime">
+      </label>
+      <label class="f">频率
+        <select class="inp" id="medFreq">
+          <option value="daily">每天一次</option>
+          <option value="twice">每天两次（早/晚）</option>
+          <option value="thrice">每天三次（早/中/晚）</option>
+          <option value="once">仅一次</option>
+        </select>
+      </label>
+      <div id="medAdvice"></div>
+      <button class="btn block" onclick="addMed()">保存用药</button>
+      <button class="btn block ghost" style="margin-top:10px;" onclick="showAllAdvice()">💡 AI 用药建议</button>
+      <button class="btn block line" style="margin-top:10px;" onclick="go('druglib')">📖 浏览药品库（共 <b id="drugCount">0</b> 种）</button>
+    </div>
+    <div id="medList"></div>
+  </div>
+
+  <!-- 药品库 -->
+  <div class="view" id="view-druglib">
+    <h1>药品库</h1>
+    <p class="lead">依据官方资料整理的常用药查询，支持药名、商品名、英文名搜索。</p>
+    <div class="card">
+      <h2>🔎 查药</h2>
+      <div class="inputrow">
+        <input class="inp" id="drugSearch" placeholder="如：阿司匹林 / 拜阿司匹灵">
+        <button class="btn line" onclick="voiceDrugSearch()" title="语音输入药名">🎤</button>
+      </div>
+      <div class="sym-list" id="drugCats" style="margin-top:12px;"></div>
+    </div>
+    <div id="drugList"></div>
+    <div class="card center" style="background:var(--surface-2);">
+      <p class="hint" style="margin-bottom:8px;">数据来源：国家基本药物目录（2018年版）与国家药品监督管理局批准的药品说明书</p>
+      <a class="btn block line sm" href="https://www.nmpa.gov.cn/datasearch/home-index.html" target="_blank" rel="noopener">国家药监局药品查询入口</a>
+    </div>
+    <p class="hint center">本知识库仅供健康参考，不能替代医生诊断与处方；用药以医嘱和药品说明书为准。</p>
+  </div>
+
+  <!-- 找医院 -->
+  <div class="view" id="view-hospital">
+    <h1>找附近医院</h1>
+    <p class="lead">根据实时位置，自动推荐离您最近的 5 所医院（可按症状匹配科室）。</p>
+    <div class="card">
+      <div class="gap6">
+        <button class="btn block" onclick="locate()">📍 获取我的位置</button>
+        <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:19px;margin-bottom:2px;">🔎 输入地点查医院</h2>
+      <p class="sub" style="margin-bottom:4px;">输入小区、街道或地标名称，以该位置推荐附近医院。</p>
+      <div class="inputrow">
+        <input class="inp" id="addrInput" placeholder="如：天府广场" onkeydown="if(event.key==='Enter')searchPlace()">
+        <button class="btn line" onclick="voiceToInput('addrInput')" title="语音输入地点">🎤</button>
+      </div>
+      <button class="btn block" style="margin-top:10px;" onclick="searchPlace()">🔍 按这个地点找医院</button>
+    </div>
+    <div id="map"></div>
+    <div class="hint" id="mapHint" style="margin:10px 0;">进入本页将自动获取实时位置，推荐最近的 5 所医院。</div>
+    <div id="hospList"></div>
+  </div>
+
+  <!-- 家属端 -->
+  <div class="view" id="view-family">
+    <h1>家属端</h1>
+    <p class="lead">让家人实时了解您的就医与用药情况。</p>
+    <div class="card">
+      <h2>👨‍👩‍👧 绑定家属</h2>
+      <p class="sub">把下面的"家庭码"告诉家人，家人在自己设备上输入即可实时同步。</p>
+      <div class="gap6">
+        <div class="inp center" style="font-family:ui-monospace,monospace;font-weight:800;letter-spacing:2px;font-size:20px;" id="familyCode">—</div>
+        <button class="btn block ghost sm" onclick="copyCode()">复制家庭码</button>
+      </div>
+      <div class="divider"></div>
+      <h2>🔗 我是家属</h2>
+      <p class="sub">输入长辈的家庭码，实时查看他的用药与就医动态。</p>
+      <div class="gap6">
+        <input class="inp" id="bindCode" placeholder="输入 6 位家庭码">
+        <button class="btn block" onclick="bindFamily()">绑定并查看</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📋 家人实时动态</h2>
+      <div id="familyFeed"></div>
+    </div>
+  </div>
+</main>
+
+<!-- 底部导航 -->
+<div class="tabbar">
+  <button class="tab on" data-v="home" onclick="go('home')"><span class="ic">🏠</span>首页</button>
+  <button class="tab" data-v="symptom" onclick="go('symptom')"><span class="ic">🔍</span>自查</button>
+  <button class="tab" data-v="flow" onclick="go('flow')"><span class="ic">🗺️</span>流程</button>
+  <button class="tab" data-v="med" onclick="go('med')"><span class="ic">💊</span>用药</button>
+  <button class="tab" data-v="druglib" onclick="go('druglib')"><span class="ic">📖</span>药库</button>
+  <button class="tab" data-v="more" onclick="go('hospital')"><span class="ic">🏥</span>医院</button>
+</div>
+
+<!-- 悬浮语音按钮 -->
+<button class="voice-fab" id="voiceFab" onclick="voiceToggle()">🎤</button>
+<div class="voicebar" id="voicebar"><span class="mic">🎤</span><span id="voiceText">请说话…</span><button class="vdone" onclick="finishListen()">说完了</button></div>
+
+<!-- 提醒横幅 -->
+<div class="notify-banner" id="notifyBanner" onclick="this.classList.remove('show')"></div>
+
+<!-- 登录/注册弹层 -->
+<div class="mask" id="authMask">
+  <div class="sheet">
+    <h3 id="authTitle">登录 / 注册</h3>
+    <label class="f">手机号 / 账号
+      <input class="inp" id="authUser" placeholder="请输入手机号或账号">
+    </label>
+    <label class="f">密码
+      <input class="inp" id="authPass" type="password" placeholder="请输入密码">
+    </label>
+    <div class="gap6">
+      <button class="btn block" onclick="doLogin()">登录</button>
+      <button class="btn block ghost" onclick="doRegister()">注册新账号</button>
+    </div>
+    <p class="hint">首次使用请先注册。账号保存在云端，换设备也能登录。</p>
+  </div>
+</div>
+
+<!-- AI 用药建议弹层 -->
+<div class="mask" id="adviceMask">
+  <div class="sheet">
+    <h3>💡 AI 用药建议</h3>
+    <div id="adviceContent"></div>
+    <p class="hint">建议仅供参考，请以医生处方为准。</p>
+    <button class="btn block" style="margin-top:16px;" onclick="$('adviceMask').classList.remove('show')">我知道了</button>
+  </div>
+</div>
+
+<!-- 语音录入确认 -->
+<div class="mask" id="voiceAskMask">
+  <div class="sheet">
+    <h3>🎤 开启语音输入？</h3>
+    <p class="sub">语音输入需要麦克风权限，识别在本机完成。可以连续说多个症状或内容，说完后点击「说完了」按钮结束。</p>
+    <label class="f" style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;">
+      <input type="checkbox" id="voiceRemember" checked> 记住选择，下次不再询问
+    </label>
+    <div class="gap6">
+      <button class="btn block" onclick="confirmVoice(true)">开启语音</button>
+      <button class="btn block ghost" onclick="confirmVoice(false)">取消，手动输入</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==================== 数据：症状知识库 ==================== */
+// 紧急度: red=立即急诊 yellow=尽快就医(1-2天) green=可先观察
+// 每条症状直接对应紧急程度与建议科室，不给出具体病名
+// aliases 为口语说法，用于文字与语音识别匹配
+const SYMPTOMS = [
+  {id:'fever', name:'发热', aliases:['发烧','发着烧','低烧','高烧','体温高'], icon:'🌡️', hot:true, u:'yellow', d:['呼吸','全科']},
+  {id:'chill', name:'怕冷 / 寒战', aliases:['怕冷','发冷','寒战','打寒颤'], icon:'🥶', hot:false, u:'yellow', d:['呼吸','全科']},
+  {id:'cough', name:'咳嗽', aliases:['咳嗽','咳痰','干咳','咳嗽有痰'], icon:'😮‍💨', hot:true, u:'yellow', d:['呼吸']},
+  {id:'bloodSputum', name:'痰中带血', aliases:['痰中带血','咯血','咳血'], icon:'💨', hot:false, u:'red', d:['呼吸']},
+  {id:'soreThroat', name:'咽痛', aliases:['嗓子疼','喉咙痛','咽痛','嗓子痛'], icon:'🗣️', hot:false, u:'green', d:['耳鼻喉','呼吸']},
+  {id:'nose', name:'鼻塞 / 流涕', aliases:['鼻塞','流鼻涕','打喷嚏'], icon:'🤧', hot:false, u:'green', d:['耳鼻喉']},
+  {id:'breath', name:'气短 / 呼吸困难', aliases:['气短','喘不上气','呼吸困难','胸闷气短','喘得厉害'], icon:'🫁', hot:true, u:'red', d:['呼吸','心血管']},
+  {id:'chest', name:'胸痛 / 胸闷', aliases:['胸痛','胸口疼','胸闷','心口疼','胸口闷'], icon:'💔', hot:true, u:'red', d:['心血管']},
+  {id:'palp', name:'心慌 / 心悸', aliases:['心慌','心悸','心跳快','心跳不齐'], icon:'💓', hot:true, u:'yellow', d:['心血管']},
+  {id:'coldSweat', name:'出冷汗', aliases:['冷汗','出虚汗','大汗淋漓'], icon:'💦', hot:false, u:'yellow', d:['心血管','内分泌']},
+  {id:'bp', name:'血压升高', aliases:['血压高','血压升高','高血压'], icon:'🩸', hot:true, u:'yellow', d:['心血管']},
+  {id:'headache', name:'头痛', aliases:['头疼','头痛','偏头痛','头胀痛'], icon:'🤕', hot:true, u:'yellow', d:['神经']},
+  {id:'thunderHead', name:'突发剧烈头痛', aliases:['突发剧烈头痛','剧烈头疼','炸裂样头痛'], icon:'⚡', hot:false, u:'red', d:['神经']},
+  {id:'dizzy', name:'头晕 / 眩晕', aliases:['头晕','眩晕','天旋地转','站不稳','晕乎乎'], icon:'💫', hot:true, u:'yellow', d:['神经','心血管']},
+  {id:'stroke', name:'口角歪斜 / 言语不清', aliases:['口角歪斜','嘴歪','说话不清','言语不清','半身无力','一侧手脚无力'], icon:'🆘', hot:true, u:'red', d:['神经']},
+  {id:'numb', name:'手脚麻木', aliases:['手麻','脚麻','肢体麻木','手脚发麻'], icon:'🦶', hot:false, u:'yellow', d:['神经']},
+  {id:'cramp', name:'抽搐', aliases:['抽搐','抽风','惊厥'], icon:'🌀', hot:false, u:'red', d:['神经']},
+  {id:'faint', name:'晕厥 / 昏迷', aliases:['晕倒','晕厥','昏迷','不省人事','叫不醒'], icon:'😵', hot:false, u:'red', d:['急诊']},
+  {id:'abdomen', name:'腹痛', aliases:['肚子疼','腹痛','肚子痛','胃疼','胃痛'], icon:'🤢', hot:true, u:'yellow', d:['消化']},
+  {id:'severeAbd', name:'剧烈腹痛', aliases:['剧烈腹痛','肚子剧痛','绞痛难忍','肚子疼得厉害'], icon:'😖', hot:false, u:'red', d:['急诊','普外']},
+  {id:'vomit', name:'恶心 / 呕吐', aliases:['恶心','呕吐','想吐','吐了','恶心想吐'], icon:'🤮', hot:false, u:'yellow', d:['消化']},
+  {id:'diarrhea', name:'腹泻', aliases:['拉肚子','腹泻','拉稀','大便次数多'], icon:'💧', hot:false, u:'yellow', d:['消化']},
+  {id:'constip', name:'便秘', aliases:['便秘','拉不出','大便干结'], icon:'🚽', hot:true, u:'green', d:['消化']},
+  {id:'bloodStool', name:'便血 / 黑便', aliases:['便血','大便带血','黑便','血便'], icon:'🚨', hot:false, u:'red', d:['消化']},
+  {id:'appetite', name:'食欲下降', aliases:['没胃口','不想吃饭','食欲差','吃不下'], icon:'🍚', hot:false, u:'green', d:['消化','全科']},
+  {id:'jaundice', name:'皮肤 / 眼白发黄', aliases:['皮肤发黄','眼白发黄','眼睛发黄','尿色深黄'], icon:'🟡', hot:false, u:'yellow', d:['消化']},
+  {id:'swallow', name:'吞咽困难', aliases:['吞咽困难','咽不下东西','吃东西噎'], icon:'🍽️', hot:false, u:'yellow', d:['消化']},
+  {id:'sugar', name:'血糖异常', aliases:['血糖高','血糖低','糖尿病','口渴多尿','多饮多尿'], icon:'🍬', hot:true, u:'yellow', d:['内分泌']},
+  {id:'fatigue', name:'乏力', aliases:['乏力','没力气','疲劳','浑身没劲','疲乏'], icon:'😵', hot:true, u:'yellow', d:['全科']},
+  {id:'weightLoss', name:'体重下降', aliases:['体重下降','消瘦','瘦了很多'], icon:'⚖️', hot:false, u:'yellow', d:['全科','内分泌']},
+  {id:'joint', name:'关节痛', aliases:['关节疼','关节痛','关节炎','关节肿痛'], icon:'🦴', hot:true, u:'yellow', d:['骨科','风湿免疫']},
+  {id:'back', name:'腰背痛', aliases:['腰疼','腰痛','背痛','腰酸背痛'], icon:'🧍', hot:false, u:'yellow', d:['骨科']},
+  {id:'neck', name:'颈肩痛', aliases:['脖子疼','颈椎疼','颈肩痛','肩膀疼'], icon:'🙅', hot:false, u:'green', d:['骨科','康复']},
+  {id:'legSw', name:'下肢水肿', aliases:['腿肿','脚肿','下肢水肿','浮肿'], icon:'🦵', hot:false, u:'yellow', d:['心血管','泌尿']},
+  {id:'urine', name:'尿频 / 尿急 / 尿痛', aliases:['尿频','尿急','尿痛','小便疼','夜尿多'], icon:'🚰', hot:true, u:'yellow', d:['泌尿']},
+  {id:'urineBlock', name:'排尿困难', aliases:['尿不出来','排尿困难','排不出尿','尿潴留'], icon:'⛔', hot:false, u:'red', d:['泌尿','急诊']},
+  {id:'rash', name:'皮疹 / 瘙痒', aliases:['皮疹','起疹子','皮肤痒','瘙痒','荨麻疹'], icon:'🔴', hot:false, u:'yellow', d:['皮肤']},
+  {id:'allergy', name:'突发肿胀 / 过敏', aliases:['过敏','脸肿','喉咙水肿','全身肿','药物过敏'], icon:'🎈', hot:false, u:'red', d:['急诊']},
+  {id:'vision', name:'视力模糊', aliases:['视力模糊','看不清','视力下降'], icon:'👁️', hot:true, u:'yellow', d:['眼科']},
+  {id:'visionLoss', name:'突然看不见', aliases:['突然看不见','失明','眼前发黑'], icon:'🌑', hot:false, u:'red', d:['眼科']},
+  {id:'eyePain', name:'眼痛 / 眼红', aliases:['眼睛疼','眼痛','眼红','眼睛发红'], icon:'👀', hot:false, u:'yellow', d:['眼科']},
+  {id:'tinnitus', name:'耳鸣 / 听力下降', aliases:['耳鸣','耳朵响','听力下降','听不清'], icon:'👂', hot:false, u:'yellow', d:['耳鼻喉']},
+  {id:'tooth', name:'牙痛', aliases:['牙疼','牙痛','牙龈肿'], icon:'🦷', hot:false, u:'yellow', d:['口腔']},
+  {id:'mouth', name:'口腔溃疡', aliases:['口腔溃疡','口疮','嘴里溃疡'], icon:'😷', hot:false, u:'green', d:['口腔']},
+  {id:'insomnia', name:'失眠', aliases:['失眠','睡不着','睡不好','早醒'], icon:'🌙', hot:true, u:'green', d:['神经','精神心理']},
+  {id:'mood', name:'情绪低落 / 焦虑', aliases:['情绪低落','心情不好','焦虑','烦躁'], icon:'😔', hot:false, u:'green', d:['精神心理']},
+  {id:'memory', name:'记忆力下降', aliases:['记忆力下降','忘事','记性差','丢三落四'], icon:'🧠', hot:true, u:'yellow', d:['神经']},
+  {id:'injury', name:'外伤 / 出血', aliases:['摔伤','外伤','出血','割伤','破皮','流血'], icon:'🩹', hot:false, u:'red', d:['急诊','普外']},
+];
+// 症状组合升级规则：同时出现多条症状时提升紧急程度
+const COMBO_RULES = [
+  {ids:['fever','breath'], note:'发热同时气短，需警惕肺部感染'},
+  {ids:['headache','vomit'], note:'头痛伴呕吐，需警惕颅脑问题'},
+  {ids:['dizzy','numb'], note:'头晕伴手脚麻木，需警惕脑血管问题'},
+  {ids:['palp','coldSweat'], note:'心慌伴出冷汗，需警惕心脏或血糖问题'},
+  {ids:['sugar','faint'], note:'血糖异常伴晕厥，情况紧急'},
+  {ids:['vomit','diarrhea'], note:'呕吐伴腹泻容易脱水，老年人需尽快就医'},
+];
+
+/* ==================== 数据：医院库（示例，可按定位替换） ==================== */
+const HOSPITALS = [
+  {name:'市第一人民医院', dept:['心血管','呼吸','神经','普外','急诊'], lat:30.5728, lng:104.0668, level:'三级甲等'},
+  {name:'市中心医院', dept:['心血管','消化','骨科','内分泌','急诊'], lat:30.5800, lng:104.0750, level:'三级甲等'},
+  {name:'市中医院', dept:['中医','针灸','康复','老年病'], lat:30.5900, lng:104.0550, level:'三级'},
+  {name:'区人民医院', dept:['全科','呼吸','泌尿','儿科','急诊'], lat:30.5650, lng:104.0500, level:'二级甲等'},
+  {name:'社区卫生服务中心', dept:['全科','慢病管理','老年体检'], lat:30.5600, lng:104.0450, level:'一级'},
+];
+
+/* ==================== 就医流程 ==================== */
+const FLOW = [
+  {t:'预约挂号', d:'通过医院公众号/APP/电话预约，选择刚才判断的科室。老人可请家人代约。'},
+  {t:'带好材料', d:'身份证、医保卡、既往病历和检查报告、正在吃的药（带药盒）。'},
+  {t:'报到取号', d:'提前 30 分钟到医院，在自助机或人工窗口取号报到。'},
+  {t:'候诊', d:'在相应科室候诊区等候，听叫号。有胸痛、气短等急症请找导诊说明。'},
+  {t:'就诊', d:'向医生清楚描述：哪里不舒服、多久了、有多重、有无其他病史。'},
+  {t:'检查', d:'按医生开的单子去缴费、做检查。抽血常需空腹，问清注意事项。'},
+  {t:'取报告复诊', d:'拿到报告后回诊室给医生看，确定诊断和用药。'},
+  {t:'缴费取药', d:'凭处方缴费取药，核对药名和用法。医保报销在缴费时直接结算。'},
+];
+
+const URGENT_TIP = {
+  red:'🆘 情况紧急：请立即前往医院急诊，或拨打 120。不要拖延！',
+  yellow:'⏰ 建议 1-2 天内就医，尽快挂号就诊。',
+  green:'😊 情况较轻，可先居家观察。若症状加重或持续，再及时就医。'
+};
+
+/* ==================== 数据：药品知识库（依据官方资料整理） ==================== */
+const DRUG_DB = [
+  /* ---- 抗血小板 / 抗凝 ---- */
+  {name:'阿司匹林', keys:['阿司匹林','拜阿司匹灵','aspirin','阿司匹灵'], cat:'抗血小板/抗凝',
+   advice:'饭后服用，减少胃部刺激。肠溶片需整片吞服，不可掰碎。',
+   caution:'有胃溃疡、胃出血史、哮喘、痛风者慎用；近期需手术请提前告知医生。',
+   inter:'勿与华法林等其他抗凝药自行联用，出血风险大增。'},
+  {name:'氯吡格雷', keys:['氯吡格雷','波立维','clopidogrel'], cat:'抗血小板/抗凝',
+   advice:'每天固定时间服用一次，可与食物同服或空腹。',
+   caution:'注意牙龈出血、皮肤瘀斑等出血迹象；近期手术请告知医生。',
+   inter:'与奥美拉唑、埃索美拉唑同用可能减弱药效，可请医生换用其他护胃药。'},
+  {name:'替格瑞洛', keys:['替格瑞洛','倍林达','ticagrelor'], cat:'抗血小板/抗凝',
+   advice:'每天早晚各服一次，漏服不要加倍补服。',
+   caution:'可能出现气短、出血；如有胸闷加重立即就医。',
+   inter:'与阿司匹林联用为医嘱方案，出血风险高，切勿自行加用其他抗凝药。'},
+  {name:'华法林', keys:['华法林','warfarin'], cat:'抗血小板/抗凝',
+   advice:'每天固定时间服用，务必按医嘱剂量，定期监测 INR（凝血）。',
+   caution:'出血风险高，拔牙、手术、外伤需告知医生；饮食中绿叶菜量需稳定。',
+   inter:'与阿司匹林、布洛芬、多种抗生素相互作用多，切勿自行加药。'},
+  {name:'利伐沙班', keys:['利伐沙班','拜瑞妥','rivaroxaban'], cat:'抗血小板/抗凝',
+   advice:'每天固定时间服用；15mg、20mg 规格建议随餐服用。',
+   caution:'注意黑便、血尿、牙龈出血；跌伤撞伤后异常肿痛及时就医。',
+   inter:'与阿司匹林、其他抗凝药联用出血风险高，需严格遵医嘱。'},
+  {name:'达比加群酯', keys:['达比加群','泰毕全','dabigatran'], cat:'抗血小板/抗凝',
+   advice:'每天固定时间服用，随餐可减轻胃部不适；胶囊须整粒吞服。',
+   caution:'出血风险高，注意瘀斑、血尿；肾功能不全者需遵医嘱调整。',
+   inter:'与利福平、部分抗真菌药及抗凝药相互作用多，勿自行加药。'},
+  {name:'阿哌沙班', keys:['阿哌沙班','艾乐妥','apixaban'], cat:'抗血小板/抗凝',
+   advice:'每天固定时间早晚各一次，可随餐或空腹。',
+   caution:'注意出血迹象；拔牙、手术前需告知医生。',
+   inter:'与阿司匹林、非甾体止痛药联用会升高出血风险。'},
+
+  /* ---- 降压药 ---- */
+  {name:'硝苯地平', keys:['硝苯地平','心痛定','拜新同','nifedipine'], cat:'降压药',
+   advice:'控释/缓释片需整片吞服，不可掰开；建议固定时间服用。',
+   caution:'可能引起面部潮红、头痛、脚踝水肿，多可耐受。',
+   inter:'勿与葡萄柚（西柚）汁同服，会升高血药浓度。'},
+  {name:'氨氯地平', keys:['氨氯地平','络活喜','amlodipine'], cat:'降压药',
+   advice:'每天固定时间服用一次即可，漏服尽快补、接近下次则跳过。',
+   caution:'可能出现脚踝水肿、头痛，一般较轻微。',
+   inter:'与沙坦类联用降压更平稳，属常用组合。'},
+  {name:'非洛地平', keys:['非洛地平','波依定','felodipine'], cat:'降压药',
+   advice:'缓释片晨起整片吞服，勿嚼碎或掰开。',
+   caution:'可能引起头痛、面部潮红、脚踝水肿。',
+   inter:'避免与西柚汁同服，以免血药浓度升高。'},
+  {name:'左旋氨氯地平', keys:['左旋氨氯地平','安内真','levamlodipine'], cat:'降压药',
+   advice:'每天一次，固定时间服用。',
+   caution:'半衰期较长，起效平稳；注意踝部水肿。',
+   inter:'与西柚汁同服可能增强降压作用，建议避免。'},
+  {name:'缬沙坦', keys:['缬沙坦','代文','valsartan'], cat:'降压药',
+   advice:'每天一次，可与食物同服或空腹。',
+   caution:'可能引起血钾升高，需定期查血钾和肾功能；孕妇禁用。',
+   inter:'勿与保钾利尿剂、补钾药物同用，易致高钾血症。'},
+  {name:'厄贝沙坦', keys:['厄贝沙坦','安博维','irbesartan'], cat:'降压药',
+   advice:'每天一次，不受饮食影响。',
+   caution:'需定期查血钾和肾功能；孕妇禁用。',
+   inter:'与保钾利尿剂同用易致高血钾。'},
+  {name:'氯沙坦', keys:['氯沙坦','科素亚','losartan'], cat:'降压药',
+   advice:'每天一次，可空腹或随餐。',
+   caution:'可能引起头晕、血钾升高，需定期复查。',
+   inter:'与保钾药、补钾药同用可致高血钾。'},
+  {name:'替米沙坦', keys:['替米沙坦','美卡素','telmisartan'], cat:'降压药',
+   advice:'每天一次，可空腹或随餐服用。',
+   caution:'胆道梗阻、严重肝功能不全者禁用。',
+   inter:'与保钾利尿剂同用需警惕高血钾。'},
+  {name:'奥美沙坦', keys:['奥美沙坦','傲坦','olmesartan'], cat:'降压药',
+   advice:'每天一次，固定时间服用。',
+   caution:'注意血钾和肾功能复查。',
+   inter:'与补钾药、保钾利尿剂联用易高血钾。'},
+  {name:'坎地沙坦', keys:['坎地沙坦','必洛斯','candesartan'], cat:'降压药',
+   advice:'每天一次，可空腹或随餐。',
+   caution:'开始用药可能出现头晕，起身放慢。',
+   inter:'与保钾利尿剂联用需监测血钾。'},
+  {name:'依那普利', keys:['依那普利','悦宁定','enalapril'], cat:'降压药',
+   advice:'每天一次或遵医嘱分次，固定时间服用。',
+   caution:'常见干咳，无法耐受可咨询医生换沙坦类；孕妇禁用。',
+   inter:'与保钾药、补钾药同用可致高血钾。'},
+  {name:'卡托普利', keys:['卡托普利','开博通','captopril'], cat:'降压药',
+   advice:'餐前 1 小时空腹服用，吸收更稳定。',
+   caution:'可能出现干咳、味觉异常；孕妇禁用。',
+   inter:'与保钾利尿剂、补钾药同用易高血钾。'},
+  {name:'培哚普利', keys:['培哚普利','雅施达','perindopril'], cat:'降压药',
+   advice:'每天一次，建议清晨餐前服用。',
+   caution:'注意干咳、头晕；肾功能不全者需调整剂量。',
+   inter:'与保钾药同用易高血钾，与利尿剂联用注意低血压。'},
+  {name:'贝那普利', keys:['贝那普利','洛汀新','benazepril'], cat:'降压药',
+   advice:'每天一次，可空腹或随餐。',
+   caution:'常见干咳；孕妇禁用。',
+   inter:'与保钾利尿剂同用可致高血钾。'},
+  {name:'美托洛尔', keys:['美托洛尔','倍他乐克','metoprolol'], cat:'降压药',
+   advice:'缓释片每天一次；普通片按医嘱分次。不可突然停药，需逐渐减量。',
+   caution:'可能引起心率偏慢、乏力；哮喘/严重心动过缓者禁用。',
+   inter:'与地尔硫卓、维拉帕米联用可致心率过慢。'},
+  {name:'比索洛尔', keys:['比索洛尔','康忻','bisoprolol'], cat:'降压药',
+   advice:'每天清晨服用一次，不可突然停药。',
+   caution:'可能心率偏慢、头晕；哮喘与严重心动过缓者禁用。',
+   inter:'与维拉帕米等联用可致严重心动过缓。'},
+  {name:'卡维地洛', keys:['卡维地洛','金络','carvedilol'], cat:'降压药',
+   advice:'建议随餐服用，按医嘱逐渐加量。',
+   caution:'可能头晕、心率慢，起身放慢；心衰患者需医生指导下调整。',
+   inter:'与降糖药联用可能掩盖低血糖症状，注意监测。'},
+  {name:'氢氯噻嗪', keys:['氢氯噻嗪','双氢克尿噻','hydrochlorothiazide'], cat:'降压药',
+   advice:'早晨服用，避免夜间频繁起夜。',
+   caution:'可能低钾、低钠，需定期查电解质；痛风患者慎用。',
+   inter:'与普利类/沙坦类联用需定期复查血钾。'},
+  {name:'吲达帕胺', keys:['吲达帕胺','寿比山','indapamide'], cat:'降压药',
+   advice:'每天早晨服用一次。',
+   caution:'可能低钾，需定期查电解质；肝肾功能严重异常者禁用。',
+   inter:'与其他降压药联用注意血压过低。'},
+  {name:'螺内酯', keys:['螺内酯','安体舒通','spironolactone'], cat:'降压药',
+   advice:'早晨服用，避免夜间起夜。',
+   caution:'保钾利尿剂，需定期查血钾；男性可能出现乳房胀痛。',
+   inter:'与沙坦类、普利类联用易致高血钾，切勿自行加药。'},
+  {name:'呋塞米', keys:['呋塞米','速尿','furosemide'], cat:'降压药',
+   advice:'早晨服用，避免夜间频繁起夜。',
+   caution:'可能引起低钾/低钠，需定期查电解质；痛风患者慎用。',
+   inter:'与沙坦类/普利类联用需警惕血压过低与高钾。'},
+  {name:'特拉唑嗪', keys:['特拉唑嗪','高特灵','terazosin'], cat:'降压药',
+   advice:'首剂建议睡前服用，起床和站起时动作放慢。',
+   caution:'可能体位性低血压、头晕、鼻塞。',
+   inter:'与其他降压药同用会增强降压作用，注意监测血压。'},
+
+  /* ---- 降脂药 ---- */
+  {name:'阿托伐他汀', keys:['阿托伐他汀','立普妥','atorvastatin'], cat:'降脂药',
+   advice:'一般晚间或每天固定时间服用。',
+   caution:'可能引起肌肉酸痛，若明显请及时就医查肌酶；肝功能异常者慎用。',
+   inter:'勿大量饮酒；与部分抗真菌药、抗生素联用需医生评估。'},
+  {name:'瑞舒伐他汀', keys:['瑞舒伐他汀','可定','rosuvastatin'], cat:'降脂药',
+   advice:'每天一次，任何固定时间服用均可。',
+   caution:'注意肌肉疼痛、乏力；定期复查肝功和血脂。',
+   inter:'与环孢素、部分抗凝药联用需医生评估。'},
+  {name:'辛伐他汀', keys:['辛伐他汀','舒降之','simvastatin'], cat:'降脂药',
+   advice:'建议晚间服用。',
+   caution:'出现肌痛、深色尿立即就医；避免大量饮用西柚汁。',
+   inter:'与克拉霉素、伊曲康唑等联用会显著增加肌病风险，禁止自行合用。'},
+  {name:'匹伐他汀', keys:['匹伐他汀','力清之','pitavastatin'], cat:'降脂药',
+   advice:'每天一次，固定时间服用。',
+   caution:'注意肌肉酸痛与肝功复查。',
+   inter:'与其他降脂药、部分免疫抑制剂联用需遵医嘱。'},
+  {name:'依折麦布', keys:['依折麦布','益适纯','ezetimibe'], cat:'降脂药',
+   advice:'每天一次，可与或不与食物同服，常与他汀类联用。',
+   caution:'可能肌肉酸痛、转氨酶升高，需定期复查。',
+   inter:'与贝特类联用需医生评估胆囊与肌肉风险。'},
+
+  /* ---- 心衰 / 冠心病 / 抗心律失常 ---- */
+  {name:'地高辛', keys:['地高辛','digoxin'], cat:'心衰/冠心病',
+   advice:'严格按医嘱剂量，每天固定时间；漏服不可加倍补服。',
+   caution:'治疗窗口窄，出现恶心、视物发黄、心律失常立即就医。',
+   inter:'与利尿剂、部分抗心律失常药联用易中毒，需医生严密监测。'},
+  {name:'单硝酸异山梨酯', keys:['单硝酸异山梨酯','依姆多','isosorbide'], cat:'心衰/冠心病',
+   advice:'缓释片清晨整片吞服，不可嚼碎；按医嘱留有服药间隔。',
+   caution:'开始用药可能头痛，多可逐渐适应；低血压者注意。',
+   inter:'与西地那非等 PDE-5 抑制剂同用可致严重低血压，绝对禁止。'},
+  {name:'硝酸甘油', keys:['硝酸甘油','耐绞宁','nitroglycerin'], cat:'心衰/冠心病',
+   advice:'心绞痛发作时舌下含服，取坐位；5 分钟未缓解可再含 1 片，最多 3 片。',
+   caution:'含服后可能头痛、头晕；3 片后仍不缓解或伴大汗、气短，立即拨打 120。',
+   inter:'与西地那非类同用可致严重低血压，绝对禁止。'},
+  {name:'曲美他嗪', keys:['曲美他嗪','万爽力','trimetazidine'], cat:'心衰/冠心病',
+   advice:'随餐服用，按医嘱剂量。',
+   caution:'帕金森病、震颤等运动障碍者禁用；出现症状请就医。',
+   inter:'一般无明显常用相互作用，仍需告知医生全部用药。'},
+  {name:'胺碘酮', keys:['胺碘酮','可达龙','amiodarone'], cat:'心衰/冠心病',
+   advice:'严格按医嘱服药，剂量调整需医生指导。',
+   caution:'需定期复查心电图、甲状腺功能、肝功能和肺部情况；外出注意防晒。',
+   inter:'与多种药物相互作用多，如地高辛、华法林，联用需严密监测。'},
+  {name:'沙库巴曲缬沙坦', keys:['沙库巴曲缬沙坦','诺欣妥','sacubitril'], cat:'心衰/冠心病',
+   advice:'每天早晚各一次，可随餐或空腹。',
+   caution:'可能低血压、高血钾、肾功能变化，需定期复查。',
+   inter:'与普利类换药时须间隔 36 小时，禁止同时服用。'},
+  {name:'普罗帕酮', keys:['普罗帕酮','心律平','propafenone'], cat:'心衰/冠心病',
+   advice:'按医嘱定时服用，剂量个体差异大。',
+   caution:'可能出现头晕、味觉异常、心律失常加重，及时复诊。',
+   inter:'与胺碘酮、地高辛等联用需医生监测。'},
+
+  /* ---- 降糖药 ---- */
+  {name:'二甲双胍', keys:['二甲双胍','格华止','metformin'], cat:'降糖药',
+   advice:'随餐或餐后服用可减轻肠胃不适。',
+   caution:'长期服用需定期查肾功能与维生素B12；做增强CT前需暂停并告知医生。',
+   inter:'与酒精同服可能诱发乳酸性酸中毒，用药期间应戒酒。'},
+  {name:'阿卡波糖', keys:['阿卡波糖','拜糖平','acarbose'], cat:'降糖药',
+   advice:'与第一口饭同时嚼服，效果最好。',
+   caution:'可能引起腹胀、排气多，一般会逐渐适应。',
+   inter:'单用一般不会低血糖，但与磺脲类/胰岛素联用发生低血糖时，需直接吃葡萄糖，不能靠蔗糖。'},
+  {name:'格列美脲', keys:['格列美脲','亚莫利','glimepiride'], cat:'降糖药',
+   advice:'饭前服用；务必按时吃饭，否则易发生低血糖。',
+   caution:'低血糖风险较高，随身携带糖果；肝肾功能不全者慎用。',
+   inter:'与酒精、其他降糖药同用可能加重低血糖。'},
+  {name:'格列齐特', keys:['格列齐特','达美康','gliclazide'], cat:'降糖药',
+   advice:'缓释片早餐时服用，整片吞服。',
+   caution:'注意低血糖，随身备糖；肾功能不全者遵医嘱。',
+   inter:'与磺胺类、酒精等联用低血糖风险增加。'},
+  {name:'格列吡嗪', keys:['格列吡嗪','美吡达','glipizide'], cat:'降糖药',
+   advice:'一般餐前 30 分钟服用，服药后及时进食。',
+   caution:'低血糖风险较高，注意规律进餐。',
+   inter:'与其他降糖药联用需加强血糖监测。'},
+  {name:'瑞格列奈', keys:['瑞格列奈','诺和龙','repaglinide'], cat:'降糖药',
+   advice:'餐前 15 分钟服用；不进餐则不服药。',
+   caution:'低血糖风险，注意按时进食；肝功能不全者遵医嘱。',
+   inter:'与氯吡格雷、部分抗真菌药联用可能增强降糖作用。'},
+  {name:'吡格列酮', keys:['吡格列酮','艾可拓','pioglitazone'], cat:'降糖药',
+   advice:'每天一次，可随餐或空腹。',
+   caution:'可能水肿、体重增加；心衰患者慎用，需遵医嘱。',
+   inter:'与胰岛素联用水肿风险增加，注意复查。'},
+  {name:'西格列汀', keys:['西格列汀','捷诺维','sitagliptin'], cat:'降糖药',
+   advice:'每天一次，可与食物同服或空腹。',
+   caution:'可能出现关节痛、胰腺炎相关症状（持续腹痛），及时就医。',
+   inter:'与磺脲类、胰岛素联用需注意低血糖。'},
+  {name:'沙格列汀', keys:['沙格列汀','安立泽','saxagliptin'], cat:'降糖药',
+   advice:'每天一次，固定时间服用。',
+   caution:'有心衰病史者需医生评估；注意关节痛等不适。',
+   inter:'与强效 CYP3A4 抑制剂联用需调整剂量，遵医嘱。'},
+  {name:'达格列净', keys:['达格列净','安达唐','dapagliflozin'], cat:'降糖药',
+   advice:'每天早晨一次，随餐或空腹均可。',
+   caution:'注意多饮水，防范泌尿生殖道感染；手术或长时间禁食前告知医生。',
+   inter:'与利尿剂联用需注意脱水和低血压。'},
+  {name:'恩格列净', keys:['恩格列净','欧唐静','empagliflozin'], cat:'降糖药',
+   advice:'每天一次，固定时间服用。',
+   caution:'注意多饮水；出现恶心、腹痛、乏力等异常及时就医。',
+   inter:'与利尿剂、降压药联用注意容量不足与低血压。'},
+  {name:'利拉鲁肽', keys:['利拉鲁肽','诺和力','liraglutide'], cat:'降糖药',
+   advice:'每天一次皮下注射，固定时间；常见胃肠不适。',
+   caution:'有甲状腺髓样癌病史或家族史者禁用；持续剧烈腹痛请就医。',
+   inter:'与磺脲类、胰岛素联用低血糖风险增加。'},
+  {name:'德谷胰岛素', keys:['德谷胰岛素','诺和达','tresiba'], cat:'降糖药',
+   advice:'每天同一时间皮下注射，轮换注射部位。',
+   caution:'注意低血糖；开封后按规定期限和温度保存。',
+   inter:'与其他降糖药联用需调整剂量并监测血糖。'},
+  {name:'胰岛素', keys:['胰岛素','insulin','诺和灵','诺和锐','来得时','优泌林'], cat:'降糖药',
+   advice:'按医嘱定时注射，轮换注射部位；注射后按时进食。',
+   caution:'注意低血糖（心慌、出汗、手抖），随身备糖；未开封冷藏、开封后室温保存。',
+   inter:'与口服降糖药联用需警惕低血糖叠加。'},
+
+  /* ---- 甲状腺 ---- */
+  {name:'左甲状腺素', keys:['左甲状腺素','优甲乐','左甲状腺','levothyroxine'], cat:'甲状腺',
+   advice:'清晨空腹、早餐前 30-60 分钟服用，与钙剂/铁剂间隔 4 小时以上。',
+   caution:'需定期复查甲功调整剂量；冠心病患者起始需小剂量。',
+   inter:'与钙片、铁剂、豆浆、咖啡同服会影响吸收。'},
+  {name:'甲巯咪唑', keys:['甲巯咪唑','赛治','methimazole'], cat:'甲状腺',
+   advice:'按医嘱分次或每日一次，饭后服用可减少胃肠不适。',
+   caution:'需定期查血常规和肝功能；出现咽痛、发热立即就医。',
+   inter:'与华法林等药物联用可能增强药效，需监测。'},
+  {name:'丙硫氧嘧啶', keys:['丙硫氧嘧啶','propylthiouracil'], cat:'甲状腺',
+   advice:'按医嘱服药，剂量调整需医生指导。',
+   caution:'需定期查肝功能；出现黄疸、深色尿、严重乏力立即就医。',
+   inter:'与抗凝药联用需监测出血风险。'},
+
+  /* ---- 胃肠药 ---- */
+  {name:'奥美拉唑', keys:['奥美拉唑','洛赛克','omeprazole'], cat:'胃肠药',
+   advice:'早餐前 30-60 分钟空腹服用，效果最佳。',
+   caution:'长期服用需遵医嘱，并关注骨密度与维生素B12。',
+   inter:'可影响氯吡格雷等药的疗效，联用前咨询医生。'},
+  {name:'泮托拉唑', keys:['泮托拉唑','潘妥洛克','pantoprazole'], cat:'胃肠药',
+   advice:'早餐前空腹服用，整片吞服。',
+   caution:'长期用药需遵医嘱，注意骨折风险。',
+   inter:'一般相互作用较少，仍需告知医生全部用药。'},
+  {name:'雷贝拉唑', keys:['雷贝拉唑','波利特','rabeprazole'], cat:'胃肠药',
+   advice:'早餐前空腹服用。',
+   caution:'长期服用需医生评估。',
+   inter:'与其他经胃酸影响吸收的药物同用需注意。'},
+  {name:'埃索美拉唑', keys:['埃索美拉唑','耐信','esomeprazole'], cat:'胃肠药',
+   advice:'早餐前 1 小时空腹整片吞服。',
+   caution:'长期用药注意骨密度和维生素B12。',
+   inter:'与氯吡格雷同用可能减弱其药效，需咨询医生。'},
+  {name:'铝碳酸镁', keys:['铝碳酸镁','达喜','hydrotalcite'], cat:'胃肠药',
+   advice:'饭后 1-2 小时或胃部不适时嚼服。',
+   caution:'长期大量使用需注意便秘；肾功能不全者遵医嘱。',
+   inter:'会减少多种药物吸收，与其他药间隔 1-2 小时。'},
+  {name:'蒙脱石散', keys:['蒙脱石散','思密达','smectite'], cat:'胃肠药',
+   advice:'空腹服用效果更好，按说明书用温水调匀。',
+   caution:'可能引起便秘，多饮水。',
+   inter:'会吸附其他药物，需间隔 2 小时以上服用。'},
+  {name:'双歧杆菌三联活菌', keys:['双歧杆菌','培菲康','probiotics'], cat:'胃肠药',
+   advice:'用不超过 40℃ 的温水送服，冷藏保存。',
+   caution:'饭前或饭后按说明书服用，坚持疗程。',
+   inter:'与抗生素同服会失效，需间隔 2 小时以上。'},
+  {name:'乳果糖', keys:['乳果糖','杜密克','lactulose'], cat:'胃肠药',
+   advice:'早晨服用，可兑水或果汁；多饮水。',
+   caution:'可能腹胀，多在适应后减轻；糖尿病者选用需遵医嘱。',
+   inter:'与其他导泻药联用需医生评估。'},
+  {name:'多潘立酮', keys:['多潘立酮','吗丁啉','domperidone'], cat:'胃肠药',
+   advice:'餐前 15-30 分钟服用。',
+   caution:'心脏 QT 风险者慎用，出现心悸及时就医。',
+   inter:'与酮康唑、红霉素等联用可增加心律失常风险。'},
+  {name:'莫沙必利', keys:['莫沙必利','mosapride'], cat:'胃肠药',
+   advice:'餐前服用，按医嘱疗程使用。',
+   caution:'可能腹泻、腹痛；出现心悸等不适就医。',
+   inter:'与抗胆碱药同用可能影响疗效。'},
+  {name:'硫糖铝', keys:['硫糖铝','sucralfate'], cat:'胃肠药',
+   advice:'餐前 1 小时及睡前空腹服用。',
+   caution:'可能便秘；肾功能不全者慎用。',
+   inter:'影响多种药物吸收，与其他药间隔 2 小时。'},
+  {name:'胶体果胶铋', keys:['胶体果胶铋','colloidal bismuth'], cat:'胃肠药',
+   advice:'餐前 30 分钟服用。',
+   caution:'服药期间大便变黑属正常现象，停药后可恢复。',
+   inter:'勿与牛奶、抗酸药同服，以免影响疗效。'},
+
+  /* ---- 呼吸药 ---- */
+  {name:'沙丁胺醇', keys:['沙丁胺醇','万托林','salbutamol'], cat:'呼吸药',
+   advice:'气雾剂按需吸入缓解喘息；用后漱口。',
+   caution:'若吸入次数明显增多，提示控制不佳，请及时就医。',
+   inter:'与 β 受体阻滞剂同用可能拮抗疗效，告知医生。'},
+  {name:'布地奈德福莫特罗', keys:['布地奈德福莫特罗','信必可','budesonide'], cat:'呼吸药',
+   advice:'每天早晚固定时间吸入，吸后漱口；急救用法遵医嘱。',
+   caution:'坚持用药才能控制哮喘，不要擅自停药。',
+   inter:'与强效 CYP3A4 抑制剂联用需医生评估。'},
+  {name:'噻托溴铵', keys:['噻托溴铵','思力华','tiotropium'], cat:'呼吸药',
+   advice:'每天固定时间吸入一次；胶囊仅供吸入，不可吞服，用后漱口。',
+   caution:'可能出现口干；青光眼、前列腺增生者遵医嘱。',
+   inter:'与其他抗胆碱吸入药同用需医生评估。'},
+  {name:'孟鲁司特', keys:['孟鲁司特','顺尔宁','montelukast'], cat:'呼吸药',
+   advice:'睡前服用，可与食物同服或空腹。',
+   caution:'出现情绪变化、失眠、行为异常需告知医生。',
+   inter:'与苯巴比妥等肝酶诱导剂联用需遵医嘱。'},
+  {name:'氨溴索', keys:['氨溴索','沐舒坦','ambroxol'], cat:'呼吸药',
+   advice:'饭后服用，服药期间多饮水。',
+   caution:'胃溃疡患者慎用；出现皮疹等过敏反应停药就医。',
+   inter:'与强力镇咳药同用可能使痰液滞留，需遵医嘱。'},
+  {name:'乙酰半胱氨酸', keys:['乙酰半胱氨酸','富露施','acetylcysteine'], cat:'呼吸药',
+   advice:'饭后服用，用半杯温水溶解后饮用。',
+   caution:'哮喘患者需医生指导下使用；出现支气管痉挛立即停药。',
+   inter:'勿与强力镇咳药同用；与抗生素间隔 2 小时。'},
+  {name:'复方甘草片', keys:['复方甘草片','甘草片'], cat:'呼吸药',
+   advice:'按说明书短期含服或口服，不宜长期使用。',
+   caution:'含阿片成分，高血压、心衰患者慎用；超量可成瘾。',
+   inter:'与强心苷类、利尿剂同用需注意电解质与血压。'},
+
+  /* ---- 抗感染药 ---- */
+  {name:'阿莫西林', keys:['阿莫西林','阿莫仙','amoxicillin'], cat:'抗感染药',
+   advice:'按处方按时服完疗程，可与食物同服减轻胃部不适。',
+   caution:'青霉素过敏者禁用；出现皮疹、呼吸困难立即停药就医。',
+   inter:'与华法林联用可能增强抗凝作用，注意监测。'},
+  {name:'阿莫西林克拉维酸钾', keys:['阿莫西林克拉维酸钾','安灭菌','augmentin'], cat:'抗感染药',
+   advice:'随餐服用可减少胃肠不适，按疗程服完。',
+   caution:'青霉素过敏者禁用；注意腹泻、皮疹。',
+   inter:'与别嘌醇同用皮疹风险增加，需告知医生。'},
+  {name:'头孢呋辛酯', keys:['头孢呋辛酯','西力欣','cefuroxime'], cat:'抗感染药',
+   advice:'饭后服用吸收更好，按疗程服完。',
+   caution:'头孢类过敏史者慎用；服药期间及停药一周内禁酒。',
+   inter:'与华法林联用需监测出血。'},
+  {name:'头孢克肟', keys:['头孢克肟','世福素','cefixime'], cat:'抗感染药',
+   advice:'可随餐或空腹，按疗程服完。',
+   caution:'服药期间及停药一周内禁酒；注意腹泻。',
+   inter:'与强效利尿剂同用需注意肾功能。'},
+  {name:'左氧氟沙星', keys:['左氧氟沙星','可乐必妥','levofloxacin'], cat:'抗感染药',
+   advice:'多饮水；与含铝/镁抗酸剂间隔 2 小时以上。',
+   caution:'出现肌腱疼痛、麻木或心悸立即停药就医；避免日晒。',
+   inter:'与华法林、降糖药联用需加强监测。'},
+  {name:'左氧氟沙星滴眼液', keys:['左氧氟沙星滴眼液','可乐必妥滴眼液'], cat:'眼科',
+   advice:'按医嘱滴眼，瓶口勿接触眼睛；按疗程使用。',
+   caution:'出现眼痛、红肿加重停药就医；勿与他人共用。',
+   inter:'与其他眼药同用需间隔 5 分钟以上。'},
+  {name:'阿奇霉素', keys:['阿奇霉素','希舒美','azithromycin'], cat:'抗感染药',
+   advice:'片剂餐前 1 小时或餐后 2 小时服用；按疗程服完。',
+   caution:'心慌、晕厥或肝功能异常及时就医。',
+   inter:'与华法林、抗心律失常药联用需医生监测。'},
+  {name:'克拉霉素', keys:['克拉霉素','克拉仙','clarithromycin'], cat:'抗感染药',
+   advice:'按医嘱定时服用，可随餐或空腹。',
+   caution:'肝功能异常者遵医嘱；出现腹泻、皮疹就医。',
+   inter:'与他汀类、华法林、多潘立酮等相互作用多，禁止自行联用。'},
+  {name:'甲硝唑', keys:['甲硝唑','灭滴灵','metronidazole'], cat:'抗感染药',
+   advice:'随餐服用可减轻胃肠不适，按疗程服完。',
+   caution:'服药期间及停药后 3 日内禁酒，否则可致双硫仑样反应。',
+   inter:'与华法林联用增强抗凝作用，需监测。'},
+  {name:'诺氟沙星', keys:['诺氟沙星','氟哌酸','norfloxacin'], cat:'抗感染药',
+   advice:'空腹服用并多饮水。',
+   caution:'未成年人禁用；老年人注意肌腱疼痛，出现即停药就医。',
+   inter:'与含铝/镁/钙制剂间隔 2 小时以上。'},
+  {name:'氟康唑', keys:['氟康唑','大扶康','fluconazole'], cat:'抗感染药',
+   advice:'按医嘱服用，定期复查肝功能。',
+   caution:'出现黄疸、深色尿及时就医；过敏者禁用。',
+   inter:'与华法林、磺脲类、他汀类等相互作用多，需医生评估。'},
+  {name:'奥司他韦', keys:['奥司他韦','达菲','oseltamivir'], cat:'抗感染药',
+   advice:'症状出现 48 小时内尽早服用，随餐可减轻恶心。',
+   caution:'可能出现恶心、头痛；出现精神行为异常及时就医。',
+   inter:'一般相互作用少，仍需告知医生全部用药。'},
+
+  /* ---- 神经 / 精神 ---- */
+  {name:'左旋多巴苄丝肼', keys:['多巴丝肼','美多芭','左旋多巴','levodopa'], cat:'神经/精神',
+   advice:'餐前 30-60 分钟或遵医嘱服用，与高蛋白食物错开。',
+   caution:'不可突然停药；可能恶心、头晕、异动，及时复诊调整。',
+   inter:'与单胺氧化酶抑制剂同用有风险，须遵医嘱。'},
+  {name:'普拉克索', keys:['普拉克索','森福罗','pramipexole'], cat:'神经/精神',
+   advice:'随餐服用可减轻恶心，按医嘱逐渐加量。',
+   caution:'可能出现嗜睡、冲动行为（过度购物/赌博等），及时告知家人和医生。',
+   inter:'与镇静药、酒精同用加重嗜睡。'},
+  {name:'多奈哌齐', keys:['多奈哌齐','安理申','donepezil'], cat:'神经/精神',
+   advice:'睡前服用，按医嘱剂量。',
+   caution:'可能出现心率慢、晕厥、恶心，定期复诊。',
+   inter:'与部分抗胆碱药、心脏药物联用需医生评估。'},
+  {name:'美金刚', keys:['美金刚','易倍申','memantine'], cat:'神经/精神',
+   advice:'每天一次，可空腹或随餐，固定时间。',
+   caution:'肾功能不全者遵医嘱调整；可能出现头晕、便秘。',
+   inter:'与含金刚烷胺药物同用需告知医生。'},
+  {name:'卡马西平', keys:['卡马西平','得理多','carbamazepine'], cat:'神经/精神',
+   advice:'随餐服用减少胃肠不适，按医嘱调整剂量。',
+   caution:'需定期查血常规、肝功能、电解质；出现皮疹立即就医。',
+   inter:'与华法林、口服避孕药、部分降压药相互作用多，需医生评估。'},
+  {name:'丙戊酸钠', keys:['丙戊酸钠','德巴金','valproate'], cat:'神经/精神',
+   advice:'随餐服用减少胃部刺激，按医嘱服药。',
+   caution:'需定期查肝功能；育龄女性用药需医生评估。',
+   inter:'与阿司匹林、其他抗癫痫药联用需监测。'},
+  {name:'左乙拉西坦', keys:['左乙拉西坦','开浦兰','levetiracetam'], cat:'神经/精神',
+   advice:'每天早晚各一次，可随餐或空腹。',
+   caution:'可能嗜睡、头晕，服药后避免驾车。',
+   inter:'与其他镇静药物同用会加重嗜睡。'},
+  {name:'舍曲林', keys:['舍曲林','左洛复','sertraline'], cat:'神经/精神',
+   advice:'每天一次，早或晚固定时间服用，起效需数周。',
+   caution:'不要突然停药；情绪恶化或出现自伤想法立即就医。',
+   inter:'与单胺氧化酶抑制剂同用禁忌，需间隔足够时间。'},
+  {name:'帕罗西汀', keys:['帕罗西汀','赛乐特','paroxetine'], cat:'神经/精神',
+   advice:'早晨服用，按医嘱逐渐加量。',
+   caution:'停药需逐渐减量；可能嗜睡或失眠。',
+   inter:'与华法林、他汀类等联用需医生评估。'},
+  {name:'艾司西酞普兰', keys:['艾司西酞普兰','来士普','escitalopram'], cat:'神经/精神',
+   advice:'每天一次，可随餐或空腹。',
+   caution:'起效较慢，需坚持服药；出现异常情绪及时就医。',
+   inter:'与单胺氧化酶抑制剂同用禁忌。'},
+  {name:'阿普唑仑', keys:['阿普唑仑','佳静安定','alprazolam'], cat:'神经/精神',
+   advice:'按医嘱短期服用，不可自行加量。',
+   caution:'有依赖风险，不可突然停药；服药后避免驾车。',
+   inter:'与酒精、其他镇静药同用可致严重嗜睡和呼吸抑制。'},
+  {name:'艾司唑仑', keys:['艾司唑仑','舒乐安定','estazolam'], cat:'神经/精神',
+   advice:'睡前服用，按医嘱短期使用。',
+   caution:'次日可能困倦；长期使用需缓慢减量。',
+   inter:'与酒精同用风险高，服药期间禁酒。'},
+  {name:'佐匹克隆', keys:['佐匹克隆','忆梦返','zopiclone'], cat:'神经/精神',
+   advice:'睡前立即服用，并保证充足睡眠时间。',
+   caution:'次日可能口苦、困倦，避免驾车；不可与酒精同用。',
+   inter:'与镇静药、抗抑郁药联用需医生评估。'},
+
+  /* ---- 骨关节 / 风湿 / 痛风 ---- */
+  {name:'布洛芬', keys:['布洛芬','芬必得','ibuprofen'], cat:'骨关节/风湿',
+   advice:'饭后服用，减轻胃刺激；短期使用，不宜长期。',
+   caution:'胃溃疡、肾功能不全、严重心衰者慎用；孕妇禁用。',
+   inter:'勿与阿司匹林、其他止痛药、抗凝药随意联用。'},
+  {name:'塞来昔布', keys:['塞来昔布','西乐葆','celecoxib'], cat:'骨关节/风湿',
+   advice:'饭后服用，按医嘱剂量。',
+   caution:'心血管与胃肠风险需评估；磺胺类过敏者慎用。',
+   inter:'与华法林、利尿剂、降压药联用需监测。'},
+  {name:'双氯芬酸', keys:['双氯芬酸','扶他林','diclofenac'], cat:'骨关节/风湿',
+   advice:'饭后服用减少胃肠刺激，外用制剂按说明书使用。',
+   caution:'消化道溃疡、心肾功能不全者慎用。',
+   inter:'与抗凝药、其他非甾体药联用出血风险增加。'},
+  {name:'美洛昔康', keys:['美洛昔康','莫比可','meloxicam'], cat:'骨关节/风湿',
+   advice:'饭后服用，按医嘱剂量。',
+   caution:'注意胃肠出血、水肿；老年患者需医生评估。',
+   inter:'与抗凝药、利尿剂同用需监测。'},
+  {name:'碳酸钙D3', keys:['碳酸钙','钙尔奇','钙片','calcium'], cat:'骨关节/风湿',
+   advice:'随餐服用，利于吸收；按医嘱剂量补钙。',
+   caution:'肾结石病史者慎用；长期大量补充需复查血钙。',
+   inter:'与左甲状腺素、铁剂、喹诺酮类同服影响吸收，需间隔。'},
+  {name:'阿仑膦酸钠', keys:['阿仑膦酸钠','福善美','alendronate'], cat:'骨关节/风湿',
+   advice:'每周固定一天晨起空腹，用一大杯白水整片送服，服后保持直立至少 30 分钟。',
+   caution:'服后 30 分钟内勿躺下、勿进食；食管疾病者慎用。',
+   inter:'与钙剂、抗酸药需间隔至少 30 分钟以上。'},
+  {name:'骨化三醇', keys:['骨化三醇','罗盖全','calcitriol'], cat:'骨关节/风湿',
+   advice:'按医嘱服用，常与钙剂配合使用。',
+   caution:'需定期复查血钙、血磷；出现恶心、乏力及时就医。',
+   inter:'与含镁抗酸药、噻嗪类利尿剂同用需监测血钙。'},
+  {name:'维生素D', keys:['维生素D','维生素D3','vitamin d'], cat:'骨关节/风湿',
+   advice:'随餐服用，脂溶性维生素吸收更好。',
+   caution:'长期大剂量补充需遵医嘱，防血钙过高。',
+   inter:'与钙剂、利尿剂同用需遵医嘱。'},
+  {name:'别嘌醇', keys:['别嘌醇','别嘌呤','allopurinol'], cat:'骨关节/风湿',
+   advice:'初始小剂量，遵医嘱逐渐加量；随餐服用减少胃部不适。',
+   caution:'出现皮疹可能是严重超敏反应，立即停药就医。',
+   inter:'与硫唑嘌呤、阿莫西林等联用需医生评估。'},
+  {name:'非布司他', keys:['非布司他','优立通','febuxostat'], cat:'骨关节/风湿',
+   advice:'每天一次，可随餐或空腹。',
+   caution:'有心肌梗死、脑卒中病史者需医生评估后使用。',
+   inter:'与硫唑嘌呤等联用需遵医嘱。'},
+  {name:'苯溴马隆', keys:['苯溴马隆','立加利仙','benzbromarone'], cat:'骨关节/风湿',
+   advice:'每天一次，服药期间大量饮水。',
+   caution:'中重度肾功能不全、尿路结石史者慎用或禁用。',
+   inter:'与阿司匹林等影响尿酸排泄的药物同用需告知医生。'},
+  {name:'秋水仙碱', keys:['秋水仙碱','colchicine'], cat:'骨关节/风湿',
+   advice:'急性发作期严格按说明书剂量服用，不可自行加量。',
+   caution:'出现腹泻、呕吐立即停药；肝肾功能不全者慎用。',
+   inter:'与克拉霉素、氟康唑等相互作用多，需医生评估。'},
+
+  /* ---- 泌尿 / 前列腺 / 男科 ---- */
+  {name:'坦索罗辛', keys:['坦索罗辛','哈乐','tamsulosin'], cat:'泌尿/前列腺',
+   advice:'每天一次，建议早餐后服用；缓释胶囊勿掰开。',
+   caution:'起身时动作放慢，防体位性低血压；可能头晕、逆行射精。',
+   inter:'与其他 α 受体阻滞剂、降压药联用需医生评估。'},
+  {name:'非那雄胺', keys:['非那雄胺','保列治','finasteride'], cat:'泌尿/前列腺',
+   advice:'每天一次，可随餐或空腹。',
+   caution:'育龄女性勿接触破损药片；复查 PSA 时告知医生用药。',
+   inter:'一般相互作用少，需告知医生全部用药。'},
+  {name:'托特罗定', keys:['托特罗定','舍尼亭','tolterodine'], cat:'泌尿/前列腺',
+   advice:'按医嘱服用，可随餐或空腹。',
+   caution:'口干、便秘常见；闭角型青光眼、尿潴留者禁用。',
+   inter:'与酮康唑等 CYP3A4 抑制剂联用需调整剂量。'},
+  {name:'西地那非', keys:['西地那非','万艾可','sildenafil'], cat:'泌尿/前列腺',
+   advice:'按医嘱在活动前服用，不可与硝酸酯类同用。',
+   caution:'胸痛、持续勃起超过 4 小时立即就医；心脏病患者遵医嘱。',
+   inter:'与硝酸甘油等硝酸酯同用可致严重低血压，绝对禁止。'},
+
+  /* ---- 眼科 ---- */
+  {name:'玻璃酸钠滴眼液', keys:['玻璃酸钠滴眼液','海露','爱丽','人工泪液'], cat:'眼科',
+   advice:'按需滴眼，瓶口勿接触眼睛；开瓶后按说明书期限内用完。',
+   caution:'初次使用可能短暂模糊，滴后稍闭眼休息。',
+   inter:'与其他眼药间隔 5 分钟以上。'},
+  {name:'噻吗洛尔滴眼液', keys:['噻吗洛尔滴眼液','timolol'], cat:'眼科',
+   advice:'按医嘱定时滴眼，滴后按压内眼角 1-2 分钟。',
+   caution:'哮喘、心动过缓、心衰患者慎用；出现气短、心悸就医。',
+   inter:'与口服 β 受体阻滞剂同用需医生评估。'},
+  {name:'拉坦前列素滴眼液', keys:['拉坦前列素滴眼液','适利达','latanoprost'], cat:'眼科',
+   advice:'每晚一次滴眼，滴后按压内眼角 1-2 分钟。',
+   caution:'虹膜颜色可能逐渐变深，睫毛可能变长，属常见现象。',
+   inter:'与其他前列腺素类眼药同用需遵医嘱。'},
+
+  /* ---- 皮肤外用 ---- */
+  {name:'炉甘石洗剂', keys:['炉甘石','炉甘石洗剂','calamine'], cat:'皮肤外用',
+   advice:'用前摇匀，棉签蘸取薄涂于瘙痒处。',
+   caution:'皮肤破损、渗液处不宜使用；避免接触眼睛。',
+   inter:'与其他外用制剂同用需医生评估。'},
+  {name:'糠酸莫米松乳膏', keys:['糠酸莫米松','艾洛松','mometasone'], cat:'皮肤外用',
+   advice:'薄涂患处，按说明书疗程使用。',
+   caution:'面部、皮肤皱褶处短期使用；勿长期大面积使用。',
+   inter:'与其他外用制剂同用需间隔并遵医嘱。'},
+  {name:'特比萘芬乳膏', keys:['特比萘芬','兰美抒','terbinafine'], cat:'皮肤外用',
+   advice:'涂抹患处及周围，足癣一般需连续用 1-2 周，坚持疗程。',
+   caution:'症状好转后也应完成疗程，防止复发。',
+   inter:'与其他外用制剂同用需遵医嘱。'},
+  {name:'氢化可的松乳膏', keys:['氢化可的松乳膏','hydrocortisone'], cat:'皮肤外用',
+   advice:'薄涂患处，短期使用。',
+   caution:'细菌、真菌感染性皮肤病需先就诊；勿长期大面积使用。',
+   inter:'与其他外用制剂同用需遵医嘱。'},
+
+  /* ---- 维生素 / 营养 / 血液 ---- */
+  {name:'叶酸', keys:['叶酸','folic acid'], cat:'维生素/营养',
+   advice:'固定时间随餐服用，遵医嘱剂量。',
+   caution:'长期大剂量补充需遵医嘱，可能掩盖维生素B12缺乏。',
+   inter:'与部分抗癫痫药同用需医生评估。'},
+  {name:'维生素B1', keys:['维生素B1','vitamin b1'], cat:'维生素/营养',
+   advice:'随餐服用，按说明书或医嘱剂量。',
+   caution:'遵医嘱补充，过量无益。',
+   inter:'一般相互作用少。'},
+  {name:'维生素C', keys:['维生素C','vitamin c'], cat:'维生素/营养',
+   advice:'随餐服用；按推荐剂量补充。',
+   caution:'长期大剂量可能增加肾结石风险。',
+   inter:'与铁剂同服可促进铁吸收。'},
+  {name:'硫酸亚铁', keys:['硫酸亚铁','琥珀酸亚铁','铁剂','ferrous'], cat:'维生素/营养',
+   advice:'空腹吸收好，胃肠不适可随餐；与茶、咖啡、钙剂间隔 2 小时。',
+   caution:'大便变黑属正常；服药后恶心明显可咨询医生。',
+   inter:'与左甲状腺素、喹诺酮类同服影响吸收。'},
+  {name:'氯化钾缓释片', keys:['氯化钾','补达秀','potassium'], cat:'维生素/营养',
+   advice:'随餐整片吞服，勿嚼碎；按医嘱补钾。',
+   caution:'需定期查血钾，肾功能不全者慎用。',
+   inter:'与保钾利尿剂、沙坦类/普利类同用易高血钾。'},
+  {name:'甲钴胺', keys:['甲钴胺','弥可保','mecobalamin'], cat:'维生素/营养',
+   advice:'随餐或餐后服用。',
+   caution:'按说明书疗程使用，长期使用需遵医嘱。',
+   inter:'一般相互作用少。'},
+
+  /* ---- 感冒 / 过敏 ---- */
+  {name:'对乙酰氨基酚', keys:['对乙酰氨基酚','扑热息痛','泰诺','必理通','acetaminophen'], cat:'感冒/过敏',
+   advice:'饭后服用；成人每日不超过 2 克，谨防过量。',
+   caution:'过量可致严重肝损伤；饮酒者、肝病患者慎用。',
+   inter:'勿与含同成分的复方感冒药重复使用。'},
+  {name:'复方感冒药', keys:['感冒灵','感康','白加黑','康泰克','感冒药','复方氨酚'], cat:'感冒/过敏',
+   advice:'仅用于缓解症状，切勿因追求效果而超量或多种混服。',
+   caution:'多数含对乙酰氨基酚与抗组胺成分，可能嗜睡，服药后勿开车。',
+   inter:'多种感冒药同服或与退烧药同服，易致对乙酰氨基酚过量伤肝。'},
+  {name:'氯雷他定', keys:['氯雷他定','开瑞坦','loratadine'], cat:'感冒/过敏',
+   advice:'每天一次，可随餐或空腹。',
+   caution:'嗜睡较少，但个体反应不同；肝肾功能不全者遵医嘱。',
+   inter:'与部分肝酶抑制剂同用需遵医嘱。'},
+  {name:'西替利嗪', keys:['西替利嗪','仙特明','cetirizine'], cat:'感冒/过敏',
+   advice:'每天一次，固定时间服用。',
+   caution:'可能嗜睡，服药后避免驾车。',
+   inter:'与酒精、镇静药同用加重嗜睡。'},
+  {name:'苯海拉明', keys:['苯海拉明','diphenhydramine'], cat:'感冒/过敏',
+   advice:'按说明书短期服用，多在睡前使用。',
+   caution:'嗜睡明显；青光眼、前列腺增生者慎用，服药后勿开车。',
+   inter:'与酒精、其他镇静药同用风险高。'},
+
+  /* ---- 类目兜底（用于未单独收录的具体药品） ---- */
+  {name:'沙坦类', keys:['沙坦'], cat:'降压药',
+   advice:'沙坦类降压药一般每天一次，固定时间服用。',
+   caution:'需定期查血钾和肾功能；孕妇禁用。',
+   inter:'勿与保钾利尿剂、补钾药物同用，易致高钾血症。'},
+  {name:'普利类', keys:['普利'], cat:'降压药',
+   advice:'普利类降压药按医嘱服用，固定时间。',
+   caution:'常见干咳；孕妇禁用；肾功能不全者遵医嘱。',
+   inter:'与保钾药、补钾药同用可致高血钾。'},
+  {name:'他汀类', keys:['他汀'], cat:'降脂药',
+   advice:'每天固定时间服用，长期坚持。',
+   caution:'出现肌肉酸痛、深色尿立即就医；定期复查肝功。',
+   inter:'与克拉霉素、伊曲康唑等联用需医生评估。'},
+  {name:'拉唑类', keys:['拉唑'], cat:'胃肠药',
+   advice:'一般早餐前空腹服用。',
+   caution:'长期服用需遵医嘱，关注骨密度。',
+   inter:'与氯吡格雷等药物联用需咨询医生。'},
+  {name:'磺脲类', keys:['磺脲'], cat:'降糖药',
+   advice:'饭前服用，服药后按时吃饭。',
+   caution:'低血糖风险较高，随身携带糖果。',
+   inter:'与酒精、其他降糖药同用低血糖风险增加。'},
+  {name:'止痛药', keys:['止痛药','镇痛药','止痛'], cat:'骨关节/风湿',
+   advice:'不明原因疼痛应先就医明确病因，按说明书短期使用。',
+   caution:'胃溃疡、心肾功能不全者慎用；勿长期自行服用。',
+   inter:'勿与阿司匹林、抗凝药或其他止痛药随意叠加。'},
+];
+
+/* 知识库元信息：数据来源与说明 */
+const DRUG_META = {
+  title:'国家基本药物目录 · 官方说明书知识库',
+  source:'依据《国家基本药物目录（2018年版）》及国家药品监督管理局（NMPA）批准的药品说明书整理',
+  site:'https://www.nmpa.gov.cn/datasearch/home-index.html',
+  note:'本知识库仅供健康参考，不能替代医生诊断与处方；具体用法用量以医嘱和药品说明书为准。'
+};
+
+/* ==================== 相互作用规则 ==================== */
+const INTERACTIONS = [
+  {a:'阿司匹林', b:'华法林', tip:'两者同服会显著增加出血风险，务必遵医嘱并监测凝血，切勿自行联用。'},
+  {a:'阿司匹林', b:'布洛芬', tip:'布洛芬会削弱阿司匹林抗血小板作用，并增加胃出血风险。'},
+  {a:'阿司匹林', b:'氯吡格雷', tip:'双联抗血小板仅限医生评估后的方案，自行叠加出血风险高。'},
+  {a:'氯吡格雷', b:'奥美拉唑', tip:'奥美拉唑可能减弱氯吡格雷药效，可请医生换用其他护胃药。'},
+  {a:'二甲双胍', b:'格列美脲', tip:'联合降糖效果强，低血糖风险增加，注意监测血糖。'},
+  {a:'沙坦类', b:'螺内酯', tip:'保钾利尿剂与沙坦类联用易致高血钾，需定期查血钾。'},
+  {a:'普利类', b:'螺内酯', tip:'保钾利尿剂与普利类联用易致高血钾。'},
+  {a:'华法林', b:'布洛芬', tip:'抗凝加非甾体止痛药，出血风险大增，避免联用。'},
+  {a:'华法林', b:'阿莫西林', tip:'抗生素可能增强华法林作用，联用期间加强出血观察与凝血监测。'},
+  {a:'华法林', b:'阿奇霉素', tip:'可能增强抗凝作用，联用需监测凝血并注意出血迹象。'},
+  {a:'利伐沙班', b:'阿司匹林', tip:'抗凝与抗血小板叠加出血风险高，请严格遵医嘱。'},
+  {a:'阿托伐他汀', b:'克拉霉素', tip:'克拉霉素会升高他汀血药浓度，增加肌损伤风险，避免自行联用。'},
+  {a:'左氧氟沙星', b:'铝碳酸镁', tip:'含铝/镁制剂会减少喹诺酮吸收，需间隔 2 小时以上服用。'},
+  {a:'硝酸甘油', b:'西地那非', tip:'硝酸酯与西地那非同用可致严重低血压，绝对禁止自行联用。'},
+  {a:'沙库巴曲缬沙坦', b:'依那普利', tip:'与普利类换药间隔不足 36 小时会增加血管性水肿风险，禁止同用。'},
+  {a:'甲硝唑', b:'阿莫西林', tip:'甲硝唑用药期间及停药后 3 日内饮酒可致双硫仑样反应。'},
+  {a:'格列美脲', b:'阿司匹林', tip:'大剂量阿司匹林可能增强降糖作用，注意监测低血糖。'},
+  {a:'地高辛', b:'呋塞米', tip:'利尿剂致低钾时更易发生地高辛中毒，需定期查电解质。'},
+  {a:'布洛芬', b:'呋塞米', tip:'布洛芬可能减弱利尿降压作用并加重肾损伤风险。'},
+  {a:'左甲状腺素', b:'碳酸钙D3', tip:'钙剂会降低左甲状腺素吸收，需间隔至少 4 小时。'},
+];
+
+/* ==================== 全局状态 ==================== */
+let currentUser = localStorage.getItem('med_user') || null;
+let selectedSyms = new Set();
+let flowIndex = 0;
+let flowStarted = false;
+let recentDepts = [];
+let myFamilyCode = '';
+let familyBind = localStorage.getItem('med_bind') || '';
+let userLoc = null;
+let autoLocated = false;
+let map = null, mapMarkers = [];
+let listening = false;
+
+const $ = id => document.getElementById(id);
+
+/* ==================== IndexedDB 数据库 ==================== */
+const DB = {
+  db: null,
+  open(){
+    return new Promise((res, rej)=>{
+      const req = indexedDB.open('medical_nav', 1);
+      req.onupgradeneeded = e => {
+        const d = e.target.result;
+        if(!d.objectStoreNames.contains('users')) d.createObjectStore('users', {keyPath:'id'});
+        if(!d.objectStoreNames.contains('meds')) d.createObjectStore('meds', {keyPath:'id', autoIncrement:true});
+        if(!d.objectStoreNames.contains('events')) d.createObjectStore('events', {keyPath:'id', autoIncrement:true});
+      };
+      req.onsuccess = e => { this.db = e.target.result; res(); };
+      req.onerror = e => rej(e);
+    });
+  },
+  tx(store, mode){ return this.db.transaction(store, mode).objectStore(store); },
+  put(store, obj){ return new Promise((res,rej)=>{ const r=this.tx(store,'readwrite').put(obj); r.onsuccess=()=>res(r.result); r.onerror=rej; }); },
+  get(store, key){ return new Promise((res,rej)=>{ const r=this.tx(store,'readonly').get(key); r.onsuccess=()=>res(r.result); r.onerror=rej; }); },
+  all(store){ return new Promise((res,rej)=>{ const r=this.tx(store,'readonly').getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=rej; }); },
+  del(store, key){ return new Promise((res,rej)=>{ const r=this.tx(store,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=rej; }); }
+};
+
+/* ==================== 提示 / 通知 ==================== */
+function toast(msg, ms=4000){
+  const b = $('notifyBanner');
+  b.textContent = msg; b.classList.add('show');
+  clearTimeout(b._t); b._t = setTimeout(()=>b.classList.remove('show'), ms);
+}
+function notify(msg){
+  toast(msg);
+  speak(msg);
+  if('Notification' in window && Notification.permission === 'granted'){
+    new Notification('医路相伴 · 提醒', {body: msg});
+  }
+}
+
+/* ==================== 语音 ==================== */
+function speak(text, rate){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = rate || (document.body.classList.contains('care') ? 0.82 : 1.0);
+    u.pitch = 1.0;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function stopSpeak(){ try{ speechSynthesis.cancel(); }catch(e){} }
+function speakCurrent(){
+  const v = document.querySelector('.view.active').id;
+  const map = {
+    'view-welcome':'欢迎使用医路相伴，老年人智能就医导航。建议开启关怀模式，字体更大更清晰。',
+    'view-home':'这是首页。可以选择症状自查、就医流程、用药提醒、找医院、语音助手或家属端。',
+    'view-symptom':'症状自查。请点选症状，或在下方输入症状文字，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
+    'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
+    'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
+    'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
+    'view-family':'家属端。把家庭码告诉家人，家人可以实时查看您的用药和就医动态。'
+  };
+  speak(map[v] || '');
+}
+function voiceToggle(){
+  if(listening){ finishListen(); }
+  else voiceInput();
+}
+
+/* 语音输入：本地 Vosk 模型优先，云端 Web Speech 兜底，均失败提示手动输入 */
+let voskModel = null, voskModelLoading = false, voskScriptPending = null;
+let voskAudioCtx = null, voskMediaStream = null, voskSource = null, voskProcessor = null;
+let voskRecognizer = null, voskFinalText = '', voskPartialText = '';
+let voiceOnResult = null, voskAutoStopTimer = null;
+let webRec = null, webFinal = '', webPartial = '';
+let voiceMode = '', voskAssetChecked = false;
+let voicePending = null;
+
+function webSpeechSupported(){
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+async function checkVoskAssets(){
+  if(voskAssetChecked) return true;
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 3000);
+  try{
+    const js = await fetch('vosk.js', {method:'HEAD', cache:'no-store', signal:ctrl.signal});
+    if(!js.ok) return false;
+    voskAssetChecked = true;
+    return true;
+  }catch(e){
+    return false;
+  }finally{
+    clearTimeout(timer);
+  }
+}
+function askVoice(prompt, onResult, grammar){
+  if(localStorage.getItem('med_voice_allow') === 'yes'){
+    startRecognize(prompt, onResult, grammar);
+    return;
+  }
+  voicePending = {prompt, onResult, grammar};
+  $('voiceAskMask').classList.add('show');
+}
+function confirmVoice(allow){
+  $('voiceAskMask').classList.remove('show');
+  if(!allow){
+    voicePending = null;
+    toast('已取消语音输入');
+    speak('好的，请手动输入');
+    return;
+  }
+  if($('voiceRemember') && $('voiceRemember').checked) localStorage.setItem('med_voice_allow', 'yes');
+  const p = voicePending;
+  voicePending = null;
+  if(p) startRecognize(p.prompt, p.onResult, p.grammar);
+}
+function ensureVoskScript(){
+  if(window.Vosk) return Promise.resolve();
+  if(voskScriptPending) return voskScriptPending;
+  voskScriptPending = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'vosk.js';
+    s.onload = () => res();
+    s.onerror = () => { voskScriptPending = null; rej(new Error('语音组件加载失败')); };
+    document.head.appendChild(s);
+  });
+  return voskScriptPending;
+}
+
+const VOSK_MODEL_URLS = [
+  'assets/vosk-model-small-cn-0.22.tar.gz',
+  'https://github.com/LY-Izar/QKS_qyjiuyi/releases/download/v1.0-model/vosk-model-small-cn-0.22.tar.gz'
+];
+async function loadVoskModel(){
+  if(voskModel) return voskModel;
+  if(voskModelLoading){
+    await new Promise(r => setTimeout(r, 500));
+    return loadVoskModel();
+  }
+  voskModelLoading = true;
+  let lastErr = null;
+  try{
+    for(const url of VOSK_MODEL_URLS){
+      try{
+        voskModel = await Vosk.createModel(url);
+        return voskModel;
+      }catch(e){ lastErr = e; }
+    }
+    throw lastErr || new Error('模型加载失败');
+  }catch(e){
+    voskModel = null;
+    throw e;
+  }finally{
+    voskModelLoading = false;
+  }
+}
+
+function startRecognize(prompt, onResult, grammar){
+  if(listening) finishListen();
+  voiceOnResult = onResult;
+  listening = true;
+  const fab = $('voiceFab'), bar = $('voicebar'), txt = $('voiceText');
+  if(fab) fab.classList.add('listening');
+  if(bar) bar.classList.add('show');
+  if(txt) txt.textContent = prompt || '请说话…';
+
+  (async () => {
+    try{
+      if(await checkVoskAssets()){
+        await startVosk(prompt, grammar);
+        return;
+      }
+    }catch(e){}
+    if(webSpeechSupported()){
+      const started = await startWebSpeech(prompt);
+      if(started) return;
+    }
+    failVoice('语音输入暂不可用，请手动输入');
+  })();
+  return true;
+}
+function startWebSpeech(prompt){
+  return new Promise(resolve=>{
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let settled = false;
+    const rec = new SR();
+    webRec = rec;
+    rec.lang = 'zh-CN';
+    rec.interimResults = true;
+    rec.continuous = false;
+    webFinal = ''; webPartial = '';
+    const finish = ok => {
+      if(settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    const fail = msg => {
+      if(!listening) return;
+      failVoice(msg);
+      finish(false);
+    };
+    rec.onstart = () => { voiceMode = 'web'; finish(true); };
+    rec.onresult = e => {
+      webFinal = ''; webPartial = '';
+      for(let i=0;i<e.results.length;i++){
+        const t = e.results[i][0].transcript || '';
+        if(e.results[i].isFinal) webFinal += t; else webPartial += t;
+      }
+      const el = $('voiceText');
+      if(el) el.textContent = '识别到：' + (webFinal + webPartial).trim();
+      scheduleAutoStop();
+    };
+    rec.onerror = e => {
+      try{ rec.stop(); }catch(err){}
+      if(e.error === 'not-allowed' || e.error === 'service-not-allowed') fail('未获得麦克风权限，请允许麦克风后重试，或手动输入');
+      else if(e.error === 'no-speech') fail('没有听到声音，请再试一次或手动输入');
+      else if(e.error === 'network') fail('语音识别网络不可用，请稍后再试或手动输入');
+      else fail('语音识别不可用，请手动输入');
+    };
+    rec.onend = () => {
+      if(!listening) return;
+      const txt = (webFinal + webPartial).trim();
+      if(txt){ finishListen(); finish(true); }
+      else fail('没有听清，请再试一次或手动输入');
+    };
+    try{ rec.start(); }
+    catch(e){ fail('语音识别启动失败，请手动输入'); }
+  });
+}
+async function startVosk(prompt, grammar){
+  await ensureVoskScript();
+  if(!voskModel){
+    const t = $('voiceText');
+    if(t) t.textContent = '正在加载离线语音模型（首次约40MB），请稍候…';
+    await loadVoskModel();
+    if(t) t.textContent = prompt || '请说话…';
+  }
+  voskMediaStream = await navigator.mediaDevices.getUserMedia({
+    video:false,
+    audio:{ echoCancellation:true, noiseSuppression:true, channelCount:1, sampleRate:16000 }
+  });
+  voskRecognizer = grammar
+    ? new voskModel.KaldiRecognizer(16000, grammar)
+    : new voskModel.KaldiRecognizer(16000);
+  voskFinalText = ''; voskPartialText = '';
+  voskRecognizer.on('result', msg => {
+    voskFinalText += (msg.result.text || '');
+    const t = $('voiceText');
+    if(t) t.textContent = '识别到：' + (voskFinalText + voskPartialText).trim();
+    scheduleAutoStop();
+  });
+  voskRecognizer.on('partialresult', msg => {
+    voskPartialText = msg.result.partial || '';
+    const t = $('voiceText');
+    if(t) t.textContent = '…' + (voskFinalText + voskPartialText).trim();
+    scheduleAutoStop();
+  });
+  const AC = window.AudioContext || window.webkitAudioContext;
+  try{ voskAudioCtx = new AC({sampleRate:16000}); }
+  catch(e){ voskAudioCtx = new AC(); }
+  voskProcessor = voskAudioCtx.createScriptProcessor(2048, 1, 1);
+  voskProcessor.onaudioprocess = e => {
+    try{ voskRecognizer.acceptWaveform(e.inputBuffer); }catch(err){}
+  };
+  voskSource = voskAudioCtx.createMediaStreamSource(voskMediaStream);
+  voskSource.connect(voskProcessor);
+  voskProcessor.connect(voskAudioCtx.destination);
+  voiceMode = 'vosk';
+}
+function scheduleAutoStop(){
+  clearTimeout(voskAutoStopTimer);
+  const wait = voiceMode === 'vosk' ? 3000 : 1600;
+  voskAutoStopTimer = setTimeout(() => { if(listening) finishListen(); }, wait);
+}
+function failVoice(msg){
+  toast(msg);
+  speak('语音输入不可用，请手动输入');
+  stopListen();
+}
+function finishListen(){
+  let txt = '';
+  if(voiceMode === 'web' && webRec){
+    txt = (webFinal + webPartial).trim();
+    try{ webRec.stop(); }catch(e){}
+  } else {
+    txt = (voskFinalText + (voskPartialText || '')).trim();
+  }
+  const cb = voiceOnResult;
+  stopListen();
+  if(cb) cb(txt || '');
+}
+function stopListen(){
+  listening = false;
+  const fab = $('voiceFab'), bar = $('voicebar');
+  if(fab) fab.classList.remove('listening');
+  if(bar) bar.classList.remove('show');
+  clearTimeout(voskAutoStopTimer);
+  try{ if(webRec) webRec.stop(); }catch(e){}
+  webRec = null; webFinal = ''; webPartial = '';
+  try{ if(voskProcessor) voskProcessor.disconnect(); }catch(e){}
+  try{ if(voskSource) voskSource.disconnect(); }catch(e){}
+  try{ if(voskMediaStream) voskMediaStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ if(voskAudioCtx) voskAudioCtx.close(); }catch(e){}
+  voskProcessor = null; voskSource = null; voskMediaStream = null; voskAudioCtx = null;
+  voskRecognizer = null; voskFinalText = ''; voskPartialText = '';
+  voiceMode = '';
+}
+
+function buildGrammar(words){
+  const seen = new Set(['[unk]', '我', '有', '点', '了', '还有', '以及', '和', '跟', '也', '并且', '加', '有点', '一个']);
+  const list = [];
+  words.forEach(w => {
+    w = (w || '').trim();
+    if(w && !seen.has(w)){ seen.add(w); list.push(w); }
+  });
+  return JSON.stringify(list);
+}
+function symptomsGrammar(){
+  const words = [];
+  SYMPTOMS.forEach(s => {
+    words.push(s.name);
+    (s.aliases || []).forEach(a => words.push(a));
+  });
+  return buildGrammar(words);
+}
+function drugsGrammar(){
+  const words = [];
+  DRUG_DB.forEach(d => {
+    words.push(d.name);
+    (d.keys || []).forEach(k => words.push(k));
+  });
+  return buildGrammar(words);
+}
+function voiceInput(){
+  askVoice('请连续说出症状，如「发烧、咳嗽、头痛」，说完点「说完了」', txt => {
+    const hits = matchSymptoms(txt);
+    if(hits.length){
+      hits.forEach(s=>selectedSyms.add(s.id));
+      renderSyms();
+      speak('已为您选中' + hits.map(s=>s.name).join('，') + '，请点击查看分析结果。');
+    } else {
+      speak('没有听清具体症状，请再试一次，或使用文字输入，也可直接前往内科就诊。');
+    }
+  }, symptomsGrammar());
+}
+function voiceToInput(targetId){
+  askVoice('请说出要填写的内容…', txt => {
+    const clean = txt.replace(/[。，！？、,.!?~～\s]/g,'').trim();
+    const el = $(targetId);
+    if(el){ el.value = clean; el.focus(); }
+    toast('已输入：' + clean);
+    speak('已输入' + clean);
+    if(targetId === 'medName'){ showDrugAdvice(matchDrug(clean)); }
+  });
+}
+
+/* ==================== 模式切换 ==================== */
+function applyMode(){
+  const care = localStorage.getItem('med_mode') === 'care';
+  document.body.classList.toggle('care', care);
+  $('modeToggle').textContent = care ? '标准模式' : '关怀模式';
+}
+function toggleMode(){
+  const care = document.body.classList.contains('care');
+  localStorage.setItem('med_mode', care ? 'normal' : 'care');
+  applyMode();
+  const nowCare = document.body.classList.contains('care');
+  speak(nowCare ? '已开启关怀模式，字体更大更清晰' : '已切换为标准模式');
+  toast(nowCare ? '已开启关怀模式' : '已切换为标准模式');
+}
+function enableCare(){
+  localStorage.setItem('med_mode', 'care');
+  applyMode();
+  speak('已为您开启关怀模式。这里字体更大、按钮更醒目，我会用语音为您播报。');
+  go('home');
+}
+
+/* ==================== 导航 ==================== */
+function go(view){
+  if(view === 'more') view = 'hospital';
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const target = $('view-' + view);
+  if(target) target.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.classList.toggle('on', (t.dataset.v === view) || (view==='hospital' && t.dataset.v==='more'));
+  });
+  window.scrollTo({top:0});
+  if(view === 'hospital'){
+    initMapOnce();
+    autoLocate();
+  }
+  if(document.body.classList.contains('care') && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
+}
+
+/* ==================== 云端账户同步（Supabase） ==================== */
+const SB_URL = 'https://hjryfgujkxuaxovftlai.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqcnlmZ3Vqa3h1YXhvdmZ0bGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NTcwNjUsImV4cCI6MjEwMzEzMzA2NX0.VsGxfhBt1J6iVYiZNyWhaeI_MSYnxSCaVFHgco1wKbc';
+function cloudUsable(){
+  return !!(window.fetch && window.crypto && crypto.subtle);
+}
+async function hashPass(p){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(p));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function sbFetch(path, opts){
+  opts = opts || {};
+  return fetch(SB_URL + '/rest/v1/' + path, {
+    method: opts.method || 'GET',
+    headers: Object.assign({
+      apikey: SB_KEY,
+      Authorization: 'Bearer ' + SB_KEY,
+      'Content-Type': 'application/json'
+    }, opts.headers || {}),
+    body: opts.body || null
+  });
+}
+
+/* ==================== 登录 / 注册 ==================== */
+function openAuth(){
+  $('authMask').classList.add('show');
+  $('authTitle').textContent = currentUser ? '切换账号' : '登录 / 注册';
+}
+function closeAuth(){ $('authMask').classList.remove('show'); }
+async function doRegister(){
+  const u = $('authUser').value.trim(), p = $('authPass').value;
+  if(!u || !p){ toast('请输入账号和密码'); return; }
+  if(u.length < 3){ toast('账号至少3位'); return; }
+  if(await DB.get('users', u)){ toast('该账号已存在，请直接登录'); return; }
+  const code = String(Math.floor(100000 + Math.random()*900000));
+  let h = null, note = '已保存本机';
+  if(cloudUsable()){
+    try{ h = await hashPass(p); }catch(e){ h = null; }
+  }
+  if(h){
+    try{
+      const res = await sbFetch('users', {
+        method: 'POST',
+        headers: {'Prefer': 'return=minimal'},
+        body: JSON.stringify({id:u, pass_hash:h, family_code:code})
+      });
+      if(res.ok){
+        note = '账号已存云端，任意设备可登录';
+      } else {
+        const errText = await res.text();
+        if(res.status === 409 || errText.includes('23505')){ toast('该账号已被注册，请直接登录'); return; }
+        if(res.status === 404){ note = '已保存本机（云端数据表未创建）'; }
+        else { note = '已保存本机（云端暂不可用）'; }
+      }
+    }catch(e){ note = '已保存本机（云端连接失败）'; }
+  }
+  await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, created:Date.now()});
+  currentUser = u; localStorage.setItem('med_user', u);
+  myFamilyCode = code;
+  toast('注册成功，' + note);
+  closeAuth(); afterLogin();
+}
+async function localVerify(rec, p){
+  if(!rec) return false;
+  if(rec.pass_hash){
+    if(!cloudUsable()) return false;
+    try{ return await hashPass(p) === rec.pass_hash; }catch(e){ return false; }
+  }
+  return rec.pass === p;
+}
+async function doLogin(){
+  const u = $('authUser').value.trim(), p = $('authPass').value;
+  if(!u || !p){ toast('请输入账号和密码'); return; }
+  let code = null, wrongPass = false, netFail = false;
+  if(cloudUsable()){
+    try{
+      const h = await hashPass(p);
+      const res = await sbFetch('users?select=id,pass_hash,family_code&id=eq.' + encodeURIComponent(u));
+      if(res.ok){
+        const rows = await res.json();
+        if(rows.length){
+          if(rows[0].pass_hash === h){
+            code = rows[0].family_code;
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, created:Date.now()});
+          } else { wrongPass = true; }
+        }
+      }
+    }catch(e){ netFail = true; }
+  }
+  if(!code && !wrongPass){
+    const rec = await DB.get('users', u);
+    if(await localVerify(rec, p)) code = rec.familyCode;
+  }
+  if(!code){
+    if(netFail && cloudUsable()){ toast('云端连接失败，本机也没有该账号'); speak('登录失败，请检查网络'); }
+    else { toast('账号或密码错误'); speak('账号或密码错误'); }
+    return;
+  }
+  currentUser = u; localStorage.setItem('med_user', u);
+  myFamilyCode = code || String(Math.floor(100000 + Math.random()*900000));
+  toast('登录成功，欢迎回来');
+  closeAuth(); afterLogin();
+}
+function quickUse(){
+  currentUser = null;
+  localStorage.removeItem('med_user');
+  myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
+  go('home');
+  updateUserUI();
+  speak('已进入体验模式，暂不保存您的数据。');
+}
+function afterLogin(){
+  const rec = DB.get('users', currentUser);
+  rec.then(r => { if(r) myFamilyCode = r.familyCode; });
+  go('home'); updateUserUI();
+  speak('登录成功，欢迎回来');
+}
+function updateUserUI(){
+  if(currentUser){
+    $('welcomeMsg').textContent = '您好，' + currentUser;
+    $('homeHi').textContent = '您好，' + currentUser + ' 👋';
+    $('btnLogin').textContent = '切换账号';
+  } else {
+    $('welcomeMsg').textContent = '您好，请先登录';
+    $('homeHi').textContent = '您好';
+    $('btnLogin').textContent = '登录 / 注册';
+  }
+  $('familyCode').textContent = currentUser ? (myFamilyCode || '—') : '请先登录获取';
+}
+
+/* ==================== 症状自查 ==================== */
+function renderSyms(){
+  const el = $('symList'); el.innerHTML = '';
+  SYMPTOMS.forEach(s=>{
+    const b = document.createElement('button');
+    b.className = 'sym-chip' + (selectedSyms.has(s.id) ? ' on' : '');
+    b.innerHTML = s.icon + ' ' + s.name;
+    b.onclick = () => { selectedSyms.has(s.id) ? selectedSyms.delete(s.id) : selectedSyms.add(s.id); renderSyms(); };
+    el.appendChild(b);
+  });
+}
+function matchSymptoms(txt){
+  if(!txt) return [];
+  return SYMPTOMS.filter(s => (s.aliases || []).concat([s.name]).some(a => a && txt.includes(a)));
+}
+function symTextSubmit(){
+  const el = $('symInput');
+  const raw = el ? el.value.trim() : '';
+  if(!raw){ toast('请先输入症状文字，如：发烧、头痛'); speak('请先输入症状文字'); return; }
+  const hits = matchSymptoms(raw);
+  if(hits.length){
+    hits.forEach(s=>selectedSyms.add(s.id));
+    renderSyms();
+    const names = hits.map(s=>s.name).join('、');
+    toast('已选中：' + names);
+    speak('已为您选中' + names + '，请点击查看分析结果');
+    el.value = '';
+  } else {
+    toast('未能识别「' + raw + '」，请从上方点选症状，或直接前往内科就诊');
+    speak('未能识别该症状，建议前往内科就诊');
+  }
+}
+function analyzeSym(){
+  if(selectedSyms.size === 0){ toast('请先选择或输入至少一个症状'); speak('请先选择或输入您的症状'); return; }
+  const chosen = SYMPTOMS.filter(s=>selectedSyms.has(s.id));
+  const order = {red:0, yellow:1, green:2};
+  const weight = {red:4, yellow:2, green:1};
+  let maxU = 'green';
+  chosen.forEach(s=>{ if(order[s.u] < order[maxU]) maxU = s.u; });
+  const notes = [];
+  COMBO_RULES.forEach(r=>{
+    if(r.ids.every(id=>selectedSyms.has(id))){
+      if(order[r.u] < order[maxU]) maxU = r.u;
+      notes.push(r.note);
+    }
+  });
+  // 科室加权评分，紧急度越高权重越大
+  const score = {};
+  chosen.forEach(s=>s.d.forEach(d=>{ score[d] = (score[d]||0) + weight[s.u]; }));
+  let depts = Object.keys(score).sort((a,b)=>score[b]-score[a]);
+  if(maxU === 'red' && depts[0] !== '急诊') depts.unshift('急诊');
+  if(depts.length === 0) depts = ['内科'];
+  const mainDept = depts[0];
+  const altDepts = depts.slice(1, 3);
+  recentDepts = depts.slice(0, 3);
+  const uLabel = {red:'紧急 · 立即就医', yellow:'建议尽快就医', green:'可先观察'};
+  let html = '<div class="card">' +
+    '<h2>分析结果</h2>' +
+    '<p class="sub">根据「' + chosen.map(s=>s.name).join('、') + '」判断</p>' +
+    '<div class="center" style="margin:8px 0;"><span class="badge big ' + maxU + '">' + uLabel[maxU] + '</span></div>' +
+    '<p style="font-weight:700;margin:10px 0;">' + URGENT_TIP[maxU] + '</p></div>';
+  html += '<div class="card"><h2>🏥 建议前往科室</h2>' +
+    '<div style="font-size:26px;font-weight:800;color:var(--primary);margin:6px 0;">' + mainDept + '</div>' +
+    (altDepts.length ? '<p class="sub">若挂不上号，也可选择：' + altDepts.join('、') + '</p>' : '') +
+    (notes.length ? '<div class="divider"></div>' + notes.map(n=>'<p class="sub">⚠️ ' + n + '</p>').join('') : '') +
+    '<p class="hint">以上仅为就诊科室建议，具体诊断请以医生判断为准。</p></div>';
+  html += '<div class="card"><h2>您选择的症状</h2><div class="rows">';
+  chosen.forEach(s=>{
+    const ul = {red:'🔴 紧急', yellow:'🟡 尽快', green:'🟢 观察'}[s.u];
+    html += '<div><span class="k">' + s.icon + ' ' + s.name + '</span>' + s.d.join(' / ') + '　' + ul + '</div>';
+  });
+  html += '</div></div>';
+  html += '<div class="gap6" style="margin-top:6px;">' +
+    '<button class="btn block" onclick="go(\'flow\')">👉 下一步：看就医流程</button>' +
+    '<button class="btn block ghost" onclick="go(\'hospital\')">🏥 按科室找附近医院</button></div>';
+  $('symResult').innerHTML = html;
+  // 记录事件
+  addEvent('自查', '自查了症状「' + chosen.map(s=>s.name).join('、') + '」，判断：' + uLabel[maxU] + '，建议科室：' + mainDept);
+  // 语音
+  speak('根据您的症状，整体判断为' + uLabel[maxU] + '。建议前往' + mainDept + '就诊。' + URGENT_TIP[maxU].replace(/🆘|⏰|😊/g,''));
+  $('symResult').scrollIntoView({behavior:'smooth'});
+}
+
+/* ==================== 就医流程 ==================== */
+function renderFlow(){
+  const el = $('flowSteps'); el.innerHTML = '';
+  FLOW.forEach((s,i)=>{
+    const d = document.createElement('div');
+    d.className = 'step' + (i < flowIndex ? ' done' : '') + (i === flowIndex ? ' current' : '');
+    d.id = 'step-' + i;
+    d.innerHTML = '<div class="num">' + (i < flowIndex ? '✓' : (i+1)) + '</div>' +
+      '<div class="bd"><div class="sn">' + s.t + '</div><div class="sd">' + s.d + '</div></div>';
+    el.appendChild(d);
+  });
+  $('btnFlowNext').style.display = (flowStarted && flowIndex < FLOW.length) ? 'block' : 'none';
+}
+function startFlow(){
+  flowStarted = true;
+  flowIndex = 0; renderFlow();
+  $('btnFlowStart').style.display = 'none';
+  speakStep();
+}
+function speakStep(){
+  const s = FLOW[flowIndex];
+  if(!s) return;
+  speak('第' + (flowIndex+1) + '步，' + s.t + '。' + s.d);
+}
+function flowNext(){
+  if(flowIndex < FLOW.length - 1){
+    flowIndex++; renderFlow();
+    speakStep();
+    const el = $('step-' + flowIndex);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  } else {
+    flowIndex = FLOW.length;
+    flowStarted = false;
+    renderFlow();
+    $('btnFlowNext').style.display = 'none';
+    $('btnFlowStart').style.display = 'block';
+    speak('全部流程已完成，祝您就医顺利。');
+    addEvent('流程', '完成了就医流程引导');
+  }
+}
+function speakFlow(){
+  const txt = FLOW.map((s,i)=>'第'+(i+1)+'步，'+s.t+'。'+s.d).join('');
+  speak('就医全流程共8步。' + txt);
+}
+
+/* ==================== 用药提醒 ==================== */
+function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+function addTime(t, hours){ let m = timeToMin(t) + hours*60; m = ((m%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
+function timePoints(med){
+  const t = med.time;
+  if(med.freq==='daily') return [t];
+  if(med.freq==='twice') return [t, addTime(t,12)];
+  if(med.freq==='thrice') return [t, addTime(t,4), addTime(t,8)];
+  return [t];
+}
+async function addMed(){
+  const name = $('medName').value.trim();
+  const dose = $('medDose').value.trim();
+  const time = $('medTime').value;
+  const freq = $('medFreq').value;
+  if(!name){ toast('请填写药品名称'); return; }
+  if(!time){ toast('请选择提醒时间'); return; }
+  const med = {name, dose, time, freq, created:Date.now(), reminded:{}};
+  await DB.put('meds', med);
+  $('medName').value=''; $('medDose').value=''; $('medTime').value='';
+  renderMeds();
+  toast('已保存用药：' + name);
+  speak('已保存用药' + name + '，到点会提醒您。');
+  addEvent('用药', '添加了用药「' + name + '」，' + (dose||'') + '，提醒时间 ' + time);
+  if('Notification' in window && Notification.permission !== 'granted'){
+    Notification.requestPermission();
+  }
+}
+async function renderMeds(){
+  const meds = await DB.all('meds');
+  const el = $('medList'); el.innerHTML = '';
+  if(meds.length === 0){
+    el.innerHTML = '<div class="card center" style="color:var(--muted);">还没有用药记录，请在上方添加。</div>';
+    return;
+  }
+  const freqLabel = {daily:'每天1次', twice:'每天2次', thrice:'每天3次', once:'仅一次'};
+  meds.forEach(m=>{
+    const drug = matchDrug(m.name);
+    const d = document.createElement('div');
+    d.className = 'med-item';
+    d.innerHTML = '<div class="t"><div class="nm">💊 ' + m.name + '</div>' +
+      '<div class="tm">' + (m.dose||'') + ' · ' + freqLabel[m.freq] + '</div>' +
+      (drug ? '<div class="tm" style="color:var(--primary-deep);">💡 ' + drug.advice + '</div>' : '') +
+      '</div>' +
+      '<div class="pill">' + m.time + '</div>' +
+      '<button class="btn sm line" onclick="delMed(' + m.id + ')">删除</button>';
+    el.appendChild(d);
+  });
+}
+async function delMed(id){
+  await DB.del('meds', id);
+  renderMeds();
+  toast('已删除');
+}
+/* ===== AI 用药建议引擎 ===== */
+function matchDrug(text){
+  if(!text) return null;
+  const t = text.toLowerCase().replace(/\s/g,'');
+  for(const d of DRUG_DB){
+    for(const k of d.keys){
+      if(t.includes(k.toLowerCase().replace(/\s/g,''))) return d;
+    }
+  }
+  return null;
+}
+function showDrugAdvice(drug){
+  const el = $('medAdvice');
+  if(!el) return;
+  if(!drug){ el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="advice-box">' +
+    '<div class="av-t">💡 AI 建议 · ' + drug.name +
+      ' <span class="badge green" style="font-size:12px;vertical-align:middle;">' + drug.cat + '</span></div>' +
+    '<div>🕐 <b>服用建议：</b>' + drug.advice + '</div>' +
+    '<div>⚠️ <b>注意事项：</b>' + drug.caution + '</div>' +
+    '<div>🚫 <b>相互作用：</b>' + drug.inter + '</div>' +
+    '<div class="hint" style="margin-top:6px;">数据来源：' + DRUG_META.source + '。仅供参考。</div></div>';
+  speak('检测到' + drug.name + '。' + drug.advice + ' ' + drug.caution);
+}
+async function showAllAdvice(){
+  const meds = await DB.all('meds');
+  const curDrug = matchDrug($('medName').value.trim());
+  const seen = new Set();
+  const unique = [];
+  meds.forEach(m=>{
+    const d = matchDrug(m.name);
+    if(d && !seen.has(d.name)){ seen.add(d.name); unique.push(d); }
+  });
+  if(curDrug && !seen.has(curDrug.name)){ seen.add(curDrug.name); unique.push(curDrug); }
+
+  let html = '';
+  if(unique.length === 0){
+    html = '<p class="sub">暂未识别到已收录的药品，可先前往「药品库」查询，或输入常见药名（如阿司匹林、二甲双胍、缬沙坦等）。</p>';
+  } else {
+    unique.forEach(d=>{
+      html += '<div class="advice-box"><div class="av-t">' + d.name +
+        ' <span class="badge green" style="font-size:12px;vertical-align:middle;">' + d.cat + '</span></div>' +
+        '<div>🕐 <b>服用建议：</b>' + d.advice + '</div>' +
+        '<div>⚠️ <b>注意事项：</b>' + d.caution + '</div>' +
+        '<div>🚫 <b>相互作用：</b>' + d.inter + '</div></div>';
+    });
+    // 相互作用检测
+    const tips = [];
+    for(let i=0;i<unique.length;i++){
+      for(let j=i+1;j<unique.length;j++){
+        INTERACTIONS.forEach(r=>{
+          const hit = (r.a===unique[i].name && r.b===unique[j].name) || (r.a===unique[j].name && r.b===unique[i].name);
+          if(hit) tips.push('「'+unique[i].name+'」与「'+unique[j].name+'」：'+r.tip);
+        });
+      }
+    }
+    if(tips.length){
+      html += '<div class="advice-box" style="border-color:var(--danger);background:#fdecec;"><div class="av-t" style="color:var(--danger);">🚨 相互作用提醒</div>' +
+        tips.map(t=>'<div>• '+t+'</div>').join('') + '</div>';
+    }
+  }
+  $('adviceContent').innerHTML = html;
+  $('adviceMask').classList.add('show');
+  if(unique.length) speak('已生成用药建议，' + (tips.length?('检测到' + tips.length + '条相互作用提醒。'):'请查看屏幕。'));
+}
+/* ===== 药品库浏览 ===== */
+let drugCat = '全部';
+function drugCatList(){
+  const cats = ['全部'];
+  DRUG_DB.forEach(d=>{ if(!cats.includes(d.cat)) cats.push(d.cat); });
+  return cats;
+}
+function renderDrugCats(){
+  const el = $('drugCats');
+  if(!el) return;
+  el.innerHTML = drugCatList().map(c=>
+    '<button class="sym-chip' + (c===drugCat?' on':'') + '" onclick="setDrugCat(\'' + c + '\')">' + c + '</button>'
+  ).join('');
+}
+function setDrugCat(c){
+  drugCat = c;
+  renderDrugCats();
+  renderDrugLib();
+}
+function renderDrugLib(){
+  const el = $('drugList');
+  if(!el) return;
+  const q = ($('drugSearch') ? $('drugSearch').value : '').toLowerCase().replace(/\s/g,'');
+  const list = DRUG_DB.filter(d=>{
+    if(drugCat !== '全部' && d.cat !== drugCat) return false;
+    if(!q) return true;
+    return d.name.toLowerCase().includes(q) || d.cat.toLowerCase().includes(q) ||
+      d.keys.some(k=>k.toLowerCase().replace(/\s/g,'').includes(q));
+  });
+  if(list.length === 0){
+    el.innerHTML = '<div class="card center" style="color:var(--muted);">未找到相关药品，试试输入更短的关键词或切换分类。</div>';
+    return;
+  }
+  el.innerHTML = '<p class="hint">共找到 <b>' + list.length + '</b> 种药品</p>' + list.map(d=>
+    '<div class="advice-box"><div class="av-t">💊 ' + d.name +
+    ' <span class="badge green" style="font-size:12px;vertical-align:middle;">' + d.cat + '</span></div>' +
+    '<div>🕐 <b>服用建议：</b>' + d.advice + '</div>' +
+    '<div>⚠️ <b>注意事项：</b>' + d.caution + '</div>' +
+    '<div>🚫 <b>相互作用：</b>' + d.inter + '</div></div>'
+  ).join('');
+}
+function voiceDrugSearch(){
+  askVoice('请说出要查询的药品名称', txt=>{
+    const clean = txt.replace(/[。，！？、,.!?~～\s]/g,'').trim();
+    const el = $('drugSearch');
+    if(el){ el.value = clean; }
+    renderDrugLib();
+    toast('已输入：' + clean);
+    speak('正在查询' + clean);
+  }, drugsGrammar());
+}
+/* ===== 拍照识别（Tesseract.js OCR） ===== */
+async function scanMed(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.onchange = async e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    if(typeof Tesseract === 'undefined'){
+      toast('拍照识别组件未加载，请手动输入药名');
+      return;
+    }
+    toast('正在识别图片中的药品，请稍候…');
+    speak('正在识别图片中的药品，请稍候');
+    try{
+      const { data } = await Tesseract.recognize(file, 'chi_sim+eng');
+      const text = data.text || '';
+      const drug = matchDrug(text);
+      if(drug){
+        $('medName').value = drug.name;
+        showDrugAdvice(drug);
+        toast('识别到：' + drug.name);
+        speak('识别到药品' + drug.name + '。' + drug.advice);
+        addEvent('用药', '拍照识别到药品「' + drug.name + '」');
+      } else {
+        const lines = text.split('\n')
+          .map(s=>s.replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g,'').trim())
+          .filter(s=>s.length>=2 && s.length<=12);
+        if(lines.length){
+          $('medName').value = lines[0];
+          toast('已识别，请核对药名');
+          speak('识别到文字' + lines[0] + '，请核对药名是否正确');
+        } else {
+          toast('未能识别出药名，请手动输入');
+          speak('未能识别出药名，请手动输入');
+        }
+      }
+    }catch(err){
+      toast('识别失败，请手动输入药名');
+    }
+  };
+  input.click();
+}
+async function checkMeds(){
+  if(!currentUser) return; // 仅登录用户提醒
+  const meds = await DB.all('meds');
+  const now = new Date();
+  const today = now.toDateString();
+  const curMin = now.getHours()*60 + now.getMinutes();
+  meds.forEach(med=>{
+    timePoints(med).forEach(tp=>{
+      const tm = timeToMin(tp);
+      // 在提醒时间前后1分钟内触发，且今天该时间点未提醒
+      if(Math.abs(curMin - tm) <= 1){
+        const key = today + '_' + tp;
+        if(!med.reminded[key]){
+          med.reminded[key] = true;
+          DB.put('meds', med);
+          notify('该吃「' + med.name + '」了！' + (med.dose ? ' ' + med.dose : ''));
+          addEvent('用药提醒', '到点提醒服药「' + med.name + '」');
+        }
+      }
+    });
+  });
+}
+
+/* ==================== 找医院 / 地图 ==================== */
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+/* 高德地图，使用内置 Key，无需用户配置 */
+let amap = null, amapPlace = null, amapReady = false, amapLoading = false, amapHospitals = [];
+const AMAP_DEFAULT_KEY = 'ba12742b2e8f0d7ede579914e78c0933';
+const AMAP_DEFAULT_SEC = '85f4acad2e7c595a70576599919245b0';
+function loadAmap(force){
+  if(window.AMap && amapReady){
+    if(force) initAmapMap();
+    return;
+  }
+  if(amapLoading) return;
+  amapLoading = true;
+  window._AMapSecurityConfig = {securityJsCode: AMAP_DEFAULT_SEC};
+  const s = document.createElement('script');
+  s.src = 'https://webapi.amap.com/maps?v=2.0&key=' + encodeURIComponent(AMAP_DEFAULT_KEY) +
+    '&plugin=AMap.PlaceSearch,AMap.Geolocation';
+  s.async = true;
+  s.onload = ()=>{
+    amapLoading = false;
+    if(window.AMap){
+      amapReady = true;
+      initAmapMap();
+    } else {
+      if(!map && typeof L !== 'undefined') initLeafletMap();
+    }
+  };
+  s.onerror = ()=>{
+    amapLoading = false;
+    if(!map && typeof L !== 'undefined') initLeafletMap();
+  };
+  document.head.appendChild(s);
+}
+function initAmapMap(){
+  if(amap || !window.AMap) return;
+  amap = new AMap.Map('map', {zoom:12, center:[104.0668, 30.5728]});
+  amap.on('click', e=>{
+    userLoc = {lat:e.lnglat.getLat(), lng:e.lnglat.getLng()};
+    renderHospitals();
+    toast('已设置位置，重新计算附近医院');
+    speak('已设置位置');
+  });
+  renderHospitals();
+}
+function autoLocate(){
+  if(autoLocated || userLoc) return;
+  autoLocated = true;
+  setTimeout(()=>{ if(!userLoc) locate(); }, 600);
+}
+function locate(){
+  if(amapReady && window.AMap){
+    toast('正在通过高德获取位置…');
+    speak('正在获取您的位置，请稍候。');
+    const geo = new AMap.Geolocation({enableHighAccuracy:true, timeout:10000});
+    geo.getCurrentPosition((status, result)=>{
+      if(status === 'complete' && result && result.position){
+        userLoc = {lat:result.position.lat, lng:result.position.lng};
+        renderHospitals();
+        speak('已定位成功，为您推荐最近的医院。');
+      } else {
+        toast('自动定位失败，可在地图上点选位置');
+        speak('自动定位失败，请在地图上点选您的位置。');
+        renderHospitals();
+      }
+    });
+    return;
+  }
+  if(!navigator.geolocation){ toast('当前浏览器不支持定位'); return; }
+  toast('正在获取位置…');
+  speak('正在获取您的位置，请稍候。');
+  navigator.geolocation.getCurrentPosition(pos=>{
+    userLoc = {lat:pos.coords.latitude, lng:pos.coords.longitude};
+    renderHospitals();
+    speak('已定位成功，为您推荐最近的医院。');
+  }, err=>{
+    toast('自动定位失败，可在地图上点选位置');
+    speak('自动定位失败，请在地图上点选您的位置。');
+    renderHospitals();
+  }, {enableHighAccuracy:true, timeout:10000});
+}
+function searchPlace(){
+  const el = $('addrInput');
+  const kw = el ? el.value.trim() : '';
+  if(!kw){
+    toast('请先输入地点，如小区、街道或地标名');
+    speak('请先输入地点名称');
+    return;
+  }
+  if(amapReady && window.AMap){
+    $('mapHint').textContent = '正在查询「' + kw + '」附近的医院…';
+    if(!amapPlace) amapPlace = new AMap.PlaceSearch({city:'全国', pageSize:10, pageIndex:1, extensions:'all'});
+    amapPlace.search(kw, (status, result)=>{
+      const pois = (status === 'complete' && result && result.poiList && result.poiList.pois) ? result.poiList.pois : [];
+      if(pois.length === 0){
+        $('mapHint').textContent = '未找到「' + kw + '」，请换个说法，或在地图上点选位置。';
+        toast('未找到该地点，请换个说法试试');
+        speak('未找到该地点，请换个说法试试');
+        return;
+      }
+      const p = pois[0];
+      userLoc = {lat:p.location.lat, lng:p.location.lng};
+      toast('已定位到「' + p.name + '」');
+      speak('已定位到' + p.name + '，为您推荐附近医院');
+      renderHospitals();
+    });
+    return;
+  }
+  if(amapLoading){
+    toast('地图正在加载，请稍候再试');
+    return;
+  }
+  $('mapHint').textContent = '正在查询「' + kw + '」…';
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(kw))
+    .then(r=>r.json())
+    .then(list=>{
+      if(!list || !list.length){
+        $('mapHint').textContent = '未找到「' + kw + '」，请换个说法试试。';
+        toast('未找到该地点，请换个说法试试');
+        return;
+      }
+      userLoc = {lat:parseFloat(list[0].lat), lng:parseFloat(list[0].lng)};
+      toast('已定位，为您重新推荐医院');
+      speak('已定位，为您推荐附近医院');
+      renderHospitals();
+    })
+    .catch(()=>{
+      $('mapHint').textContent = '地点查询失败，请检查网络或点击地图选择位置。';
+      toast('地点查询失败，请检查网络');
+    });
+}
+function initMapOnce(){
+  if(map || amapReady) return;
+  loadAmap(true);
+}
+function initLeafletMap(){
+  if(map || typeof L === 'undefined') return;
+  map = L.map('map').setView([30.5728, 104.0668], 12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18, attribution: '© OpenStreetMap'
+  }).addTo(map);
+  // 手动点选位置（自动定位失败时的降级方案）
+  map.on('click', e => {
+    userLoc = {lat: e.latlng.lat, lng: e.latlng.lng};
+    renderHospitals();
+    toast('已设置位置，重新计算附近医院');
+    speak('已设置位置');
+  });
+}
+function renderHospitals(){
+  if(amapReady && amap) return renderHospitalsAMap();
+  let list = HOSPITALS.map(h=>({...h}));
+  if(userLoc){
+    list.forEach(h=>{ h.dist = haversine(userLoc.lat, userLoc.lng, h.lat, h.lng); });
+    list.sort((a,b)=>a.dist-b.dist);
+    list = list.slice(0,5);
+  }
+  const el = $('hospList'); el.innerHTML = '';
+  list.forEach(h=>{
+    const dist = userLoc ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
+    const match = recentDepts.some(d=>h.dept.some(x=>x.includes(d)||d.includes(x)));
+    const d = document.createElement('div');
+    d.className = 'hosp-item';
+    d.innerHTML = '<div class="dist">' + dist + '</div>' +
+      '<div style="flex:1;"><div class="nm">' + h.name + (match?'<span class="tag">匹配科室</span>':'') + '</div>' +
+      '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
+      '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
+    el.appendChild(d);
+  });
+  $('mapHint').textContent = userLoc ? '已定位，为您推荐最近的 5 所医院。' : '未定位，显示示例医院（供演示）。';
+  // 地图标注
+  if(map){
+    mapMarkers.forEach(m=>map.removeLayer(m)); mapMarkers = [];
+    const center = userLoc || {lat:30.5728, lng:104.0668};
+    map.setView([center.lat, center.lng], userLoc ? 12 : 11);
+    if(userLoc){
+      const me = L.circleMarker([userLoc.lat, userLoc.lng], {radius:8, color:'#0f9d8f', fillColor:'#0f9d8f', fillOpacity:.8}).addTo(map);
+      me.bindPopup('我的位置').openPopup();
+      mapMarkers.push(me);
+    }
+    list.forEach(h=>{
+      const m = L.marker([h.lat, h.lng]).addTo(map);
+      m.bindPopup('<b>'+h.name+'</b><br>'+h.level);
+      mapMarkers.push(m);
+    });
+  }
+}
+function renderHospitalsAMap(){
+  if(!amap) return;
+  amap.clearMap();
+  const drawStatic = ()=>{
+    amapHospitals = [];
+    const el = $('hospList'); el.innerHTML = '';
+    HOSPITALS.forEach(h=>{
+      const m = new AMap.Marker({position:[h.lng, h.lat], title:h.name});
+      m.setMap(amap);
+      m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
+      const d = document.createElement('div');
+      d.className = 'hosp-item';
+      d.innerHTML = '<div class="dist">—</div>' +
+        '<div style="flex:1;"><div class="nm">' + h.name + '</div>' +
+        '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
+        '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
+      el.appendChild(d);
+    });
+    if(userLoc) amap.setFitView();
+  };
+  if(!userLoc){
+    $('mapHint').textContent = '未定位，显示示例医院；点击「获取我的位置」可搜索附近真实医院。';
+    drawStatic();
+    return;
+  }
+  $('mapHint').textContent = '正在通过高德搜索附近医院…';
+  amap.setCenter([userLoc.lng, userLoc.lat]);
+  const me = new AMap.Marker({
+    position:[userLoc.lng, userLoc.lat],
+    title:'我的位置',
+    content:'<div style="width:14px;height:14px;border-radius:50%;background:#0f9d8f;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.4);"></div>'
+  });
+  me.setMap(amap);
+  if(!amapPlace) amapPlace = new AMap.PlaceSearch({city:'全国', pageSize:10, pageIndex:1, extensions:'all'});
+  amapPlace.searchNearBy('医院', [userLoc.lng, userLoc.lat], 10000, (status, result)=>{
+    const pois = (status === 'complete' && result && result.poiList && result.poiList.pois) ? result.poiList.pois : [];
+    if(pois.length === 0){
+      $('mapHint').textContent = '高德未搜索到附近医院，显示示例医院。';
+      drawStatic();
+      return;
+    }
+    amapHospitals = pois.map(p=>({
+      name:p.name,
+      lat:p.location.getLat(),
+      lng:p.location.getLng(),
+      level:p.type ? p.type.split(';').filter(Boolean).pop() : '医院',
+      dist:haversine(userLoc.lat, userLoc.lng, p.location.getLat(), p.location.getLng())
+    })).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    const el = $('hospList'); el.innerHTML = '';
+    amapHospitals.forEach(h=>{
+      const m = new AMap.Marker({position:[h.lng, h.lat], title:h.name});
+      m.setMap(amap);
+      m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
+      const dist = h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里';
+      const d = document.createElement('div');
+      d.className = 'hosp-item';
+      d.innerHTML = '<div class="dist">' + dist + '</div>' +
+        '<div style="flex:1;"><div class="nm">' + h.name + '</div>' +
+        '<div class="ds">' + h.level + '</div></div>' +
+        '<button class="btn sm line" onclick="goHospital(\'' + h.name.replace(/'/g,"\\'") + '\')">导航</button>';
+      el.appendChild(d);
+    });
+    $('mapHint').textContent = '高德已定位，为您推荐最近的 ' + amapHospitals.length + ' 所医院。';
+    amap.setFitView();
+  });
+}
+function goHospital(name){
+  speak('已选择' + name + '。您可以使用手机地图软件进行导航。');
+  toast('正在打开 ' + name);
+  const h = amapHospitals.find(x=>x.name===name) || HOSPITALS.find(x=>x.name===name);
+  if(h) window.open('https://uri.amap.com/navigation?to=' + h.lng + ',' + h.lat + ',' + encodeURIComponent(h.name), '_blank');
+  else toast('未找到该医院的导航信息');
+}
+
+/* ==================== 家属端 ==================== */
+let bc = null;
+function initChannel(){
+  if('BroadcastChannel' in window && !bc){
+    bc = new BroadcastChannel('med_family');
+    bc.onmessage = e => {
+      const ev = e.data;
+      if(familyBind && ev.familyCode === familyBind){
+        appendFeed(ev, false);
+      }
+    };
+  }
+}
+function addEvent(type, text){
+  const ev = {familyCode: myFamilyCode, type, text, time:Date.now()};
+  DB.put('events', ev);
+  if(bc) bc.postMessage(ev);
+  appendFeed(ev, true);
+}
+function appendFeed(ev, isSelf){
+  const feed = $('familyFeed');
+  const d = document.createElement('div');
+  d.className = 'med-item';
+  const time = new Date(ev.time).toLocaleString('zh-CN', {hour12:false});
+  d.innerHTML = '<div class="t"><div class="nm">' + (isSelf?'我':'家人') + ' · ' + ev.type + '</div>' +
+    '<div class="tm">' + ev.text + '</div><div class="tm">' + time + '</div></div>';
+  feed.prepend(d);
+  if(feed.children.length > 20) feed.removeChild(feed.lastChild);
+}
+function copyCode(){
+  const code = $('familyCode').textContent;
+  if(code === '—' || code === '请先登录获取'){ toast('请先登录获取家庭码'); return; }
+  if(navigator.clipboard){ navigator.clipboard.writeText(code).then(()=>toast('已复制家庭码')); }
+  else { toast('家庭码：' + code); }
+}
+function bindFamily(){
+  const code = $('bindCode').value.trim();
+  if(code.length !== 6){ toast('请输入 6 位家庭码'); return; }
+  familyBind = code;
+  localStorage.setItem('med_bind', code);
+  $('familyFeed').innerHTML = '';
+  toast('已绑定家庭码 ' + code + '，可实时查看家人动态');
+  speak('绑定成功，现在可以实时查看家人的动态。');
+  // 拉取历史事件
+  DB.all('events').then(evs=>{
+    evs.filter(e=>e.familyCode===code).slice(-10).forEach(e=>appendFeed(e, false));
+  });
+}
+
+/* ==================== 初始化 ==================== */
+async function init(){
+  await DB.open();
+  applyMode();
+  updateUserUI();
+  renderSyms();
+  renderFlow();
+  renderMeds();
+  $('drugCount').textContent = DRUG_DB.length;
+  renderDrugCats();
+  renderDrugLib();
+  initChannel();
+  // 药名输入实时匹配 AI 建议
+  $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
+  $('drugSearch').addEventListener('input', renderDrugLib);
+  if(currentUser){
+    const rec = await DB.get('users', currentUser);
+    if(rec) myFamilyCode = rec.familyCode;
+    updateUserUI();
+  } else {
+    myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
+  }
+  // 定时检查用药提醒（每30秒）
+  setInterval(checkMeds, 30000);
+  checkMeds();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
