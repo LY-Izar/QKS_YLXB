@@ -5012,6 +5012,8 @@ const DEFAULT_TARGETS = {
   other:{}
 };
 let chronicChart = null;
+let chronicChartRetryTimer = null;
+let chronicChartFallbackW = 0;
 let currentChronicRange = '30d';
 
 function onChronicTypeChange(){
@@ -5343,10 +5345,6 @@ async function delMetric(id){
   renderMetricHistory();
   renderChart(currentChronicRange);
 }
-
-let chronicChart = null;
-let chronicChartRetryTimer = null;
-let chronicChartFallbackW = 0;
 
 function _chronicShowEmpty(emptyEl, text){
   if(!emptyEl) return;
