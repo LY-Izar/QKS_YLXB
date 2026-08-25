@@ -58,9 +58,57 @@
   body.dark .grid .tile:nth-child(4) .ic{background:rgba(230,180,60,.14);}
   body.dark .grid .tile:nth-child(5) .ic{background:rgba(80,200,140,.14);}
   body.dark .grid .tile:nth-child(6) .ic{background:rgba(170,130,250,.14);}
-  body.dark .grid .tile:nth-child(7) .ic{background:rgba(80,200,210,.14);}
   body.dark .voice-fab{border-color:var(--bg);}
   body.dark .mask{background:rgba(0,0,0,.6);}
+
+  /* ===== 黑暗模式卡片边缘高光（BorderGlow 风格） ===== */
+  body.dark .card{
+    --edge-proximity:0;
+    --cursor-angle:45deg;
+    --edge-sens:28;
+    --color-sens:45;
+    border-color:rgba(255,255,255,.14);
+  }
+  body.dark .card::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    box-shadow:
+      inset 0 0 0 1px rgba(194,153,255,.55),
+      inset 0 0 4px 0 rgba(194,153,255,.4),
+      inset 0 0 12px 0 rgba(194,153,255,.22),
+      inset 0 0 26px 2px rgba(194,153,255,.12);
+    -webkit-mask:conic-gradient(from var(--cursor-angle) at 50% 50%,
+      #000 2%, transparent 9%, transparent 91%, #000 98%);
+    mask:conic-gradient(from var(--cursor-angle) at 50% 50%,
+      #000 2%, transparent 9%, transparent 91%, #000 98%);
+    opacity:calc((var(--edge-proximity) - var(--edge-sens)) / (100 - var(--edge-sens)));
+    transition:opacity .3s ease-out;
+  }
+  /* 彩色网格渐变描边：仅支持 mask-composite 的浏览器启用 */
+  @supports (-webkit-mask-composite: xor) or (mask-composite: exclude){
+    body.dark .card::before{
+      content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
+      padding:2px;
+      background:
+        radial-gradient(at 80% 55%, hsla(268,100%,76%,.95) 0px, transparent 50%),
+        radial-gradient(at 69% 34%, hsla(349,100%,74%,.95) 0px, transparent 50%),
+        radial-gradient(at 8% 6%, hsla(136,100%,78%,.95) 0px, transparent 50%),
+        radial-gradient(at 41% 38%, hsla(192,100%,64%,.95) 0px, transparent 50%),
+        radial-gradient(at 86% 85%, hsla(186,100%,74%,.95) 0px, transparent 50%),
+        radial-gradient(at 82% 18%, hsla(52,100%,65%,.95) 0px, transparent 50%),
+        radial-gradient(at 51% 4%, hsla(12,100%,72%,.95) 0px, transparent 50%),
+        linear-gradient(#c299ff 0 0);
+      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite:xor;
+      mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite:exclude;
+      opacity:calc((var(--edge-proximity) - var(--color-sens)) / (100 - var(--color-sens)));
+      transition:opacity .3s ease-out;
+    }
+  }
+  /* 家属端卡片在黑暗模式优先用边缘光，停用 Spotlight 光斑 */
+  body.dark #view-family .card::after{
+    background:none;mix-blend-mode:normal;
+  }
 
   /* 关怀模式（大字·高对比·暖色） */
   body.care{
@@ -135,7 +183,7 @@
   .mode-btn:hover{background:var(--primary);color:#fff;box-shadow:0 4px 14px color-mix(in srgb, var(--primary) 40%, transparent);}
 
   /* ===== 内容区 ===== */
-  main{max-width:640px;margin:0 auto;padding:18px 16px 120px;min-height:calc(100vh - 70px);}
+  main{max-width:640px;margin:0 auto;padding:18px 16px 150px;min-height:calc(100vh - 70px);}
   .view{display:none;animation:fade .25s ease;}
   .view.active{display:block;}
   @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -153,6 +201,7 @@
 
   /* ===== 卡片 ===== */
   .card{
+    position:relative;
     background:var(--surface);border:1px solid var(--border);
     border-color:color-mix(in srgb, var(--border) 60%, transparent);
     border-radius:var(--radius);padding:18px;margin-bottom:16px;
@@ -204,7 +253,6 @@
   .grid .tile:nth-child(4) .ic{background:#fdf6e3;}
   .grid .tile:nth-child(5) .ic{background:#e9f6ef;}
   .grid .tile:nth-child(6) .ic{background:#f3ecfa;}
-  .grid .tile:nth-child(7) .ic{background:#e6f4f5;}
   .tile .nm{font-weight:700;font-size:19px;}
   body.care .tile .nm{font-size:26px;}
   .tile .ds{font-size:14px;color:var(--muted);}
@@ -340,6 +388,13 @@
 
   /* ===== 家属端专属特效（React Bits 风格，关怀模式下全部关闭） ===== */
   #view-family{position:relative;z-index:0;}
+  /* LightRays 光线背景：仅家属端黑暗模式显示 */
+  #fxRays{
+    position:absolute;inset:0;width:100%;height:100%;
+    z-index:-1;pointer-events:none;display:none;
+  }
+  body.dark #view-family #fxRays{display:block;}
+  body.care #fxRays{display:none !important;}
   #view-family .fx-aurora{
     position:absolute;inset:-30%;z-index:-1;pointer-events:none;
     background:
@@ -413,37 +468,87 @@
   .theme-btn:active{transform:scale(.9);}
   body.care .theme-btn{display:none;}
 
-  /* ===== 底部导航 ===== */
+  /* ===== 底部导航：胶囊 + 液态玻璃（PillNav / GlassSurface 风格） ===== */
   .tabbar{
-    position:fixed;bottom:0;left:0;right:0;z-index:40;
-    display:flex;background:var(--surface);
-    background:color-mix(in srgb, var(--surface) 88%, transparent);
-    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-    border-top:1px solid var(--border);
-    border-top-color:color-mix(in srgb, var(--border) 70%, transparent);
-    padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+    position:fixed;left:14px;right:14px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;
+    display:flex;gap:2px;padding:5px;
+    border-radius:9999px;
+    background:rgba(255,255,255,.22);
+    background:color-mix(in srgb, var(--surface) 55%, transparent);
+    backdrop-filter:blur(18px) saturate(1.8) brightness(1.08);
+    -webkit-backdrop-filter:blur(18px) saturate(1.8) brightness(1.08);
+    border:1px solid rgba(255,255,255,.35);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255,255,255,.45),
+      inset 0 -1px 0 0 rgba(255,255,255,.18),
+      0 8px 32px 0 rgba(16,58,50,.16),
+      0 2px 12px 0 rgba(16,58,50,.10);
+  }
+  body.dark .tabbar{
+    background:rgba(22,33,29,.55);
+    border-color:rgba(255,255,255,.14);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255,255,255,.16),
+      inset 0 -1px 0 0 rgba(255,255,255,.06),
+      0 8px 32px 0 rgba(0,0,0,.45),
+      0 2px 12px 0 rgba(0,0,0,.3);
+  }
+  /* 关怀模式保持高对比实底，确保老人看清 */
+  body.care .tabbar{
+    background:#ffffff;
+    backdrop-filter:none;-webkit-backdrop-filter:none;
+    border:2px solid var(--primary);
+    box-shadow:0 6px 24px rgba(143,61,0,.22);
+    padding:7px;
   }
   .tab{
-    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
-    color:var(--muted);font-size:14px;font-weight:600;padding:6px 4px;border-radius:12px;
-    transition:.15s;
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    color:var(--muted);font-size:13px;font-weight:700;padding:7px 2px;
+    border-radius:9999px;position:relative;overflow:hidden;
+    transition:color .2s;
   }
-  body.care .tab{font-size:18px;}
-  .tab .ic{font-size:24px;line-height:1;transition:.2s;}
-  body.care .tab .ic{font-size:30px;}
-  .tab.on{color:var(--primary);background:var(--primary-soft);}
-  .tab.on .ic{transform:scale(1.08);}
+  body.care .tab{font-size:17px;padding:10px 2px;}
+  .tab .ic{font-size:22px;line-height:1;transition:transform .25s;position:relative;z-index:2;}
+  body.care .tab .ic{font-size:28px;}
+  .tab span:not(.ic){position:relative;z-index:2;}
+  .tab .lb{line-height:1;}
+  /* PillNav 悬停升起圆形填充 */
+  .tab::before{
+    content:'';position:absolute;left:50%;bottom:-70%;
+    width:170%;aspect-ratio:1;transform:translateX(-50%);
+    border-radius:50%;background:var(--primary-soft);
+    transition:bottom .38s cubic-bezier(.22,1,.36,1);z-index:1;
+  }
+  @media (hover:hover){
+    .tab:hover{color:var(--primary-deep);}
+    .tab:hover::before{bottom:-32%;}
+    .tab:hover .ic{transform:translateY(-1px) scale(1.1);}
+  }
+  .tab:active{transform:scale(.94);}
+  /* 激活态：主色胶囊 + 底部圆点 */
+  .tab.on{color:#fff;}
+  .tab.on::before{
+    bottom:-32%;background:linear-gradient(135deg,var(--primary),var(--primary-deep));
+    width:100%;aspect-ratio:auto;top:0;
+    box-shadow:0 3px 10px color-mix(in srgb, var(--primary) 40%, transparent);
+  }
+  .tab.on .ic{transform:scale(1.1);}
+  .tab.on::after{
+    content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+    width:5px;height:5px;border-radius:50%;background:#fff;opacity:.9;z-index:2;
+  }
+  body.care .tab.on::after{width:7px;height:7px;bottom:4px;}
 
   /* ===== 悬浮语音按钮 ===== */
   .voice-fab{
-    position:fixed;right:16px;bottom:100px;z-index:60;
+    position:fixed;right:16px;bottom:106px;z-index:60;
     width:58px;height:58px;border-radius:50%;
     background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;font-size:26px;
     display:grid;place-items:center;
     box-shadow:0 6px 20px color-mix(in srgb, var(--primary) 45%, transparent);
     transition:.15s;border:3px solid #fff;
   }
-  body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:120px;}
+  body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:150px;}
   .voice-fab:active{transform:scale(.92);}
   @media (hover:hover){ .voice-fab:hover{filter:brightness(1.06);} }
   .voice-fab.listening{background:linear-gradient(135deg,var(--danger),#9b2c2c);animation:pulse 1s infinite;}
@@ -538,7 +643,6 @@
       <button class="tile" onclick="go('med')"><span class="ic">💊</span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
       <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
       <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
-      <button class="tile" onclick="speakCurrent()"><span class="ic">🔊</span><span class="nm">语音助手</span><span class="ds">听我说 · 读出内容</span></button>
       <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc">👨‍👩‍👧</span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
     </div>
   </div>
@@ -662,6 +766,7 @@
 
   <!-- 家属端 -->
   <div class="view" id="view-family">
+    <canvas id="fxRays"></canvas>
     <div class="fx-aurora"></div>
     <div class="fx-dots"></div>
     <h1 id="familyTitle">家属端</h1>
@@ -691,12 +796,12 @@
 
 <!-- 底部导航 -->
 <div class="tabbar">
-  <button class="tab on" data-v="home" onclick="go('home')"><span class="ic">🏠</span>首页</button>
-  <button class="tab" data-v="symptom" onclick="go('symptom')"><span class="ic">🔍</span>自查</button>
-  <button class="tab" data-v="flow" onclick="go('flow')"><span class="ic">🗺️</span>流程</button>
-  <button class="tab" data-v="med" onclick="go('med')"><span class="ic">💊</span>用药</button>
-  <button class="tab" data-v="druglib" onclick="go('druglib')"><span class="ic">📖</span>药库</button>
-  <button class="tab" data-v="more" onclick="go('hospital')"><span class="ic">🏥</span>医院</button>
+  <button class="tab on" data-v="home" onclick="go('home')"><span class="ic">🏠</span><span class="lb">首页</span></button>
+  <button class="tab" data-v="symptom" onclick="go('symptom')"><span class="ic">🔍</span><span class="lb">自查</span></button>
+  <button class="tab" data-v="flow" onclick="go('flow')"><span class="ic">🗺️</span><span class="lb">流程</span></button>
+  <button class="tab" data-v="med" onclick="go('med')"><span class="ic">💊</span><span class="lb">用药</span></button>
+  <button class="tab" data-v="druglib" onclick="go('druglib')"><span class="ic">📖</span><span class="lb">药库</span></button>
+  <button class="tab" data-v="more" onclick="go('hospital')"><span class="ic">🏥</span><span class="lb">医院</span></button>
 </div>
 
 <!-- 悬浮语音按钮 -->
@@ -1556,7 +1661,7 @@ function speakCurrent(){
     'view-welcome':'欢迎使用医路相伴，老年人智能就医导航。建议开启关怀模式，字体更大更清晰。',
     'view-home': myRole === 'family'
       ? '这是首页。可以查看亲属的健康动态，或使用症状自查、药品库等功能。'
-      : '这是首页。可以选择症状自查、就医流程、用药提醒、找医院、语音助手或绑定家人。',
+      : '这是首页。可以选择症状自查、就医流程、用药提醒、药品库、找医院或绑定家人。',
     'view-symptom':'症状自查。请点选症状，或在下方输入症状文字，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
@@ -1843,9 +1948,14 @@ function voiceInput(){
     if(hits.length){
       hits.forEach(s=>selectedSyms.add(s.id));
       renderSyms();
-      speak('已为您选中' + hits.map(s=>s.name).join('，') + '，请点击查看分析结果。');
+      go('symptom');
+      analyzeSym();
     } else {
-      speak('没有听清具体症状，请再试一次，或使用文字输入，也可直接前往内科就诊。');
+      go('symptom');
+      const el = $('symInput');
+      if(el && txt){ el.value = txt; }
+      toast('未识别到症状，已打开自查页，可在文字框中补充描述');
+      speak('没有听清具体症状，已为您打开自查页，可在文字框中补充，或直接前往内科就诊。');
     }
   }, symptomsGrammar());
 }
@@ -1875,6 +1985,7 @@ function applyTheme(){
   document.body.classList.toggle('dark', dark);
   const btn = $('btnTheme');
   if(btn) btn.textContent = themeDark ? '☀️' : '🌙';
+  updateLightRays();
 }
 function toggleTheme(){
   themeDark = !themeDark;
@@ -1893,6 +2004,158 @@ function initSpotlight(){
       c.style.setProperty('--my', (e.clientY - r.top) + 'px');
     });
   });
+}
+
+/* 黑暗模式卡片边缘高光：指针跟踪边缘接近度与角度（BorderGlow 移植） */
+function initEdgeGlow(){
+  if(!window.matchMedia('(hover:hover)').matches) return;
+  document.addEventListener('pointermove', e=>{
+    const card = e.target && e.target.closest ? e.target.closest('.card') : null;
+    if(!card) return;
+    const r = card.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const cx = r.width / 2, cy = r.height / 2;
+    const dx = x - cx, dy = y - cy;
+    const kx = dx !== 0 ? cx / Math.abs(dx) : Infinity;
+    const ky = dy !== 0 ? cy / Math.abs(dy) : Infinity;
+    const edge = Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
+    let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+    if(angle < 0) angle += 360;
+    card.style.setProperty('--edge-proximity', (edge * 100).toFixed(3));
+    card.style.setProperty('--cursor-angle', angle.toFixed(3) + 'deg');
+  }, {passive:true});
+}
+
+/* LightRays 光线背景（家属端黑暗模式，原生 WebGL 移植） */
+const raysState = {gl:null, raf:0, running:false, mouse:{x:.5,y:.5}, smooth:{x:.5,y:.5}};
+function raysSupported(){
+  try{
+    const c = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+  }catch(e){ return false; }
+}
+function updateLightRays(){
+  const canvas = $('fxRays');
+  if(!canvas) return;
+  const active = document.body.classList.contains('dark')
+    && $('view-family') && $('view-family').classList.contains('active')
+    && !document.body.classList.contains('care')
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(active && !raysState.running && raysSupported()) startLightRays(canvas);
+  if(!active && raysState.running) stopLightRays();
+}
+function startLightRays(canvas){
+  const gl = canvas.getContext('webgl', {alpha:true, antialias:false});
+  if(!gl) return;
+  raysState.gl = gl; raysState.running = true;
+  const vertSrc = 'attribute vec2 position;varying vec2 vUv;void main(){vUv=position*0.5+0.5;gl_Position=vec4(position,0.0,1.0);}';
+  const fragSrc = [
+    'precision highp float;',
+    'uniform float iTime;uniform vec2 iResolution;',
+    'uniform vec2 rayPos;uniform vec2 rayDir;uniform vec3 raysColor;',
+    'uniform float raysSpeed;uniform float lightSpread;uniform float rayLength;',
+    'uniform float fadeDistance;uniform float saturation;',
+    'uniform vec2 mousePos;uniform float mouseInfluence;',
+    'varying vec2 vUv;',
+    'float rayStrength(vec2 raySource,vec2 rayRefDirection,vec2 coord,float seedA,float seedB,float speed){',
+    'vec2 sourceToCoord=coord-raySource;vec2 dirNorm=normalize(sourceToCoord);',
+    'float cosAngle=dot(dirNorm,rayRefDirection);',
+    'float spreadFactor=pow(max(cosAngle,0.0),1.0/max(lightSpread,0.001));',
+    'float distance=length(sourceToCoord);',
+    'float maxDistance=iResolution.x*rayLength;',
+    'float lengthFalloff=clamp((maxDistance-distance)/maxDistance,0.0,1.0);',
+    'float fadeFalloff=clamp((iResolution.x*fadeDistance-distance)/(iResolution.x*fadeDistance),0.5,1.0);',
+    'float baseStrength=clamp((0.45+0.15*sin(cosAngle*seedA+iTime*speed))+(0.3+0.2*cos(-cosAngle*seedB+iTime*speed)),0.0,1.0);',
+    'return baseStrength*lengthFalloff*fadeFalloff*spreadFactor;',
+    '}',
+    'void main(){',
+    'vec2 coord=gl_FragCoord.xy;',
+    'vec2 finalRayDir=rayDir;',
+    'if(mouseInfluence>0.0){vec2 mouseScreenPos=mousePos*iResolution.xy;',
+    'vec2 mouseDirection=normalize(mouseScreenPos-rayPos);',
+    'finalRayDir=normalize(mix(rayDir,mouseDirection,mouseInfluence));}',
+    'vec4 rays1=vec4(1.0)*rayStrength(rayPos,finalRayDir,coord,36.2214,21.11349,1.5*raysSpeed);',
+    'vec4 rays2=vec4(1.0)*rayStrength(rayPos,finalRayDir,coord,22.3991,18.0234,1.1*raysSpeed);',
+    'vec4 fragColor=rays1*0.5+rays2*0.4;',
+    'float brightness=1.0-(coord.y/iResolution.y);',
+    'fragColor.x*=0.1+brightness*0.8;fragColor.y*=0.3+brightness*0.6;fragColor.z*=0.5+brightness*0.5;',
+    'if(saturation!=1.0){float gray=dot(fragColor.rgb,vec3(0.299,0.587,0.114));',
+    'fragColor.rgb=mix(vec3(gray),fragColor.rgb,saturation);}',
+    'fragColor.rgb*=raysColor;',
+    'gl_FragColor=fragColor;',
+    '}'
+  ].join('\n');
+  function compile(type, src){
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertSrc));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSrc));
+  gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){ raysState.running = false; return; }
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'position');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = {};
+  ['iTime','iResolution','rayPos','rayDir','raysColor','raysSpeed','lightSpread','rayLength','fadeDistance','saturation','mousePos','mouseInfluence'].forEach(n=>{ U[n] = gl.getUniformLocation(prog, n); });
+  gl.uniform3f(U.raysColor, 0.30, 0.86, 0.62);
+  gl.uniform1f(U.raysSpeed, 1.2);
+  gl.uniform1f(U.lightSpread, 1.3);
+  gl.uniform1f(U.rayLength, 3.0);
+  gl.uniform1f(U.fadeDistance, 0.7);
+  gl.uniform1f(U.saturation, 0.6);
+  gl.uniform1f(U.mouseInfluence, 0.3);
+  function resize(){
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if(!w || !h) return;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(U.iResolution, canvas.width, canvas.height);
+    gl.uniform2f(U.rayPos, canvas.width * 0.5, -canvas.height * 0.2);
+    gl.uniform2f(U.rayDir, 0, 1);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  const t0 = performance.now();
+  function loop(t){
+    if(!raysState.running) return;
+    gl.uniform1f(U.iTime, (t - t0) * 0.001);
+    raysState.smooth.x = raysState.smooth.x * 0.92 + raysState.mouse.x * 0.08;
+    raysState.smooth.y = raysState.smooth.y * 0.92 + raysState.mouse.y * 0.08;
+    gl.uniform2f(U.mousePos, raysState.smooth.x, raysState.smooth.y);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    raysState.raf = requestAnimationFrame(loop);
+  }
+  raysState.raf = requestAnimationFrame(loop);
+  raysState._onResize = resize;
+  raysState._onMouse = e=>{
+    const r = canvas.getBoundingClientRect();
+    if(r.width && r.height){
+      raysState.mouse.x = (e.clientX - r.left) / r.width;
+      raysState.mouse.y = 1 - (e.clientY - r.top) / r.height;
+    }
+  };
+  window.addEventListener('mousemove', raysState._onMouse);
+}
+function stopLightRays(){
+  raysState.running = false;
+  cancelAnimationFrame(raysState.raf);
+  if(raysState._onResize) window.removeEventListener('resize', raysState._onResize);
+  if(raysState._onMouse) window.removeEventListener('mousemove', raysState._onMouse);
+  try{
+    if(raysState.gl){
+      const ext = raysState.gl.getExtension('WEBGL_lose_context');
+      if(ext) ext.loseContext();
+    }
+  }catch(e){}
+  raysState.gl = null; raysState._onResize = null; raysState._onMouse = null;
 }
 function toggleMode(){
   const care = document.body.classList.contains('care');
@@ -1915,6 +2178,7 @@ function go(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const target = $('view-' + view);
   if(target) target.classList.add('active');
+  updateLightRays();
   document.querySelectorAll('.tab').forEach(t=>{
     t.classList.toggle('on', (t.dataset.v === view) || (view==='hospital' && t.dataset.v==='more'));
   });
@@ -2077,8 +2341,12 @@ function quickUse(){
 function afterLogin(){
   const rec = DB.get('users', currentUser);
   rec.then(r => { if(r){ myFamilyCode = r.familyCode; if(r.role) setRole(r.role); updateUserUI(); } });
-  // 按身份切换界面模式：老人自动关怀模式，家属标准模式
+  // 按身份切换界面模式：老人自动关怀模式，家属标准模式+默认黑暗模式
   localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
+  if(myRole === 'family'){
+    themeDark = true;
+    localStorage.setItem('med_theme', 'dark');
+  }
   applyMode();
   if(myRole === 'family' && familyBind) pullCloudEvents(familyBind);
   go(myRole === 'family' ? 'family' : 'home'); updateUserUI();
@@ -2831,6 +3099,7 @@ async function init(){
   renderDrugLib();
   initChannel();
   initSpotlight();
+  initEdgeGlow();
   // 药名输入实时匹配 AI 建议
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
@@ -2843,6 +3112,7 @@ async function init(){
     updateUserUI();
     // 已登录家属自动拉取绑定老人的云端动态
     if(myRole === 'family' && familyBind) pullCloudEvents(familyBind);
+    go(myRole === 'family' ? 'family' : 'home');
   } else {
     myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   }
