@@ -1975,7 +1975,7 @@ function notify(msg){
 }
 
 /* ==================== PWA 推送通知 ==================== */
-const VAPID_PUBLIC_KEY = 'BLQr5tG2iTxcjG8gNkR3ZpLvQ4nKmF9dH7eC6bU2vRyY4xJfGmDpLsTzWqNkBhSxV2C4xYUg3Zm';
+const VAPID_PUBLIC_KEY = 'BKzNqQ81FCrr0igBOBYWQJV3_L2oqrQd9iRnB1FUodGw9zJwGINNDuduPap3Z0dXLbOgdI2Aco3QrVLEPMrk3ws';
 let swReg = null;
 let initPushPromise = null;
 
@@ -2022,6 +2022,8 @@ async function subscribePush(){
     return {ok:true, msg:'推送已开启，即使关闭页面也能收到提醒'};
   }catch(e){
     if(e.name === 'NotAllowedError') return {ok:false, msg:'您拒绝了推送权限，可在浏览器地址栏左侧重新开启'};
+    if(e.message && e.message.includes('applicationServerKey')) return {ok:false, msg:'推送服务密钥无效，请刷新页面重试'};
+    if(e.message && e.message.includes('push service not available')) return {ok:false, msg:'当前浏览器推送服务暂不可用，请确认已连接网络并使用 HTTPS 访问'};
     return {ok:false, msg:'订阅失败: ' + e.message};
   }
 }
