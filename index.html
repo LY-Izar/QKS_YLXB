@@ -5364,9 +5364,19 @@ async function selectChronic(id){
 }
 
 function hideChronicCards(){
-  ['chronicMetricCard','chronicChartCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
+  // 录入区/复诊/预警按原需求在"没选档案"时直接隐藏，防止老人在无档案时乱操作
+  ['chronicMetricCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
     const el = $(id); if(el) el.style.display = 'none';
   });
+  // 趋势图卡不做 display:none（避免"标题+三个按钮+下面纯白"让用户以为"图坏了"）
+  // 改为在卡内显示明确文字指引，并强制销毁 Chart 实例避免旧图残留
+  const cardChart = $('chronicChartCard'); if(cardChart) cardChart.style.display = 'block';
+  const emptyEl = $('chronicChartEmpty');
+  if(emptyEl){
+    emptyEl.style.display = 'flex';
+    emptyEl.innerHTML = '📊 请先在上方<b>创建或选择慢病档案</b>（点"档案列表"里的任意一条），之后才能查看近7/30/90天的指标趋势。';
+  }
+  try{ _destroyChronicChart(); }catch(e){}
 }
 
 function showChronicCards(){
