@@ -666,6 +666,17 @@
   /* ===== 症状选项 ===== */
   .sym-list{display:flex;flex-wrap:wrap;gap:10px;}
   body.care .sym-list{gap:14px;}
+  .body-svg-wrap{position:relative;display:flex;justify-content:center;padding:8px 0;}
+  .bp{fill:rgba(15,157,143,0.10);stroke:rgba(15,157,143,0.45);stroke-width:1.2;cursor:pointer;transition:fill .2s,stroke .2s;}
+  .bp:hover,.bp.hover{fill:rgba(15,157,143,0.40);stroke:rgba(15,157,143,0.9);}
+  .bp.bp-sm{stroke-width:1;}
+  .bp.active{fill:rgba(15,157,143,0.55);stroke:#0f9d8f;stroke-width:2;}
+  .body-tooltip{position:fixed;background:rgba(15,58,50,0.92);color:#fff;padding:4px 12px;border-radius:8px;font-size:13px;pointer-events:none;z-index:999;opacity:0;transition:opacity .15s;white-space:nowrap;}
+  .body-tooltip.show{opacity:1;}
+  body.dark .bp{fill:rgba(15,157,143,0.08);stroke:rgba(15,157,143,0.35);}
+  body.dark .bp:hover,.body.dark .bp.hover{fill:rgba(15,157,143,0.30);stroke:rgba(15,157,143,0.8);}
+  body.care .body-tooltip{font-size:16px;padding:6px 16px;}
+  body.care #bodySvg{width:240px;}
   .sym-chip{
     padding:10px 16px;border-radius:999px;border:2px solid var(--border);
     background:var(--surface);font-size:17px;font-weight:600;transition:.15s;
@@ -959,8 +970,65 @@
         <button class="btn line" onclick="voiceToInput('symInput')" title="语音输入症状">🎤</button>
       </div>
       <button class="btn block" style="margin-top:10px;" onclick="symTextSubmit()">✅ 识别并选中症状</button>
+    </div>
+    <div class="card">
+      <h2>② 点人体选症状</h2>
+      <p class="sub" style="margin-bottom:8px;">点击身体部位，选择对应的症状。悬浮可查看部位名称。</p>
+      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:10px;">
+        <button class="btn sm line" id="btnFront" onclick="bodyView('front')">正面</button>
+        <button class="btn sm line" id="btnBack" onclick="bodyView('back')">背面</button>
+      </div>
+      <div class="body-svg-wrap" id="bodySvgWrap">
+        <svg viewBox="0 0 160 430" id="bodySvg" preserveAspectRatio="xMidYMid meet" style="width:200px;max-width:60vw;height:auto;display:block;margin:0 auto;">
+          <defs>
+            <linearGradient id="bpGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(15,157,143,0.12)"/>
+              <stop offset="100%" stop-color="rgba(15,157,143,0.06)"/>
+            </linearGradient>
+          </defs>
+          <g id="bodyFront">
+            <ellipse class="bp" data-part="head" cx="80" cy="34" rx="25" ry="28"/>
+            <circle class="bp bp-sm" data-part="eyes" cx="72" cy="26" r="3.5"/>
+            <circle class="bp bp-sm" data-part="eyes" cx="88" cy="26" r="3.5"/>
+            <ellipse class="bp bp-sm" data-part="ears" cx="53" cy="34" rx="4.5" ry="8"/>
+            <ellipse class="bp bp-sm" data-part="ears" cx="107" cy="34" rx="4.5" ry="8"/>
+            <path class="bp bp-sm" data-part="nose" d="M80,28 L77,40 L83,40 Z"/>
+            <path class="bp bp-sm" data-part="mouth" d="M73,46 Q80,51 87,46" stroke-width="2" fill="none" stroke="rgba(15,157,143,0.3)"/>
+            <rect class="bp" data-part="neck" x="71" y="58" width="18" height="14" rx="4"/>
+            <path class="bp" data-part="chest" d="M52,74 Q50,71 58,69 L102,69 Q110,71 108,74 L112,135 L48,135 Z"/>
+            <path class="bp" data-part="abdomen" d="M50,138 L110,138 L107,205 L53,205 Z"/>
+            <path class="bp" data-part="arm" d="M46,74 Q40,78 38,90 L34,200 Q33,208 40,209 L47,207 L49,90 Z"/>
+            <path class="bp" data-part="arm" d="M114,74 Q120,78 122,90 L126,200 Q127,208 120,209 L113,207 L111,90 Z"/>
+            <circle class="bp bp-sm" data-part="arm" cx="37" cy="213" r="7"/>
+            <circle class="bp bp-sm" data-part="arm" cx="123" cy="213" r="7"/>
+            <path class="bp" data-part="leg" d="M55,207 L53,395 L72,395 L75,207 Z"/>
+            <path class="bp" data-part="leg" d="M85,207 L88,395 L107,395 L105,207 Z"/>
+            <ellipse class="bp bp-sm" data-part="leg" cx="62" cy="402" rx="11" ry="6"/>
+            <ellipse class="bp bp-sm" data-part="leg" cx="98" cy="402" rx="11" ry="6"/>
+          </g>
+          <g id="bodyBack" style="display:none;">
+            <ellipse class="bp" data-part="head" cx="80" cy="34" rx="25" ry="28"/>
+            <rect class="bp" data-part="neck" x="71" y="58" width="18" height="14" rx="4"/>
+            <path class="bp" data-part="back" d="M50,74 Q48,71 58,69 L102,69 Q112,71 110,74 L112,205 L48,205 Z"/>
+            <path class="bp" data-part="arm" d="M46,74 Q40,78 38,90 L34,200 Q33,208 40,209 L47,207 L49,90 Z"/>
+            <path class="bp" data-part="arm" d="M114,74 Q120,78 122,90 L126,200 Q127,208 120,209 L113,207 L111,90 Z"/>
+            <circle class="bp bp-sm" data-part="arm" cx="37" cy="213" r="7"/>
+            <circle class="bp bp-sm" data-part="arm" cx="123" cy="213" r="7"/>
+            <path class="bp" data-part="leg" d="M55,207 L53,395 L72,395 L75,207 Z"/>
+            <path class="bp" data-part="leg" d="M85,207 L88,395 L107,395 L105,207 Z"/>
+            <ellipse class="bp bp-sm" data-part="leg" cx="62" cy="402" rx="11" ry="6"/>
+            <ellipse class="bp bp-sm" data-part="leg" cx="98" cy="402" rx="11" ry="6"/>
+          </g>
+        </svg>
+        <div class="body-tooltip" id="bodyTip"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
+        <button class="btn sm line" onclick="bodyPartClick('whole')">全身</button>
+        <button class="btn sm line" onclick="bodyPartClick('skin')">皮肤</button>
+      </div>
+      <div id="bodySymArea" style="margin-top:10px;"></div>
       <div class="divider"></div>
-      <h2>② 或点选您的症状</h2>
+      <h2>③ 或从列表选择</h2>
       <div class="sym-list" id="symList"></div>
       <div class="divider"></div>
       <button class="btn block" id="btnSym" onclick="analyzeSym()">查看分析结果</button>
@@ -1403,6 +1471,99 @@ const SYMPTOMS = [
   {id:'memory', name:'记忆力下降', aliases:['记忆力下降','忘事','记性差','丢三落四'], icon:'🧠', hot:true, u:'yellow', d:['神经']},
   {id:'injury', name:'外伤 / 出血', aliases:['摔伤','外伤','出血','割伤','破皮','流血'], icon:'🩹', hot:false, u:'red', d:['急诊','普外']},
 ];
+
+const BODY_PARTS = {
+  head:{label:'头部',syms:['headache','thunderHead','dizzy','stroke','memory','insomnia','mood']},
+  eyes:{label:'眼部',syms:['vision','visionLoss','eyePain','jaundice']},
+  ears:{label:'耳部',syms:['tinnitus']},
+  nose:{label:'鼻部',syms:['nose']},
+  mouth:{label:'口咽',syms:['soreThroat','tooth','mouth','swallow']},
+  neck:{label:'颈部',syms:['neck']},
+  chest:{label:'胸部',syms:['chest','palp','breath','coldSweat','bp']},
+  abdomen:{label:'腹部',syms:['abdomen','severeAbd','vomit','diarrhea','constip','bloodStool','appetite','urine','urineBlock']},
+  back:{label:'背/腰',syms:['back']},
+  arm:{label:'上肢',syms:['joint']},
+  leg:{label:'下肢',syms:['legSw']},
+  skin:{label:'皮肤',syms:['rash','allergy','injury']},
+  whole:{label:'全身',syms:['fever','chill','fatigue','weightLoss','sugar','cramp','faint','numb']}
+};
+
+let bodyCurrentView = 'front';
+let bodyActivePart = null;
+
+function bodyView(view){
+  bodyCurrentView = view;
+  const front = document.getElementById('bodyFront');
+  const back = document.getElementById('bodyBack');
+  if(front) front.style.display = view === 'front' ? '' : 'none';
+  if(back) back.style.display = view === 'back' ? '' : 'none';
+  const bf = document.getElementById('btnFront');
+  const bb = document.getElementById('btnBack');
+  if(bf) bf.style.fontWeight = view === 'front' ? '700' : '400';
+  if(bb) bb.style.fontWeight = view === 'back' ? '700' : '400';
+  bodyClearActive();
+}
+
+function bodyClearActive(){
+  document.querySelectorAll('.bp.active').forEach(el => el.classList.remove('active'));
+  bodyActivePart = null;
+  const area = document.getElementById('bodySymArea');
+  if(area) area.innerHTML = '';
+}
+
+function bodyPartClick(part){
+  document.querySelectorAll('.bp.active').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.bp[data-part="'+part+'"]').forEach(el => el.classList.add('active'));
+  bodyActivePart = part;
+  const info = BODY_PARTS[part];
+  if(!info) return;
+  const area = document.getElementById('bodySymArea');
+  if(!area) return;
+  const syms = info.syms.map(id => SYMPTOMS.find(s => s.id === id)).filter(Boolean);
+  if(!syms.length){
+    area.innerHTML = '<p class="hint">该部位暂无对应症状</p>';
+    return;
+  }
+  area.innerHTML = '<p class="sub" style="margin-bottom:6px;">'+info.label+'相关症状（点击选择）</p>'
+    + '<div class="sym-list">'
+    + syms.map(s => {
+      const sel = selectedSyms.has(s.id);
+      return '<button class="sym-chip'+(sel?' selected':'')+'" onclick="toggleBodySym(\''+s.id+'\')">'+s.icon+' '+s.name+'</button>';
+    }).join('')
+    + '</div>';
+  autoSpeak(info.label+'相关症状');
+}
+
+function toggleBodySym(id){
+  if(selectedSyms.has(id)) selectedSyms.delete(id);
+  else selectedSyms.add(id);
+  renderSyms();
+  if(bodyActivePart) bodyPartClick(bodyActivePart);
+}
+
+function initBodyModel(){
+  const tip = document.getElementById('bodyTip');
+  document.querySelectorAll('.bp').forEach(el => {
+    const part = el.dataset.part;
+    if(!part) return;
+    el.addEventListener('mouseenter', e => {
+      const info = BODY_PARTS[part];
+      if(!info || !tip) return;
+      tip.textContent = info.label;
+      tip.classList.add('show');
+    });
+    el.addEventListener('mousemove', e => {
+      if(tip && tip.classList.contains('show')){
+        tip.style.left = (e.clientX + 12) + 'px';
+        tip.style.top = (e.clientY - 28) + 'px';
+      }
+    });
+    el.addEventListener('mouseleave', () => {
+      if(tip) tip.classList.remove('show');
+    });
+    el.addEventListener('click', () => bodyPartClick(part));
+  });
+}
 // 症状组合升级规则：同时出现多条症状时提升紧急程度
 const COMBO_RULES = [
   {ids:['fever','breath'], note:'发热同时气短，需警惕肺部感染'},
@@ -2744,7 +2905,7 @@ function speakCurrent(){
     'view-home': myRole === 'family'
       ? '这是首页。可以查看亲属的健康动态，或使用症状自查、药品库等功能。'
       : '这是首页。可以选择症状自查、就医流程、用药提醒、药品库、找医院或绑定家人。',
-    'view-symptom':'症状自查。可在上方输入症状文字，也可在下方点选症状，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
+    'view-symptom':'症状自查。可在上方输入症状文字，也可点击人体模型选择身体部位对应的症状，或从列表选择。可以多选，然后查看分析结果，了解紧急程度和该挂的科室。',
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
     'view-druglib':'药品库。可以按药名、商品名或英文名搜索常用药，查看用途、用法和注意事项。',
@@ -3311,6 +3472,7 @@ function resetAppState(){
   renderSyms();
   renderFlow();
   renderMeds();
+  initBodyModel();
   renderTimeInputs($('medFreq')?.value || 'daily');
   selectedChronicId = null;
   renderChronicList();
