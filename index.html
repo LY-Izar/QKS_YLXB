@@ -4102,18 +4102,63 @@ async function renderMeds(){
     if(myRole !== 'family') renderCompliance();
     return;
   }
+  const now = nowBeijing();
+  const todayStr = now.toISOString().slice(0,10);
+  const curMin = now.getHours()*60 + now.getMinutes();
+  const allLogs = await allMine('medlog'); // 自己的 medlog 用来判断今日每个时间段状态
   const freqLabel = {daily:'每天1次', twice:'每天2次', thrice:'每天3次', once:'仅一次'};
   meds.forEach(m=>{
     const drug = matchDrug(m.name);
     const times = timePoints(m);
     const d = document.createElement('div');
     d.className = 'med-item';
-    const timesHtml = times.map(t => '<span class="pill">' + t + '</span>').join(' ');
+    // 每个时间段渲染：<time pill> + 条件（到时间 & 未处理 → 两个按钮 / 已处理 → badge）
+    const timesHtml = times.map(t => {
+      const tm = timeToMin(t);
+      const log = allLogs.find(l => l.username === (currentUser||'guest') && l.med_id === m.id && l.scheduled_date === todayStr && l.scheduled_time === t);
+      const status = log ? log.status : null;
+      const diffMin = curMin - tm; // 正数=已过提醒点
+      let badgeHtml = '';
+      let btnHtml = '';
+      // --- 1. 今日该时间段已处理 → 显示彩色 status badge，不再显示按钮 ---
+      if(status === 'taken'){
+        badgeHtml = '<span class="badge green" style="margin-left:4px;">✅ 已服用' + (log.actual_time ? '（'+String(log.actual_time).slice(11,16)+'）':'') + '</span>';
+      } else if(status === 'late_taken'){
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fb923c;color:#fff;">⚠️ 已补用' + (log.actual_time ? '（'+String(log.actual_time).slice(11,16)+'，晚'+Math.round(log.late_minutes||0)+'分钟）':'') + '</span>';
+      } else if(status === 'skipped'){
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#ef4444;color:#fff;">❌ 今日已跳过（漏服）</span>';
+      } else {
+        // --- 2. 未处理：过了提醒时间(curMin >= tm - 0)才允许点按钮 ---
+        if(diffMin >= -0){
+          const isLate = diffMin >= 10; // 过了 10 分钟，按钮 1 改成"已补用"
+          const takeLabel = isLate ? '💡 已补用' : '✅ 已服用';
+          const takeBg = isLate ? 'background:#fb923c;' : 'background:#22c55e;';
+          const takeStatus = isLate ? 'late_taken' : 'taken';
+          const takeArg = [m.id, todayStr, JSON.stringify(t), JSON.stringify(takeStatus)].join(',');
+          const skipArg = [m.id, todayStr, JSON.stringify(t), JSON.stringify('skipped')].join(',');
+          btnHtml = '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:8px;">' +
+            '<button class="btn sm" style="' + takeBg + 'color:#fff;border:none;" onclick="markMedTaken(' + takeArg + ')">' + takeLabel + '</button>' +
+            '<button class="btn sm line" style="border-color:#ef4444;color:#ef4444;" onclick="markMedTaken(' + skipArg + ')">↪️ 跳过今天</button>' +
+            '</div>';
+          if(isLate){
+            badgeHtml = '<span class="badge" style="margin-left:4px;background:#fde68a;color:#92400e;">⏰ 已过 ' + Math.floor(diffMin) + ' 分钟</span>';
+          } else if(diffMin >= 0){
+            badgeHtml = '<span class="badge" style="margin-left:4px;background:#bfdbfe;color:#1e3a8a;">🔔 提醒时间到</span>';
+          }
+        } else {
+          badgeHtml = '<span class="badge" style="margin-left:4px;background:#e0e7ff;color:#3730a3;">🕐 还有 ' + Math.ceil(-diffMin) + ' 分钟</span>';
+        }
+      }
+      return '<div style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px;margin:0 4px 4px 0;">' +
+        '<span class="pill">' + t + badgeHtml + '</span>' +
+        btnHtml +
+        '</div>';
+    }).join('');
     d.innerHTML = '<div class="t"><div class="nm">💊 ' + m.name + '</div>' +
       '<div class="tm">' + (m.dose||'') + ' · ' + freqLabel[m.freq] + '</div>' +
       (drug ? '<div class="tm" style="color:var(--primary-deep);">💡 ' + drug.advice + '</div>' : '') +
       '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' + timesHtml + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;margin-top:6px;">' + timesHtml + '</div>' +
       '<button class="btn sm line" onclick="delMed(' + m.id + ')">删除</button>';
     el.appendChild(d);
   });
@@ -4293,37 +4338,120 @@ async function scanMed(){
   };
   input.click();
 }
+/* ==================== 用药提醒增强：滴滴警报声 / 10 分钟重复提醒 / 幂等防重 ==================== */
+let _didiAudioCtx = null;
+/** 播放"滴滴"警报声：880Hz 方波，0.3s 响 + 0.2s 停 × 20 轮 ≈ 10 秒 */
+function playDidiAlert(durationSec){
+  durationSec = durationSec || 10;
+  try{
+    if(!_didiAudioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return;
+      _didiAudioCtx = new AC();
+    }
+    if(_didiAudioCtx.state === 'suspended') _didiAudioCtx.resume().catch(()=>{});
+    const ctx = _didiAudioCtx;
+    const beepMs = 300, gapMs = 200, perMs = beepMs + gapMs;
+    const totalMs = Math.max(1, Math.min(60, durationSec)) * 1000;
+    const startT = ctx.currentTime;
+    let t = 0;
+    while(t < totalMs){
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 880;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const s = startT + t / 1000;
+      const e = s + beepMs / 1000;
+      gain.gain.setValueAtTime(0.0001, s);
+      gain.gain.exponentialRampToValueAtTime(0.12, s + 0.01);
+      gain.gain.setValueAtTime(0.12, e - 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, e);
+      osc.start(s); osc.stop(e + 0.005);
+      t += perMs;
+    }
+  }catch(e){ console.warn('滴滴警报声播放失败：', e); }
+}
+/** 生成"服药提醒专用"大字 UI Modal（避免重复 toast）：一次只弹一个，点击关闭 */
+let _medAlertModalOpen = false;
+function showMedAlertUI(msg, onClose){
+  if(_medAlertModalOpen) return;
+  _medAlertModalOpen = true;
+  const wrap = document.createElement('div');
+  wrap.id = '__medAlertWrap__';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);';
+  const box = document.createElement('div');
+  box.style.cssText = 'min-width:320px;max-width:92vw;background:#fff;border:2px solid #ef4444;border-radius:18px;padding:22px 24px;box-shadow:0 22px 60px rgba(239,68,68,.35);color:#111;';
+  box.innerHTML = '<div style="font-size:20px;font-weight:800;color:#ef4444;margin-bottom:10px;">🔔 用药提醒</div>' +
+    '<div style="font-size:16px;line-height:1.55;">' + String(msg||'').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+    '<div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;"><button class="btn sm" id="__medAlertClose__">我知道了</button></div>';
+  wrap.appendChild(box);
+  document.body.appendChild(wrap);
+  const close = ()=>{
+    _medAlertModalOpen = false;
+    try{ document.body.removeChild(wrap); }catch(e){}
+    if(typeof onClose === 'function'){ try{ onClose(); }catch(e){} }
+  };
+  wrap.addEventListener('click', e=>{ if(e.target === wrap) close(); });
+  const btn = document.getElementById('__medAlertClose__');
+  if(btn) btn.addEventListener('click', close);
+  // 最多 30 秒自动关，防止页面后台一直挂
+  setTimeout(close, 30000);
+}
+/** 字符串 → 32 位 FNV-1a 哈希截断（8 位 hex）：用于脱敏上传 med_id，避免明文上传真实药名/ID */
+function _hash8(str){
+  str = String(str || '');
+  let h = 0x811c9dc5;
+  for(let i = 0; i < str.length; i++){
+    h ^= str.charCodeAt(i) & 0xff;
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return ('00000000' + h.toString(16)).slice(-8);
+}
 async function checkMeds(){
   if(!currentUser || !DB.db) return;
-  const meds = await DB.all('meds');
+  const meds = await allMine('meds'); // 只检查当前登录用户自己的用药（防止其他账号数据串用提醒）
   const now = nowBeijing();
-  const today = now.toDateString();
+  const todayStr = now.toISOString().slice(0,10);
   const curMin = now.getHours()*60 + now.getMinutes();
+  const allLogs = await allMine('medlog');
   for(const med of meds){
     for(const tp of timePoints(med)){
       const tm = timeToMin(tp);
-      if(Math.abs(curMin - tm) <= 1){
-        const key = today + '_' + tp;
-        if(!med.reminded[key]){
-          med.reminded[key] = true;
-          await DB.put('meds', med);
-          const msg = '该吃「' + med.name + '」了！' + (med.dose ? ' ' + med.dose : '');
-          notify(msg);
-          addEvent('用药提醒', '到点提醒服药「' + med.name + '」');
-          // 双渠道推送：PWA 浏览器 + PushPlus 微信
-          if(swReg){
-            const sub = await swReg.pushManager.getSubscription();
-            if(sub){
-              fetch('https://updates.push.services.mozilla.com/wpush/v2/gcm', {method:'POST'}).catch(()=>{});
-            }
-          }
-          sendPushPlus('医路相伴 · 用药提醒', msg);
-        }
+      const diffMin = curMin - tm; // 正数 = 已经过了提醒时间，负数 = 还没到
+      // --- 今天这颗药的 medlog 状态（如果是 skipped/taken/late_taken 就不用再提醒了） ---
+      const logKey = { med_id: med.id, scheduled_date: todayStr, scheduled_time: tp };
+      const todayLog = allLogs.find(l => l.username === (currentUser||'guest') && l.med_id === logKey.med_id && l.scheduled_date === logKey.scheduled_date && l.scheduled_time === logKey.scheduled_time);
+      if(todayLog && (todayLog.status === 'taken' || todayLog.status === 'late_taken' || todayLog.status === 'skipped')){
+        continue; // 今天该时间段已经处理 → 不再重复提醒
       }
+      // --- 触发窗口：到时间点附近(±1分钟)才允许首次触发；之后每 10 分钟整档重复提醒一次 ---
+      if(diffMin < -1) continue; // 还没到提醒时间
+      // 窗口索引：0 = 首次(±1min)，1 = 过了 10~19 分钟，2 = 过了 20~29 分钟，3 = ...
+      const slotIndex = diffMin <= 1 ? 0 : Math.max(0, Math.floor(diffMin / 10));
+      if(slotIndex > 36) continue; // 最多提醒 6 小时（36 × 10 分钟），晚上避免一直轰炸
+      if(!med.remindSlots) med.remindSlots = {};
+      const slotKey = todayStr + '_' + tp + '#' + slotIndex;
+      if(med.remindSlots[slotKey]) continue; // 该 10 分钟档已提醒过（幂等），跳过
+      med.remindSlots[slotKey] = true;
+      med.reminded = med.reminded || {};
+      med.reminded[todayStr + '_' + tp] = true;
+      if(!med.remindCounts) med.remindCounts = {};
+      const countKey = todayStr + '_' + tp;
+      med.remindCounts[countKey] = (med.remindCounts[countKey] || 0) + 1;
+      await DB.put('meds', med);
+
+      const baseMsg = '该吃「' + med.name + '」了！' + (med.dose ? '（' + med.dose + '）' : '') + ' · 提醒时间：' + tp + (slotIndex ? '（第' + (slotIndex+1) + '次提醒）' : '（首次提醒）');
+      notify(baseMsg);
+      addEvent('用药提醒', (slotIndex ? '重复提醒#'+(slotIndex+1)+'：':'到点提醒：') + '服药「' + med.name + '」' + tp);
+      if(swReg){ try{ const sub = await swReg.pushManager.getSubscription(); if(sub) fetch('https://updates.push.services.mozilla.com/wpush/v2/gcm',{method:'POST'}).catch(()=>{}); }catch(e){} }
+      sendPushPlus('医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+slotIndex+'次）') : ''), baseMsg);
+      // 第一次/重复提醒 都有"滴滴"警报声（持续 10 秒）+ 大字 UI 弹窗
+      playDidiAlert(10);
+      showMedAlertUI(baseMsg + '<div style="margin-top:10px;color:#ef4444;font-weight:700;">请尽快点击该时间段下方的<b>「已服用」</b>或<b>「跳过今天」</b>，否则每 10 分钟重复提醒一次。</div>');
     }
   }
 }
-
 /* ==================== 医院资质审查过滤器 ==================== */
 /* 只保留"正规、具备综合资质"的综合医院；
    排除：专科医院、医疗保健/体检/美容/养生、小型诊所/门诊/卫生室/卫生站。 */
@@ -5775,7 +5903,7 @@ async function renderCompliance(targetUser, statsId, calId){
     const logs = await DB.all('medlog');
     myLogs = logs.filter(l => l.username === targetUser && new Date(l.scheduled_date) >= thirtyAgo);
   } else if(cloudUsable()){
-    // 家属端：通过云端 medication_logs 查老人记录
+    // 家属端：通过云端 medication_logs 查老人记录（按 RLS 隔离）
     const res = await sbFetch('medication_logs?username=eq.' + encodeURIComponent(targetUser) + '&order=scheduled_date.desc&limit=500');
     if(res.ok){
       const rows = await res.json();
@@ -5793,13 +5921,25 @@ async function renderCompliance(targetUser, statsId, calId){
     cEl.innerHTML = '';
     return;
   }
+  // --- 兼容历史：status 为空的旧记录一律当 taken（避免旧数据拖垮依从率）---
+  myLogs = myLogs.map(l => ({ ...l, status: String(l.status || 'taken').trim() }));
   const total = myLogs.length || 1;
-  const taken = myLogs.filter(l => l.status === 'taken').length;
-  const rate = Math.round(taken / total * 100);
-  sEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">'
-    + '<div style="font-size:32px;font-weight:700;color:' + (rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + rate + '%</div>'
-    + '<div class="hint">近30天用药依从率<br>已服 ' + taken + ' / 应服 ' + total + ' 次</div>'
-    + '</div>';
+  const onTime = myLogs.filter(l => l.status === 'taken').length;     // ✅ 按时（10 分钟内点）
+  const late   = myLogs.filter(l => l.status === 'late_taken').length; // ⚠️ 补服（>10 分钟点）
+  const skip   = myLogs.filter(l => l.status === 'skipped').length;    // ❌ 漏服（点跳过/不操作）
+  const served = onTime + late;  // 分子：算入依从性（按时+补服都是"吃了"）
+  const rate = Math.round(served / total * 100);
+  sEl.innerHTML = '<div>' +
+    '<div style="display:flex;align-items:center;gap:12px;">' +
+      '<div style="font-size:32px;font-weight:700;color:' + (rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + rate + '%</div>' +
+      '<div class="hint">近30天用药依从率<br>已服 ' + served + ' / 应服 ' + total + ' 次</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">' +
+      '<span class="badge green">✅ 按时 ' + onTime + '</span>' +
+      '<span class="badge" style="background:#fb923c;color:#fff;">⚠️ 补服 ' + late + '</span>' +
+      '<span class="badge" style="background:#ef4444;color:#fff;">❌ 漏服 ' + skip + '</span>' +
+    '</div>' +
+  '</div>';
   const now = new Date();
   const days = [];
   for(let i = 29; i >= 0; i--){
@@ -5807,16 +5947,41 @@ async function renderCompliance(targetUser, statsId, calId){
     const ds = d.toISOString().slice(0, 10);
     const dayLogs = myLogs.filter(l => String(l.scheduled_date).slice(0,10) === ds);
     const dayTotal = dayLogs.length;
-    const dayTaken = dayLogs.filter(l => l.status === 'taken').length;
-    const dayRate = dayTotal > 0 ? dayTaken / dayTotal : null;
-    const bg = dayRate === null ? 'var(--surface-2)' : (dayRate >= 1 ? '#22c55e' : (dayRate >= 0.5 ? '#eab308' : '#ef4444'));
-    days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;">'
+    if(dayTotal <= 0){
+      days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;" title="' + ds + '（无记录）">'
+        + '<div style="width:24px;height:24px;border-radius:6px;background:var(--surface-2);"></div>'
+        + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + (d.getMonth()+1) + '/' + d.getDate() + '</div>'
+        + '</div>');
+      continue;
+    }
+    const dOn = dayLogs.filter(l => l.status === 'taken').length;
+    const dLate = dayLogs.filter(l => l.status === 'late_taken').length;
+    const dSkip = dayLogs.filter(l => l.status === 'skipped').length;
+    let bg;
+    if(dSkip === 0 && dLate === 0){
+      bg = '#22c55e'; // 全部按时
+    } else if(dSkip === 0 && dLate > 0){
+      bg = '#fb923c'; // 有补服，无漏服
+    } else if(dSkip > 0 && (dOn + dLate) === 0){
+      bg = '#ef4444'; // 全部漏服
+    } else {
+      // 混合：部分漏 + 部分按时/补服 → 黄色
+      bg = '#eab308';
+    }
+    const title = ds + '：按时' + dOn + ' / 补服' + dLate + ' / 漏服' + dSkip + '（共' + dayTotal + '）';
+    days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;" title="' + title + '">'
       + '<div style="width:24px;height:24px;border-radius:6px;background:' + bg + ';"></div>'
       + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + (d.getMonth()+1) + '/' + d.getDate() + '</div>'
       + '</div>');
   }
   cEl.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + days.join('') + '</div>'
-    + '<div class="hint" style="margin-top:6px;">绿色=全部服用，黄色=部分服用，红色=未服，灰色=无记录</div>';
+    + '<div class="hint" style="margin-top:6px;">'
+    + '<span style="color:#22c55e;">■</span> 全部按时&emsp;'
+    + '<span style="color:#fb923c;">■</span> 含补服（无漏服）&emsp;'
+    + '<span style="color:#eab308;">■</span> 部分漏服&emsp;'
+    + '<span style="color:#ef4444;">■</span> 全部漏服&emsp;'
+    + '<span style="color:var(--surface-2);border:1px solid var(--border);display:inline-block;width:10px;height:10px;vertical-align:-1px;"></span> 无记录'
+    + '</div>';
 }
 
 async function renderElderCompliance(elderCode){
@@ -5838,29 +6003,76 @@ async function renderElderCompliance(elderCode){
 }
 
 async function markMedTaken(medId, date, timeSlot, status){
+  // --- 安全校验：status 只能是 3 个合法值，避免用户伪造 ---
+  const ALLOWED_STATUS = { taken:1, late_taken:1, skipped:1 };
+  if(!ALLOWED_STATUS[String(status || '').trim()]){
+    toast('状态异常'); return;
+  }
+  status = String(status).trim();
   const u = currentUser || 'guest';
+  // 归属校验：只能在"当前登录用户自己的 meds 记录"里操作，防止 id 碰巧一致改到别人的
+  const medOwn = await ensureMine('meds', medId);
+  if(!medOwn){ toast('无权操作该用药'); return; }
   const logs = await DB.all('medlog');
   // 只在自己的记录里找 existing：避免两个用户 meds.id 碰巧一致时改到别人的服药日志
   const existing = logs.find(l => l.username === u && l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
+  // 计算 late_minutes（迟了几分钟才按按钮，taken < 10 分钟按的一般 late=0，late_taken >= 10 分钟）
+  const now = nowBeijing();
+  const curMin = now.getHours()*60 + now.getMinutes();
+  const plannedMin = timeToMin(String(timeSlot || '00:00'));
+  const lateMin = Math.max(0, curMin - plannedMin);
+  // reminded_count：med.remindCounts[date+'_'+timeSlot] 该时间段被弹窗/滴滴提醒了多少次
+  let remindedCount = 0;
+  try{ if(medOwn && medOwn.remindCounts) remindedCount = medOwn.remindCounts[date + '_' + timeSlot] || 0; }catch(e){}
+  const payload = {
+    med_id: medId,
+    username: u,
+    scheduled_date: date,
+    scheduled_time: timeSlot,
+    status: status,
+    actual_time: now.toISOString(),
+    late_minutes: lateMin,
+    reminded_count: remindedCount
+  };
   if(existing){
-    existing.status = status;
-    existing.actual_time = new Date().toISOString();
+    Object.assign(existing, payload);
     await DB.put('medlog', existing);
   } else {
-    await DB.put('medlog', {
-      med_id: medId, username: u,
-      scheduled_date: date, scheduled_time: timeSlot,
-      status: status, actual_time: new Date().toISOString()
-    });
+    await DB.put('medlog', payload);
   }
+  // --- 云端同步（数据隐私安全：明文药名/剂量/用法 绝对不上传；仅上传脱敏后的匿名统计字段） ---
   if(currentUser && cloudUsable()){
+    // 脱敏字段：med_ref = hash(username + ':' + medId + ':' + salt)，8 位 hex，可追溯（本地复现）但不可逆推个人药名
+    const medRef = _hash8(currentUser + ':' + String(medId) + ':med_ref_v1');
+    // 仅上传：username(按 RLS 隔离) + med_ref(脱敏) + 计划日期/时间 + 状态 + 补服分钟 + 提醒次数
+    // （真实药名、剂量、用法等 PHI 敏感信息只保存在本地 IndexedDB，绝不离开用户设备）
+    const cloudRec = {
+      username: currentUser,
+      med_ref: medRef,
+      scheduled_date: date,
+      scheduled_time: timeSlot,
+      status: status,
+      late_minutes: lateMin,
+      reminded_count: remindedCount
+    };
     sbFetch('medication_logs', {
       method:'POST',
       headers:{'Prefer':'return=minimal'},
-      body: JSON.stringify({ username: currentUser, med_name: String(medId), scheduled_date: date, scheduled_time: timeSlot, status: status })
+      body: JSON.stringify(cloudRec)
     }).catch(()=>{});
   }
-  toast(status === 'taken' ? '已记录服药' : '已记录跳过');
+  // --- 操作反馈 toast + 重绘界面（按钮状态立刻更新 + 依从性重新计算） ---
+  if(status === 'taken'){
+    toast('✅ 已记录服药');
+    addEvent('用药依从性', '按时服药：时间段 ' + date + ' ' + timeSlot);
+  } else if(status === 'late_taken'){
+    toast('⚠️ 已补服（晚' + lateMin + '分钟）');
+    addEvent('用药依从性', '补服：晚' + lateMin + '分钟，时间段 ' + date + ' ' + timeSlot);
+  } else {
+    toast('❌ 已记录今日跳过（计入漏服）');
+    addEvent('用药依从性', '跳过（漏服）：时间段 ' + date + ' ' + timeSlot);
+  }
+  renderMeds();
   renderCompliance();
 }
 
