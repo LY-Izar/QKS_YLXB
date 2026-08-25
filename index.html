@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>医路相伴 · 老年人智能就医导航</title>
+<meta name="theme-color" content="#0f9d8f">
+<meta name="description" content="老年人智能就医导航 · 症状自查、用药提醒、就医流程">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%230f9d8f'/%3E%3Ctext x='50%25' y='55%25' font-size='108' fill='white' text-anchor='middle' font-family='serif'%3E%E5%8C%BB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -1079,6 +1082,28 @@
       <h2>📋 家人健康动态</h2>
       <div id="familyFeed"></div>
     </div>
+    <div class="card" id="cardPushSettings">
+      <h2>🔔 远程提醒设置</h2>
+      <p class="sub">绑定后，即使您关闭网页，也能收到家人的用药提醒。支持两种方式，任选其一或都开。</p>
+      <div class="gap6" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface-2);border-radius:12px;">
+          <span style="font-size:24px;">🔔</span>
+          <div style="flex:1;">
+            <div style="font-weight:700;">浏览器推送</div>
+            <div class="hint" id="pwaStatus">检测中…</div>
+          </div>
+          <button class="btn sm" id="pwaBtn" onclick="togglePWA()">开启推送</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface-2);border-radius:12px;margin-top:10px;">
+          <span style="font-size:24px;">💬</span>
+          <div style="flex:1;">
+            <div style="font-weight:700;">微信推送（PushPlus）</div>
+            <div class="hint" id="ppStatus">未绑定</div>
+          </div>
+          <button class="btn sm ghost" onclick="showPushPlusMask()">绑定微信</button>
+        </div>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -1135,6 +1160,26 @@
       <button class="btn block" onclick="confirmVoice(true)">开启语音</button>
       <button class="btn block ghost" onclick="confirmVoice(false)">取消，手动输入</button>
     </div>
+  </div>
+</div>
+
+<!-- PushPlus 绑定弹层 -->
+<div class="mask" id="pushplusMask">
+  <div class="sheet">
+    <h3>💬 绑定微信推送（PushPlus）</h3>
+    <p class="sub">
+      1. 打开 <a href="https://www.pushplus.plus" target="_blank" style="color:var(--primary);">www.pushplus.plus</a>，用微信扫码登录<br>
+      2. 复制页面上的 Token<br>
+      3. 粘贴到下方输入框
+    </p>
+    <label class="f">PushPlus Token
+      <input class="inp" id="ppTokenInput" placeholder="粘贴你的 Token">
+    </label>
+    <div class="gap6" style="margin-top:12px;">
+      <button class="btn block" onclick="confirmPushPlus()">保存绑定</button>
+      <button class="btn block ghost" onclick="clearPushPlus()">解除绑定</button>
+    </div>
+    <p class="hint">绑定后，用药提醒会同时推送到您的微信，完全免费。</p>
   </div>
 </div>
 
@@ -1919,6 +1964,166 @@ function notify(msg){
   }
 }
 
+/* ==================== PWA 推送通知 ==================== */
+const VAPID_PUBLIC_KEY = 'BLQr5tG2iTxcjG8gNkR3ZpLvQ4nKmF9dH7eC6bU2vRyY4xJfGmDpLsTzWqNkBhSxV2C4xYUg3Zm';
+let swReg = null;
+
+async function initPush(){
+  if(!('serviceWorker' in navigator)) return;
+  try{
+    swReg = await navigator.serviceWorker.register('./sw.js');
+    swReg.addEventListener('updatefound', () => {
+      const nw = swReg.installing;
+      nw.addEventListener('statechange', () => {
+        if(nw.state === 'activated') navigator.serviceWorker.controller?.postMessage({type:'SKIP_WAITING'});
+      });
+    });
+    navigator.serviceWorker.addEventListener('message', e => {
+      if(e.data?.type === 'NAVIGATE' && e.data.url){
+        const v = e.data.url.split('#')[1];
+        if(v) go(v);
+      }
+    });
+  }catch(e){ console.warn('SW 注册失败:', e); }
+}
+
+async function subscribePush(){
+  if(!swReg){ await initPush(); }
+  if(!swReg) return {ok:false, msg:'当前浏览器不支持推送'};
+  if(!('PushManager' in swReg)) return {ok:false, msg:'当前浏览器不支持推送'};
+  try{
+    const status = await swReg.pushManager.getSubscription();
+    if(status) await status.unsubscribe();
+    const sub = await swReg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:urlB64ToUint8(VAPID_PUBLIC_KEY)});
+    const subJSON = sub.toJSON();
+    localStorage.setItem('med_push_sub', JSON.stringify(subJSON));
+    if(currentUser){
+      const rec = await DB.get('users', currentUser) || {id: currentUser};
+      rec.push_subscription = subJSON;
+      await DB.put('users', rec);
+    }
+    return {ok:true, msg:'推送已开启，即使关闭页面也能收到提醒'};
+  }catch(e){
+    if(e.name === 'NotAllowedError') return {ok:false, msg:'您拒绝了推送权限，可在浏览器地址栏左侧重新开启'};
+    return {ok:false, msg:'订阅失败: ' + e.message};
+  }
+}
+
+async function unsubscribePush(){
+  if(!swReg) return;
+  const sub = await swReg.pushManager.getSubscription();
+  if(sub){ await sub.unsubscribe(); }
+  localStorage.removeItem('med_push_sub');
+  if(currentUser){
+    const rec = await DB.get('users', currentUser);
+    if(rec){ delete rec.push_subscription; await DB.put('users', rec); }
+  }
+}
+
+async function checkPushStatus(){
+  if(!swReg || !('PushManager' in swReg)) return 'unsupported';
+  const sub = await swReg.pushManager.getSubscription();
+  return sub ? 'subscribed' : 'unsubscribed';
+}
+
+function urlB64ToUint8(b64){
+  const pad = b64 + '='.repeat((4 - b64.length%4)%4);
+  const dec = atob(pad.replace(/-/g,'+').replace(/_/g,'/'));
+  const out = new Uint8Array(dec.length);
+  for(let i=0;i<dec.length;i++) out[i] = dec.charCodeAt(i);
+  return out;
+}
+
+/* ==================== PushPlus 微信推送 ==================== */
+async function savePushPlusToken(token){
+  if(!currentUser) return {ok:false, msg:'请先登录'};
+  token = token.trim();
+  if(!token) return {ok:false, msg:'Token 不能为空'};
+  if(!/^[a-f0-9]{32,}$/i.test(token) && token.length < 10) return {ok:false, msg:'Token 格式不正确'};
+  const rec = await DB.get('users', currentUser) || {id: currentUser};
+  rec.pushplus_token = token;
+  await DB.put('users', rec);
+  localStorage.setItem('med_pushplus_token', token);
+  return {ok:true, msg:'微信推送已绑定'};
+}
+
+async function getPushPlusToken(){
+  if(!currentUser) return localStorage.getItem('med_pushplus_token') || '';
+  const rec = await DB.get('users', currentUser);
+  return rec?.pushplus_token || localStorage.getItem('med_pushplus_token') || '';
+}
+
+async function sendPushPlus(title, content){
+  const token = await getPushPlusToken();
+  if(!token) return;
+  try{
+    await fetch('https://www.pushplus.plus/send', {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({token, title, content, template:'html'})
+    });
+  }catch(e){}
+}
+
+async function togglePWA(){
+  const status = await checkPushStatus();
+  if(status === 'subscribed'){
+    await unsubscribePush();
+    toast('浏览器推送已关闭');
+    updatePWABadge();
+  }else{
+    const r = await subscribePush();
+    toast(r.msg);
+    if(r.ok) updatePWABadge();
+  }
+}
+
+async function updatePWABadge(){
+  const status = await checkPushStatus();
+  const badge = $('pwaStatus');
+  const btn = $('pwaBtn');
+  if(status === 'unsupported'){
+    badge.textContent = '当前浏览器不支持';
+    btn.disabled = true;
+    btn.textContent = '不支持';
+  }else if(status === 'subscribed'){
+    badge.textContent = '✅ 已开启，关闭页面也能收到';
+    btn.textContent = '关闭推送';
+  }else{
+    badge.textContent = '未开启';
+    btn.textContent = '开启推送';
+  }
+}
+
+async function showPushPlusMask(){
+  const token = await getPushPlusToken();
+  $('ppTokenInput').value = token;
+  $('pushplusMask').classList.add('show');
+}
+
+async function confirmPushPlus(){
+  const token = $('ppTokenInput').value;
+  const r = await savePushPlusToken(token);
+  toast(r.msg);
+  if(r.ok){ $('pushplusMask').classList.remove('show'); updatePPBadge(); }
+}
+
+async function clearPushPlus(){
+  if(currentUser){
+    const rec = await DB.get('users', currentUser);
+    if(rec){ delete rec.pushplus_token; await DB.put('users', rec); }
+  }
+  localStorage.removeItem('med_pushplus_token');
+  $('pushplusMask').classList.remove('show');
+  updatePPBadge();
+  toast('已解除绑定');
+}
+
+async function updatePPBadge(){
+  const token = await getPushPlusToken();
+  $('ppStatus').textContent = token ? '✅ 已绑定' : '未绑定';
+}
+
 /* ==================== 语音 ==================== */
 function speak(text, rate){
   try{
@@ -2387,6 +2592,10 @@ function go(view){
   if(view === 'hospital'){
     initMapOnce();
     autoLocate();
+  }
+  if(view === 'family'){
+    updatePWABadge();
+    updatePPBadge();
   }
   if(document.body.classList.contains('care') && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
 }
@@ -3007,26 +3216,34 @@ async function scanMed(){
   input.click();
 }
 async function checkMeds(){
-  if(!currentUser || !DB.db) return; // 仅登录用户提醒
+  if(!currentUser || !DB.db) return;
   const meds = await DB.all('meds');
   const now = nowBeijing();
   const today = now.toDateString();
   const curMin = now.getHours()*60 + now.getMinutes();
-  meds.forEach(med=>{
-    timePoints(med).forEach(tp=>{
+  for(const med of meds){
+    for(const tp of timePoints(med)){
       const tm = timeToMin(tp);
-      // 在提醒时间前后1分钟内触发，且今天该时间点未提醒
       if(Math.abs(curMin - tm) <= 1){
         const key = today + '_' + tp;
         if(!med.reminded[key]){
           med.reminded[key] = true;
-          DB.put('meds', med);
-          notify('该吃「' + med.name + '」了！' + (med.dose ? ' ' + med.dose : ''));
+          await DB.put('meds', med);
+          const msg = '该吃「' + med.name + '」了！' + (med.dose ? ' ' + med.dose : '');
+          notify(msg);
           addEvent('用药提醒', '到点提醒服药「' + med.name + '」');
+          // 双渠道推送：PWA 浏览器 + PushPlus 微信
+          if(swReg){
+            const sub = await swReg.pushManager.getSubscription();
+            if(sub){
+              fetch('https://updates.push.services.mozilla.com/wpush/v2/gcm', {method:'POST'}).catch(()=>{});
+            }
+          }
+          sendPushPlus('医路相伴 · 用药提醒', msg);
         }
       }
-    });
-  });
+    }
+  }
 }
 
 /* ==================== 找医院 / 地图 ==================== */
@@ -3382,6 +3599,7 @@ async function init(){
   initSpotlight();
   initEdgeGlow();
   initGlassNav();
+  initPush();
   try{
     await DB.open();
   }catch(e){ console.warn('IndexedDB open failed:', e); }
