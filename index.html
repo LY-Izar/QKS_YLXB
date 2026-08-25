@@ -6124,17 +6124,25 @@ async function renderCompliance(targetUser, statsId, calId){
     if(targetUser === (currentUser || 'guest')){
       const meds = await allMine('meds');
       hasMeds = meds.length > 0;
-      const now = new Date();
-      const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
+      // 走北京时间：30 天窗口按北京日期算，避免 UTC/本地时区差导致跨天过滤不准
+      const nowBJ = nowBeijing();
+      const thirtyAgoStr = beijingYMD(new Date(nowBJ.getTime() - 30 * 86400000));
       const logs = await allMine('medlog');
-      myLogs = logs.filter(l => new Date(l.scheduled_date) >= thirtyAgo);
+      myLogs = logs.filter(l => {
+        const s = String(l.scheduled_date || '').slice(0,10);
+        return s >= thirtyAgoStr;
+      });
     } else if(cloudUsable()){
       const res = await sbFetch('medication_logs?username=eq.' + encodeURIComponent(targetUser) + '&order=scheduled_date.desc&limit=500');
       if(res.ok){
         const rows = await res.json();
-        const now = new Date();
-        const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
-        myLogs = rows.filter(r => new Date(r.scheduled_date) >= thirtyAgo).map(r => ({
+        // 云端同样按 北京日期字符串过滤（与 renderMeds/markMedTaken 存的格式一致：YYYY-MM-DD 北京）
+        const nowBJ = nowBeijing();
+        const thirtyAgoStr = beijingYMD(new Date(nowBJ.getTime() - 30 * 86400000));
+        myLogs = rows.filter(r => {
+          const s = String(r.scheduled_date || '').slice(0,10);
+          return s >= thirtyAgoStr;
+        }).map(r => ({
           scheduled_date: String(r.scheduled_date).slice(0,10),
           status: r.status
         }));
@@ -6174,17 +6182,22 @@ async function renderCompliance(targetUser, statsId, calId){
         '<span class="badge" style="background:#ef4444;color:#fff;">❌ 漏服 ' + skip + '</span>' +
       '</div>' +
     '</div>';
-    const now = new Date();
+    // ====== 日历 30 天格子：日期计算 & scheduled_date 匹配统一走北京时间（防止 UTC→本地差 1 天导致"26 号格子对 25 号数据"）======
+    const now = nowBeijing();
     const days = [];
     for(let i = 29; i >= 0; i--){
       const d = new Date(now.getTime() - i * 86400000);
-      const ds = d.toISOString().slice(0, 10);
+      // 🔴 关键：ds 必须是北京时间 YYYY-MM-DD，因为 markMedTaken 存 scheduled_date 用的是 beijingYMD
+      const ds = beijingYMD(d);
       const dayLogs = myLogs.filter(l => String(l.scheduled_date).slice(0,10) === ds);
       const dayTotal = dayLogs.length;
+      // 标签同样按北京月/日显示，保证与 ds 对齐
+      const bm = d.getMonth() + 1;
+      const bd = d.getDate();
       if(dayTotal <= 0){
         days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;" title="' + ds + '（无记录）">'
           + '<div style="width:24px;height:24px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);"></div>'
-          + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + (d.getMonth()+1) + '/' + d.getDate() + '</div>'
+          + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + bm + '/' + bd + '</div>'
           + '</div>');
         continue;
       }
@@ -6204,7 +6217,7 @@ async function renderCompliance(targetUser, statsId, calId){
       const title = ds + '：按时' + dOn + ' / 补服' + dLate + ' / 漏服' + dSkip + '（共' + dayTotal + '）';
       days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;" title="' + title + '">'
         + '<div style="width:24px;height:24px;border-radius:6px;background:' + bg + ';"></div>'
-        + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + (d.getMonth()+1) + '/' + d.getDate() + '</div>'
+        + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + bm + '/' + bd + '</div>'
         + '</div>');
     }
     cEl.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + days.join('') + '</div>'
