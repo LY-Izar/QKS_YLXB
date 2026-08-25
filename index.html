@@ -1081,11 +1081,24 @@
       </div>
     </div>
     <div class="card" id="cardFamilyBind">
-      <h2>🔗 绑定老人</h2>
-      <p class="sub">输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。</p>
-      <div class="gap6">
+      <h2 id="bindCardTitle">🔗 绑定老人</h2>
+      <p class="sub" id="bindCardDesc">输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。</p>
+      <div class="gap6" id="bindFormArea">
         <input class="inp" id="bindCode" placeholder="输入老人的 6 位邀请码">
         <button class="btn block" onclick="bindFamily()">绑定并查看</button>
+      </div>
+      <div class="gap6" id="boundInfoArea" style="display:none;">
+        <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border);">
+          <div style="font-size:28px;">👴</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:16px;">已绑定老人</div>
+            <div class="hint">邀请码：<span id="boundCodeDisplay" style="font-family:ui-monospace,monospace;font-weight:700;"></span></div>
+          </div>
+        </div>
+        <div class="gap6" style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn line sm" onclick="unbindFamily()">解除绑定</button>
+          <button class="btn line sm" onclick="switchToRebind()" id="rebindBtn">更换绑定</button>
+        </div>
       </div>
     </div>
     <div class="card" id="cardFamilyFeed">
@@ -2839,41 +2852,63 @@ function quickUse(){
   speak('已进入体验模式，暂不保存您的数据。');
 }
 async function afterLogin(){
-  const rec = DB.get('users', currentUser);
-  rec.then(r => {
+  // 1. 从 IndexedDB 读取本地缓存
+  let localBound = null;
+  try{
+    const r = await DB.get('users', currentUser);
     if(r){
       myFamilyCode = r.familyCode;
       if(r.boundElderCode){
+        localBound = r.boundElderCode;
         familyBind = r.boundElderCode;
         localStorage.setItem('med_bind', r.boundElderCode);
       }
-      updateUserUI();
     }
-  });
-  // 按身份切换界面模式：老人自动关怀模式，家属标准模式+默认黑暗模式
+  }catch(e){}
+  // 1b. 从 localStorage 读取作为兜底（跨会话保持）
+  if(!familyBind){
+    const saved = localStorage.getItem('med_bind');
+    if(saved && saved.length === 6){
+      familyBind = saved;
+      localBound = saved;
+    }
+  }
+  // 2. 按身份切换界面模式
   localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
   if(myRole === 'family'){
     themeDark = true;
     localStorage.setItem('med_theme', 'dark');
   }
   applyMode();
+  // 3. 先根据本地数据渲染界面
+  updateUserUI();
   if(myRole === 'family' && familyBind) pullCloudEvents(familyBind);
-  go(myRole === 'family' ? 'family' : 'home'); updateUserUI();
+  go(myRole === 'family' ? 'family' : 'home');
+  updateUserUI();
   if(myRole === 'elder') speak('登录成功，欢迎回来');
-  // 家属端登录后从云端同步最新绑定关系
+  // 4. 家属端从云端同步最新绑定关系（覆盖本地过期数据）
   if(myRole === 'family' && cloudUsable()){
     try{
-      let res = await sbFetch('users?select=bound_elder_code&id=eq.' + encodeURIComponent(currentUser));
+      let res = await sbFetch('users?select=bound_elder_code,family_code&id=eq.' + encodeURIComponent(currentUser));
       if(res.ok){
         const rows = await res.json();
-        if(rows && rows.length && rows[0].bound_elder_code){
-          familyBind = rows[0].bound_elder_code;
-          localStorage.setItem('med_bind', familyBind);
-          pullCloudEvents(familyBind);
-          // 同步到本机 IndexedDB
-          DB.get('users', currentUser).then(r => {
-            if(r){ r.boundElderCode = familyBind; DB.put('users', r); }
-          }).catch(()=>{});
+        if(rows && rows.length){
+          let changed = false;
+          if(rows[0].bound_elder_code && rows[0].bound_elder_code !== familyBind){
+            familyBind = rows[0].bound_elder_code;
+            localStorage.setItem('med_bind', familyBind);
+            pullCloudEvents(familyBind);
+            // 同步到本机 IndexedDB
+            DB.get('users', currentUser).then(r => {
+              if(r){ r.boundElderCode = familyBind; DB.put('users', r); }
+            }).catch(()=>{});
+            changed = true;
+          }
+          if(rows[0].family_code && rows[0].family_code !== myFamilyCode){
+            myFamilyCode = rows[0].family_code;
+            changed = true;
+          }
+          if(changed) updateUserUI();
         }
       }
     }catch(e){}
@@ -2898,6 +2933,7 @@ function updateFamilyView(){
   if(showCode) showCode.style.display = elder ? '' : 'none';
   if(showBind) showBind.style.display = elder ? 'none' : '';
   if(showFeed) showFeed.style.display = elder ? 'none' : '';
+  if(!elder) renderBoundState();
   $('familyTitle').textContent = elder ? '绑定家人' : '查看亲属';
   $('familyLead').textContent = elder
     ? '把邀请码告诉家人，家人就能在手机上看到您的健康动态。'
@@ -3688,18 +3724,54 @@ function addEvent(type, text){
   }
 }
 async function pullCloudEvents(code){
-  if(!cloudUsable() || !code) return;
-  try{
-    const res = await sbFetch('events?select=id,family_code,type,text,created_at&family_code=eq.' + encodeURIComponent(code) + '&order=created_at.desc&limit=30');
-    if(!res.ok) return;
-    const rows = await res.json();
-    if(!rows.length) return;
-    const feed = $('familyFeed');
-    feed.innerHTML = '';
-    rows.reverse().forEach(e => {
+  if(!code) return;
+  // 1. 获取老人基本信息
+  if(cloudUsable()){
+    try{
+      const ures = await sbFetch('users?select=id,family_code&family_code=eq.' + encodeURIComponent(code) + '&limit=1');
+      if(ures.ok){
+        const urs = await ures.json();
+        if(urs.length){
+          $('boundCodeDisplay').textContent = code + ' · ' + (urs[0].id || '老人');
+        }
+      }
+    }catch(e){}
+  }
+  // 2. 获取云端事件
+  let cloudRows = [];
+  if(cloudUsable()){
+    try{
+      const res = await sbFetch('events?select=id,family_code,type,text,created_at&family_code=eq.' + encodeURIComponent(code) + '&order=created_at.desc&limit=30');
+      if(res.ok){
+        cloudRows = await res.json();
+      }
+    }catch(e){}
+  }
+  const feed = $('familyFeed');
+  feed.innerHTML = '';
+  if(cloudRows.length){
+    cloudRows.reverse().forEach(e => {
       appendFeed({familyCode:e.family_code, type:e.type, text:e.text, time:new Date(e.created_at).getTime()}, false);
     });
+  }
+  // 3. 本机历史事件兜底
+  try{
+    if(DB.db){
+      const evs = await DB.all('events');
+      const localMatch = evs.filter(e=>e.familyCode===code).slice(-10);
+      if(localMatch.length && feed.children.length === 0){
+        localMatch.forEach(e=>appendFeed(e, false));
+      }
+    }
   }catch(e){}
+  // 4. 若仍为空，显示友好提示
+  if(feed.children.length === 0){
+    const d = document.createElement('div');
+    d.className = 'med-item';
+    d.innerHTML = '<div class="t"><div class="nm">家人 · 系统提示</div>' +
+      '<div class="tm">暂无健康动态。当老人完成自查、用药或前往医院时，这里会自动更新。</div></div>';
+    feed.appendChild(d);
+  }
 }
 function appendFeed(ev, isSelf){
   const feed = $('familyFeed');
@@ -3717,12 +3789,61 @@ function copyCode(){
   if(navigator.clipboard){ navigator.clipboard.writeText(code).then(()=>toast('已复制邀请码')); }
   else { toast('邀请码：' + code); }
 }
+function renderBoundState(){
+  const bound = !!(familyBind && familyBind.length === 6);
+  const formArea = $('bindFormArea');
+  const infoArea = $('boundInfoArea');
+  const title = $('bindCardTitle');
+  const desc = $('bindCardDesc');
+  if(!formArea) return;
+  if(bound){
+    formArea.style.display = 'none';
+    infoArea.style.display = '';
+    $('boundCodeDisplay').textContent = familyBind;
+    title.textContent = '🔗 已绑定老人';
+    desc.textContent = '下面是已绑定的老人的健康动态。如需更换，可点击「更换绑定」。';
+  } else {
+    formArea.style.display = '';
+    infoArea.style.display = 'none';
+    title.textContent = '🔗 绑定老人';
+    desc.textContent = '输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。';
+    $('bindCode').value = '';
+  }
+}
+function switchToRebind(){
+  familyBind = '';
+  localStorage.removeItem('med_bind');
+  $('bindCode').value = '';
+  renderBoundState();
+  toast('请输入新的邀请码进行绑定');
+}
+function unbindFamily(){
+  if(!confirm('确定要解除绑定吗？解除后将无法查看老人的健康动态。')) return;
+  familyBind = '';
+  localStorage.removeItem('med_bind');
+  $('familyFeed').innerHTML = '';
+  renderBoundState();
+  if(currentUser && DB.db){
+    DB.get('users', currentUser).then(rec=>{
+      if(rec){ delete rec.boundElderCode; DB.put('users', rec); }
+    }).catch(()=>{});
+  }
+  if(currentUser && cloudUsable()){
+    sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {
+      method:'PATCH',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({bound_elder_code: null})
+    }).catch(()=>{});
+  }
+  toast('已解除绑定');
+}
 function bindFamily(){
   const code = $('bindCode').value.trim();
   if(code.length !== 6){ toast('请输入 6 位邀请码'); return; }
   familyBind = code;
   localStorage.setItem('med_bind', code);
   $('familyFeed').innerHTML = '';
+  renderBoundState();
   toast('已绑定邀请码 ' + code + '，正在获取家人动态');
   pullCloudEvents(code);
   // 本机历史事件兜底
@@ -3782,6 +3903,13 @@ async function init(){
       if(rec.boundElderCode){
         familyBind = rec.boundElderCode;
         localStorage.setItem('med_bind', rec.boundElderCode);
+      }
+    }
+    // 从 localStorage 读取作为兜底
+    if(!familyBind){
+      const saved = localStorage.getItem('med_bind');
+      if(saved && saved.length === 6){
+        familyBind = saved;
       }
     }
     // 从云端同步绑定关系（覆盖本机过期数据）
