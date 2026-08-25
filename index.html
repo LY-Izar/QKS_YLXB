@@ -149,41 +149,211 @@
   input,select,textarea{font-family:inherit;font-size:inherit;color:var(--ink);}
   .hidden{display:none !important;}
 
-  /* ===== 顶部栏 ===== */
-  .topbar{
-    position:sticky;top:0;z-index:50;
-    display:flex;align-items:center;gap:12px;
-    padding:14px 18px;
-    background:var(--surface);
-    background:color-mix(in srgb, var(--surface) 86%, transparent);
-    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-    border-bottom:1px solid var(--border);
-    border-bottom-color:color-mix(in srgb, var(--border) 70%, transparent);
+  /* ===== 顶部悬浮导航栏 · 液态玻璃胶囊（国防之盾同款） ===== */
+  .liquid-glass-defs{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;opacity:0;}
+  #navbar{
+    --lg-blur:22px;
+    --lg-saturate:185%;
+    --lg-bg:rgba(255,255,255,.52);
+    --lg-edge:rgba(255,255,255,.65);
+    --lg-edge-strong:rgba(255,255,255,.95);
+    --lg-w2:rgba(255,255,255,.5);
+    --lg-glow:15,157,143;
+    --lg-glow-a:.14;
+    --lg-side:rgba(255,255,255,.35);
+    --lg-line:rgba(0,0,0,.08);
+    --lg-line2:rgba(0,0,0,.10);
+    --lg-sh-lg:0 12px 44px rgba(16,58,50,.16);
+    --lg-sh-sm:0 4px 14px rgba(16,58,50,.10);
+    --lg-mx:50%;
+    --lg-my:50%;
+    position:fixed;
+    top:18px;left:24px;right:24px;z-index:55;
+    max-width:640px;margin:0 auto;
+    padding:10px 18px;
+    display:flex;align-items:center;gap:8px;
+    border-radius:32px;
+    background:linear-gradient(180deg,rgba(255,255,255,.66) 0%,var(--lg-bg) 50%,rgba(255,255,255,.44) 100%);
+    border:1.5px solid var(--lg-edge);
+    backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-saturate)) url(#liquid-glass);
+    -webkit-backdrop-filter:blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    box-shadow:
+      inset 0 1.5px 0 0 var(--lg-edge-strong),
+      inset 0 3px 6px -2px var(--lg-w2),
+      inset 0 -1.5px 0 0 var(--lg-line),
+      inset 0 -3px 8px -3px var(--lg-line2),
+      inset 0 0 28px rgba(var(--lg-glow),.06),
+      inset 1.5px 0 0 0 var(--lg-side),
+      inset -1.5px 0 0 0 var(--lg-side),
+      0 0 0 1px rgba(var(--lg-glow),.10),
+      0 0 24px rgba(var(--lg-glow),var(--lg-glow-a)),
+      var(--lg-sh-lg),
+      var(--lg-sh-sm);
+    transition:padding .45s cubic-bezier(.22,1,.36,1),
+                box-shadow .45s cubic-bezier(.22,1,.36,1),
+                background .45s ease;
+    overflow:visible;
   }
-  .topbar .logo{
-    width:42px;height:42px;border-radius:14px;flex:none;
+  #navbar::before{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.5) 0%,rgba(255,255,255,.2) 12%,rgba(255,255,255,.05) 28%,transparent 45%),
+      linear-gradient(0deg,rgba(0,0,0,.05) 0%,rgba(0,0,0,.02) 15%,transparent 32%),
+      linear-gradient(90deg,rgba(255,255,255,.28) 0%,transparent 8%,transparent 92%,rgba(255,255,255,.28) 100%);
+    z-index:1;
+  }
+  #navbar::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:
+      radial-gradient(circle 220px at var(--lg-mx) var(--lg-my),
+        rgba(255,255,255,.16) 0%,
+        rgba(var(--lg-glow),.08) 35%,
+        transparent 65%),
+      linear-gradient(180deg,rgba(255,255,255,.12) 0%,transparent 15%);
+    opacity:.5;
+    transition:opacity .4s ease;
+    z-index:2;
+  }
+  #navbar:hover::after{opacity:1;}
+  #navbar.scrolled{
+    --lg-blur:30px;
+    --lg-bg:rgba(255,255,255,.66);
+    --lg-glow-a:.2;
+    padding:8px 18px;
+  }
+  .nav-brand{
+    position:relative;z-index:3;flex:none;
+    display:flex;align-items:center;gap:9px;
+    font-weight:700;font-size:1.05rem;color:var(--ink);
+    letter-spacing:.5px;line-height:1.2;
+  }
+  .nav-logo{
+    width:30px;height:30px;border-radius:10px;flex:none;
     background:linear-gradient(135deg,var(--primary),var(--primary-deep));
-    color:#fff;
-    display:grid;place-items:center;font-size:20px;font-weight:700;
-    box-shadow:0 4px 12px rgba(16,58,50,.18);
+    color:#fff;display:grid;place-items:center;font-size:15px;font-weight:700;
+    box-shadow:0 2px 8px rgba(16,58,50,.2);
   }
-  body.care .topbar .logo{width:54px;height:54px;border-radius:16px;font-size:26px;}
-  .topbar .tt{font-weight:700;font-size:18px;line-height:1.2;}
-  body.care .topbar .tt{font-size:24px;}
-  .topbar .st{font-size:12px;color:var(--muted);}
-  body.care .topbar .st{font-size:15px;}
-  .topbar .sp{flex:1;}
-  .mode-btn{
-    flex:none;font-weight:700;padding:10px 16px;border-radius:999px;
-    border:2px solid var(--primary);color:var(--primary);
-    font-size:14px;white-space:nowrap;
-    transition:.2s;
+  .nav-links{
+    position:relative;z-index:3;
+    display:flex;gap:4px;list-style:none;align-items:center;
+    margin-left:auto;
+    overflow-x:auto;scrollbar-width:none;
   }
-  body.care .mode-btn{font-size:18px;padding:12px 18px;border-width:3px;}
-  .mode-btn:hover{background:var(--primary);color:#fff;box-shadow:0 4px 14px color-mix(in srgb, var(--primary) 40%, transparent);}
+  .nav-links::-webkit-scrollbar{display:none;}
+  .nav-link{
+    position:relative;flex:none;
+    color:var(--muted);text-decoration:none;font-size:.9rem;
+    cursor:pointer;padding:8px 13px;border-radius:16px;
+    white-space:nowrap;
+    display:inline-flex;align-items:center;
+    font-weight:600;letter-spacing:.3px;
+    -webkit-tap-highlight-color:transparent;
+    transition:color .3s ease;
+  }
+  .nav-link::before{
+    content:'';position:absolute;inset:0;border-radius:inherit;
+    background:linear-gradient(180deg,
+      rgba(var(--lg-glow),.20) 0%,
+      rgba(var(--lg-glow),.08) 100%);
+    border:1px solid rgba(var(--lg-glow),.45);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.32),
+      inset 0 2px 5px -1px rgba(255,255,255,.18),
+      inset 0 -1px 0 rgba(0,0,0,.20),
+      0 0 0 1px rgba(var(--lg-glow),.12),
+      0 4px 16px rgba(var(--lg-glow),.24);
+    opacity:0;transform:scale(.9);
+    transition:opacity .35s cubic-bezier(.22,1,.36,1),
+                transform .35s cubic-bezier(.22,1,.36,1);
+    z-index:-1;
+  }
+  .nav-link:hover{color:var(--primary-deep);}
+  .nav-link:hover::before{opacity:.6;transform:scale(1);}
+  .nav-link.active{color:var(--primary-deep);}
+  .nav-link.active::before{opacity:1;transform:scale(1);}
+  .nav-icon-btn{
+    position:relative;z-index:3;flex:none;
+    width:36px;height:36px;border-radius:50%;font-size:17px;
+    display:grid;place-items:center;color:var(--ink);
+    background:rgba(255,255,255,.28);
+    border:1px solid rgba(255,255,255,.4);
+    transition:.25s;
+  }
+  .nav-icon-btn:active{transform:scale(.9);}
+  .nav-mode-btn{
+    position:relative;z-index:3;flex:none;
+    font-weight:700;padding:7px 13px;border-radius:16px;
+    font-size:.82rem;color:var(--primary);
+    border:1.5px solid rgba(var(--lg-glow),.5);
+    white-space:nowrap;transition:.25s;
+  }
+  .nav-mode-btn:hover{background:rgba(var(--lg-glow),.12);}
+
+  /* 黑暗模式：国防之盾原版深海军蓝玻璃 + 青色辉光 */
+  body.dark #navbar{
+    --lg-bg:rgba(10,22,40,.42);
+    --lg-edge:rgba(255,255,255,.22);
+    --lg-edge-strong:rgba(255,255,255,.55);
+    --lg-w2:rgba(255,255,255,.22);
+    --lg-glow:0,212,255;
+    --lg-side:rgba(255,255,255,.10);
+    --lg-line:rgba(0,0,0,.30);
+    --lg-line2:rgba(0,0,0,.25);
+    --lg-sh-lg:0 12px 44px rgba(0,0,0,.38);
+    --lg-sh-sm:0 4px 14px rgba(0,0,0,.24);
+    background:linear-gradient(180deg,
+      rgba(24,44,70,.50) 0%,
+      var(--lg-bg) 50%,
+      rgba(6,14,28,.54) 100%);
+  }
+  body.dark #navbar::before{
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.28) 0%,rgba(255,255,255,.12) 12%,rgba(255,255,255,.03) 28%,transparent 45%),
+      linear-gradient(0deg,rgba(0,0,0,.18) 0%,rgba(0,0,0,.06) 15%,transparent 32%),
+      linear-gradient(90deg,rgba(255,255,255,.10) 0%,transparent 8%,transparent 92%,rgba(255,255,255,.10) 100%);
+  }
+  body.dark #navbar.scrolled{--lg-bg:rgba(8,18,34,.66);}
+  body.dark .nav-brand{color:#F1F5F9;text-shadow:0 1px 2px rgba(0,0,0,.3);}
+  body.dark .nav-link{color:#B8CDE3;}
+  body.dark .nav-link:hover{color:#E8F4FF;}
+  body.dark .nav-link.active{color:#FFFFFF;}
+  body.dark .nav-icon-btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);}
+  body.dark .nav-mode-btn{color:#7FC9E8;border-color:rgba(0,212,255,.45);}
+
+  /* 关怀模式：高对比实底，关闭玻璃特效，保证老人看清 */
+  body.care #navbar{
+    backdrop-filter:none;-webkit-backdrop-filter:none;
+    background:#ffffff;
+    border:2.5px solid var(--primary);
+    box-shadow:0 8px 24px rgba(143,61,0,.2);
+  }
+  body.care #navbar::before,
+  body.care #navbar::after{display:none;}
+  body.care .nav-brand{font-size:1.2rem;}
+  body.care .nav-logo{width:38px;height:38px;font-size:19px;border-radius:12px;}
+  body.care .nav-link{font-size:1.02rem;font-weight:700;padding:9px 13px;}
+  body.care .nav-link:hover{color:var(--primary-deep);}
+  body.care .nav-link.active{color:#fff;}
+  body.care .nav-link.active::before{
+    background:linear-gradient(180deg,var(--primary),var(--primary-deep));
+    border-color:var(--primary-deep);
+  }
+  body.care .nav-icon-btn{display:none;}
+  body.care .nav-mode-btn{font-size:.95rem;padding:9px 14px;border-width:2.5px;}
+
+  @media (max-width:640px){
+    #navbar{top:10px;left:12px;right:12px;padding:8px 10px;border-radius:26px;gap:6px;}
+    .nav-brand{display:none;}
+    .nav-link{font-size:.78rem;padding:7px 7px;}
+    .nav-icon-btn{width:31px;height:31px;font-size:15px;}
+    .nav-mode-btn{font-size:.75rem;padding:6px 9px;}
+    body.care .nav-link{font-size:.92rem;padding:8px 6px;}
+    body.care .nav-mode-btn{font-size:.85rem;padding:8px 9px;}
+    main{padding-top:78px;}
+  }
 
   /* ===== 内容区 ===== */
-  main{max-width:640px;margin:0 auto;padding:18px 16px 150px;min-height:calc(100vh - 70px);}
+  main{max-width:640px;margin:0 auto;padding:92px 16px 44px;min-height:calc(100vh - 150px);}
   .view{display:none;animation:fade .25s ease;}
   .view.active{display:block;}
   @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -459,96 +629,16 @@
     #view-family .med-item{animation:none;}
   }
 
-  /* ===== 主题切换按钮 ===== */
-  .theme-btn{
-    flex:none;width:42px;height:42px;border-radius:50%;font-size:19px;
-    background:var(--primary-soft);color:var(--ink);
-    display:grid;place-items:center;transition:.2s;
-  }
-  .theme-btn:active{transform:scale(.9);}
-  body.care .theme-btn{display:none;}
-
-  /* ===== 底部导航：胶囊 + 液态玻璃（PillNav / GlassSurface 风格） ===== */
-  .tabbar{
-    position:fixed;left:14px;right:14px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;
-    display:flex;gap:2px;padding:5px;
-    border-radius:9999px;
-    background:rgba(255,255,255,.22);
-    background:color-mix(in srgb, var(--surface) 55%, transparent);
-    backdrop-filter:blur(18px) saturate(1.8) brightness(1.08);
-    -webkit-backdrop-filter:blur(18px) saturate(1.8) brightness(1.08);
-    border:1px solid rgba(255,255,255,.35);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255,255,255,.45),
-      inset 0 -1px 0 0 rgba(255,255,255,.18),
-      0 8px 32px 0 rgba(16,58,50,.16),
-      0 2px 12px 0 rgba(16,58,50,.10);
-  }
-  body.dark .tabbar{
-    background:rgba(22,33,29,.55);
-    border-color:rgba(255,255,255,.14);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255,255,255,.16),
-      inset 0 -1px 0 0 rgba(255,255,255,.06),
-      0 8px 32px 0 rgba(0,0,0,.45),
-      0 2px 12px 0 rgba(0,0,0,.3);
-  }
-  /* 关怀模式保持高对比实底，确保老人看清 */
-  body.care .tabbar{
-    background:#ffffff;
-    backdrop-filter:none;-webkit-backdrop-filter:none;
-    border:2px solid var(--primary);
-    box-shadow:0 6px 24px rgba(143,61,0,.22);
-    padding:7px;
-  }
-  .tab{
-    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-    color:var(--muted);font-size:13px;font-weight:700;padding:7px 2px;
-    border-radius:9999px;position:relative;overflow:hidden;
-    transition:color .2s;
-  }
-  body.care .tab{font-size:17px;padding:10px 2px;}
-  .tab .ic{font-size:22px;line-height:1;transition:transform .25s;position:relative;z-index:2;}
-  body.care .tab .ic{font-size:28px;}
-  .tab span:not(.ic){position:relative;z-index:2;}
-  .tab .lb{line-height:1;}
-  /* PillNav 悬停升起圆形填充 */
-  .tab::before{
-    content:'';position:absolute;left:50%;bottom:-70%;
-    width:170%;aspect-ratio:1;transform:translateX(-50%);
-    border-radius:50%;background:var(--primary-soft);
-    transition:bottom .38s cubic-bezier(.22,1,.36,1);z-index:1;
-  }
-  @media (hover:hover){
-    .tab:hover{color:var(--primary-deep);}
-    .tab:hover::before{bottom:-32%;}
-    .tab:hover .ic{transform:translateY(-1px) scale(1.1);}
-  }
-  .tab:active{transform:scale(.94);}
-  /* 激活态：主色胶囊 + 底部圆点 */
-  .tab.on{color:#fff;}
-  .tab.on::before{
-    bottom:-32%;background:linear-gradient(135deg,var(--primary),var(--primary-deep));
-    width:100%;aspect-ratio:auto;top:0;
-    box-shadow:0 3px 10px color-mix(in srgb, var(--primary) 40%, transparent);
-  }
-  .tab.on .ic{transform:scale(1.1);}
-  .tab.on::after{
-    content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
-    width:5px;height:5px;border-radius:50%;background:#fff;opacity:.9;z-index:2;
-  }
-  body.care .tab.on::after{width:7px;height:7px;bottom:4px;}
-
   /* ===== 悬浮语音按钮 ===== */
   .voice-fab{
-    position:fixed;right:16px;bottom:106px;z-index:60;
+    position:fixed;right:16px;bottom:24px;z-index:60;
     width:58px;height:58px;border-radius:50%;
     background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;font-size:26px;
     display:grid;place-items:center;
     box-shadow:0 6px 20px color-mix(in srgb, var(--primary) 45%, transparent);
     transition:.15s;border:3px solid #fff;
   }
-  body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:150px;}
+  body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:40px;}
   .voice-fab:active{transform:scale(.92);}
   @media (hover:hover){ .voice-fab:hover{filter:brightness(1.06);} }
   .voice-fab.listening{background:linear-gradient(135deg,var(--danger),#9b2c2c);animation:pulse 1s infinite;}
@@ -568,11 +658,11 @@
 
   /* ===== 语音提示条 ===== */
   .voicebar{
-    position:fixed;left:50%;transform:translateX(-50%);bottom:180px;z-index:65;
+    position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:65;
     background:var(--ink);color:#fff;padding:12px 20px;border-radius:999px;
     font-size:15px;display:none;align-items:center;gap:10px;max-width:90vw;
   }
-  body.care .voicebar{font-size:19px;bottom:200px;}
+  body.care .voicebar{font-size:19px;bottom:128px;}
   .voicebar.show{display:flex;}
   .voicebar .mic{color:var(--danger);font-weight:800;}
   .voicebar #voiceText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -581,7 +671,7 @@
 
   /* ===== 提醒弹窗 ===== */
   .notify-banner{
-    position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:80;
+    position:fixed;top:86px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:80;
     background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;
     padding:14px 22px;border-radius:16px;
     font-weight:700;font-size:18px;box-shadow:0 10px 30px color-mix(in srgb, var(--primary) 40%, transparent);
@@ -602,14 +692,31 @@
 </head>
 <body>
 
-<!-- 顶部栏 -->
-<div class="topbar">
-  <div class="logo">医</div>
-  <div class="tt">医路相伴<span class="st"> · 老年人智能就医导航</span></div>
-  <div class="sp"></div>
-  <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式">🌙</button>
-  <button class="mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
-</div>
+<!-- 液态玻璃 SVG 滤镜定义（不可见） -->
+<svg class="liquid-glass-defs" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="liquid-glass" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.009 0.012" numOctaves="2" seed="7" result="noise"/>
+      <feGaussianBlur in="noise" stdDeviation="1.5" result="softNoise"/>
+      <feDisplacementMap in="SourceGraphic" in2="softNoise" scale="38" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<!-- 顶部悬浮导航栏（液态玻璃胶囊） -->
+<nav id="navbar">
+  <div class="nav-brand"><span class="nav-logo">医</span><span class="nav-name">医路相伴</span></div>
+  <ul class="nav-links">
+    <li><a class="nav-link active" data-v="home" onclick="go('home')">首页</a></li>
+    <li><a class="nav-link" data-v="symptom" onclick="go('symptom')">自查</a></li>
+    <li><a class="nav-link" data-v="flow" onclick="go('flow')">流程</a></li>
+    <li><a class="nav-link" data-v="med" onclick="go('med')">用药</a></li>
+    <li><a class="nav-link" data-v="druglib" onclick="go('druglib')">药库</a></li>
+    <li><a class="nav-link" data-v="more" onclick="go('hospital')">医院</a></li>
+  </ul>
+  <button class="nav-icon-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式">🌙</button>
+  <button class="nav-mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
+</nav>
 
 <main>
   <!-- 欢迎 / 登录 -->
@@ -793,16 +900,6 @@
     </div>
   </div>
 </main>
-
-<!-- 底部导航 -->
-<div class="tabbar">
-  <button class="tab on" data-v="home" onclick="go('home')"><span class="ic">🏠</span><span class="lb">首页</span></button>
-  <button class="tab" data-v="symptom" onclick="go('symptom')"><span class="ic">🔍</span><span class="lb">自查</span></button>
-  <button class="tab" data-v="flow" onclick="go('flow')"><span class="ic">🗺️</span><span class="lb">流程</span></button>
-  <button class="tab" data-v="med" onclick="go('med')"><span class="ic">💊</span><span class="lb">用药</span></button>
-  <button class="tab" data-v="druglib" onclick="go('druglib')"><span class="ic">📖</span><span class="lb">药库</span></button>
-  <button class="tab" data-v="more" onclick="go('hospital')"><span class="ic">🏥</span><span class="lb">医院</span></button>
-</div>
 
 <!-- 悬浮语音按钮 -->
 <button class="voice-fab" id="voiceFab" onclick="voiceToggle()">🎤</button>
@@ -2026,6 +2123,28 @@ function initEdgeGlow(){
   }, {passive:true});
 }
 
+/* 顶部液态玻璃导航：鼠标跟随光斑 + 滚动加深（国防之盾同款） */
+function initGlassNav(){
+  const nav = $('navbar');
+  if(!nav) return;
+  if(window.matchMedia('(hover:hover)').matches){
+    let raf = null;
+    nav.addEventListener('mousemove', e=>{
+      if(raf) return;
+      raf = requestAnimationFrame(()=>{
+        raf = null;
+        const r = nav.getBoundingClientRect();
+        if(!r.width || !r.height) return;
+        nav.style.setProperty('--lg-mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+        nav.style.setProperty('--lg-my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
+      });
+    });
+  }
+  window.addEventListener('scroll', ()=>{
+    nav.classList.toggle('scrolled', window.scrollY > 80);
+  }, {passive:true});
+}
+
 /* LightRays 光线背景（家属端黑暗模式，原生 WebGL 移植） */
 const raysState = {gl:null, raf:0, running:false, mouse:{x:.5,y:.5}, smooth:{x:.5,y:.5}};
 function raysSupported(){
@@ -2179,8 +2298,8 @@ function go(view){
   const target = $('view-' + view);
   if(target) target.classList.add('active');
   updateLightRays();
-  document.querySelectorAll('.tab').forEach(t=>{
-    t.classList.toggle('on', (t.dataset.v === view) || (view==='hospital' && t.dataset.v==='more'));
+  document.querySelectorAll('.nav-link').forEach(t=>{
+    t.classList.toggle('active', (t.dataset.v === view) || (view==='hospital' && t.dataset.v==='more'));
   });
   window.scrollTo({top:0});
   if(view === 'hospital'){
@@ -3100,6 +3219,7 @@ async function init(){
   initChannel();
   initSpotlight();
   initEdgeGlow();
+  initGlassNav();
   // 药名输入实时匹配 AI 建议
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
