@@ -240,6 +240,10 @@
     overflow-x:auto;scrollbar-width:none;
   }
   .nav-links::-webkit-scrollbar{display:none;}
+  /* 名称切换：平时显示简称，关怀模式显示全称 */
+  .nav-link .nm-f{display:none;}
+  body.care .nav-link .nm-s{display:none;}
+  body.care .nav-link .nm-f{display:inline;}
   .nav-link{
     position:relative;flex:none;
     color:var(--muted);text-decoration:none;font-size:.9rem;
@@ -320,18 +324,20 @@
   body.dark .nav-icon-btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.14);}
   body.dark .nav-mode-btn{color:#7FC9E8;border-color:rgba(0,212,255,.45);}
 
-  /* 关怀模式：高对比实底，关闭玻璃特效，保证老人看清 */
+  /* 关怀模式：高对比实底，关闭玻璃特效，保证老人看清；导航栏加长放下全称 */
   body.care #navbar{
     backdrop-filter:none;-webkit-backdrop-filter:none;
     background:#ffffff;
     border:2.5px solid var(--primary);
     box-shadow:0 8px 24px rgba(143,61,0,.2);
+    left:10px;right:10px;max-width:1020px;
+    padding:9px 14px;gap:6px;
   }
   body.care #navbar::before,
   body.care #navbar::after{display:none;}
   body.care .nav-brand{font-size:1.2rem;}
   body.care .nav-logo{width:38px;height:38px;font-size:19px;border-radius:12px;}
-  body.care .nav-link{font-size:1.02rem;font-weight:700;padding:9px 13px;}
+  body.care .nav-link{font-size:1.02rem;font-weight:700;padding:9px 12px;}
   body.care .nav-link:hover{color:var(--primary-deep);}
   body.care .nav-link.active{color:#fff;}
   body.care .nav-link.active::before{
@@ -339,7 +345,7 @@
     border-color:var(--primary-deep);
   }
   body.care .nav-icon-btn{display:none;}
-  body.care .nav-mode-btn{font-size:.95rem;padding:9px 14px;border-width:2.5px;}
+  body.care .nav-mode-btn{font-size:.95rem;padding:9px 12px;border-width:2.5px;flex:none;}
 
   @media (max-width:640px){
     #navbar{top:10px;left:12px;right:12px;padding:8px 10px;border-radius:26px;gap:6px;}
@@ -347,8 +353,9 @@
     .nav-link{font-size:.78rem;padding:7px 7px;}
     .nav-icon-btn{width:31px;height:31px;font-size:15px;}
     .nav-mode-btn{font-size:.75rem;padding:6px 9px;}
-    body.care .nav-link{font-size:.92rem;padding:8px 6px;}
-    body.care .nav-mode-btn{font-size:.85rem;padding:8px 9px;}
+    body.care #navbar{left:8px;right:8px;padding:8px 10px;}
+    body.care .nav-link{font-size:.9rem;padding:8px 8px;}
+    body.care .nav-mode-btn{font-size:.8rem;padding:8px 10px;}
     main{padding-top:78px;}
   }
 
@@ -708,11 +715,11 @@
   <div class="nav-brand"><span class="nav-logo">医</span><span class="nav-name">医路相伴</span></div>
   <ul class="nav-links">
     <li><a class="nav-link active" data-v="home" onclick="go('home')">首页</a></li>
-    <li><a class="nav-link" data-v="symptom" onclick="go('symptom')">自查</a></li>
-    <li><a class="nav-link" data-v="flow" onclick="go('flow')">流程</a></li>
-    <li><a class="nav-link" data-v="med" onclick="go('med')">用药</a></li>
-    <li><a class="nav-link" data-v="druglib" onclick="go('druglib')">药库</a></li>
-    <li><a class="nav-link" data-v="more" onclick="go('hospital')">医院</a></li>
+    <li><a class="nav-link" data-v="symptom" onclick="go('symptom')"><span class="nm-s">自查</span><span class="nm-f">症状自查</span></a></li>
+    <li><a class="nav-link" data-v="flow" onclick="go('flow')"><span class="nm-s">流程</span><span class="nm-f">就医流程</span></a></li>
+    <li><a class="nav-link" data-v="med" onclick="go('med')"><span class="nm-s">用药</span><span class="nm-f">用药提醒</span></a></li>
+    <li><a class="nav-link" data-v="more" onclick="go('hospital')"><span class="nm-s">医院</span><span class="nm-f">找医院</span></a></li>
+    <li><a class="nav-link" data-v="welcome" onclick="go('welcome')">账户</a></li>
   </ul>
   <button class="nav-icon-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式">🌙</button>
   <button class="nav-mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
@@ -748,7 +755,6 @@
       <button class="tile feature" onclick="go('symptom')"><span class="ic">🔍</span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
       <button class="tile" onclick="go('flow')"><span class="ic">🗺️</span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
       <button class="tile" onclick="go('med')"><span class="ic">💊</span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
-      <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
       <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
       <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc">👨‍👩‍👧</span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
     </div>
@@ -1758,7 +1764,7 @@ function speakCurrent(){
     'view-welcome':'欢迎使用医路相伴，老年人智能就医导航。建议开启关怀模式，字体更大更清晰。',
     'view-home': myRole === 'family'
       ? '这是首页。可以查看亲属的健康动态，或使用症状自查、药品库等功能。'
-      : '这是首页。可以选择症状自查、就医流程、用药提醒、药品库、找医院或绑定家人。',
+      : '这是首页。可以选择症状自查、就医流程、用药提醒、找医院或绑定家人。药品库可从用药提醒页面进入。',
     'view-symptom':'症状自查。请点选症状，或在下方输入症状文字，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
