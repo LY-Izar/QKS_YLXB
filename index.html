@@ -4439,7 +4439,7 @@ async function checkMeds(){
       if(!med.remindCounts) med.remindCounts = {};
       const countKey = todayStr + '_' + tp;
       med.remindCounts[countKey] = (med.remindCounts[countKey] || 0) + 1;
-      await DB.put('meds', med);
+      await DB.put('meds', withUsername(med)); // [隔离-加固] withUsername 强覆盖 username，防止 med 对象被误改串到其他账号
 
       const baseMsg = '该吃「' + med.name + '」了！' + (med.dose ? '（' + med.dose + '）' : '') + ' · 提醒时间：' + tp + (slotIndex ? '（第' + (slotIndex+1) + '次提醒）' : '（首次提醒）');
       notify(baseMsg);
@@ -4878,16 +4878,8 @@ async function pullCloudEvents(code){
       appendFeed({familyCode:e.family_code, type:e.type, text:e.text, time:new Date(e.created_at).getTime(), elderName}, false);
     });
   }
-  // 本机历史事件兜底
-  try{
-    if(DB.db){
-      const evs = await DB.all('events');
-      const localMatch = evs.filter(e=>e.familyCode===code).slice(-10);
-      if(localMatch.length && feed.children.length === 0){
-        localMatch.forEach(e=>appendFeed({...e, elderName}, false));
-      }
-    }
-  }catch(e){}
+  // 家属端仅显示云端 events（符合要求："绑定后老人数据只是能在家属端页面查看，不做本地同步/兜底"）
+  // —— 绝不读本机 DB.events 做回退，避免同机登录过的其他家属/老人账号 events 串到当前家属端
   if(feed.children.length === 0){
     const d = document.createElement('div');
     d.className = 'med-item';
@@ -5316,12 +5308,6 @@ function bindFamily(){
   renderBoundList();
   toast('已绑定邀请码 ' + code + '，正在获取家人动态');
   pullCloudEvents(code);
-  // 本机历史事件兜底
-  DB.all('events').then(evs=>{
-    if($('familyFeed').children.length <= 1){
-      evs.filter(e=>e.familyCode===code).slice(-10).forEach(e=>appendFeed({...e}, false));
-    }
-  });
 }
 
 /* ==================== 慢性病管理 ==================== */
@@ -5900,8 +5886,9 @@ async function renderCompliance(targetUser, statsId, calId){
     hasMeds = meds.length > 0;
     const now = new Date();
     const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
-    const logs = await DB.all('medlog');
-    myLogs = logs.filter(l => l.username === targetUser && new Date(l.scheduled_date) >= thirtyAgo);
+    // [隔离-加固] 不再裸 DB.all('medlog')，强制 allMine 按 username 过滤 → 同机多账号不会读到别人的 medlog
+    const logs = await allMine('medlog');
+    myLogs = logs.filter(l => new Date(l.scheduled_date) >= thirtyAgo);
   } else if(cloudUsable()){
     // 家属端：通过云端 medication_logs 查老人记录（按 RLS 隔离）
     const res = await sbFetch('medication_logs?username=eq.' + encodeURIComponent(targetUser) + '&order=scheduled_date.desc&limit=500');
@@ -6013,9 +6000,9 @@ async function markMedTaken(medId, date, timeSlot, status){
   // 归属校验：只能在"当前登录用户自己的 meds 记录"里操作，防止 id 碰巧一致改到别人的
   const medOwn = await ensureMine('meds', medId);
   if(!medOwn){ toast('无权操作该用药'); return; }
-  const logs = await DB.all('medlog');
+  const logs = await allMine('medlog'); // [隔离-加固] 强制按 username 过滤，禁止裸 DB.all('medlog') 读别人记录
   // 只在自己的记录里找 existing：避免两个用户 meds.id 碰巧一致时改到别人的服药日志
-  const existing = logs.find(l => l.username === u && l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
+  const existing = logs.find(l => l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
   // 计算 late_minutes（迟了几分钟才按按钮，taken < 10 分钟按的一般 late=0，late_taken >= 10 分钟）
   const now = nowBeijing();
   const curMin = now.getHours()*60 + now.getMinutes();
@@ -6036,9 +6023,9 @@ async function markMedTaken(medId, date, timeSlot, status){
   };
   if(existing){
     Object.assign(existing, payload);
-    await DB.put('medlog', existing);
+    await DB.put('medlog', withUsername(existing)); // [隔离-加固] withUsername 强覆盖 username，防止被误改写串
   } else {
-    await DB.put('medlog', payload);
+    await DB.put('medlog', withUsername(payload)); // [隔离-加固] 写入前强制绑定当前登录用户
   }
   // --- 云端同步（数据隐私安全：明文药名/剂量/用法 绝对不上传；仅上传脱敏后的匿名统计字段） ---
   if(currentUser && cloudUsable()){
@@ -6098,7 +6085,7 @@ async function saveFollowup(){
     reminder_days_before: remind,
     is_completed: false
   };
-  await DB.put('followups', rec);
+  await DB.put('followups', withUsername(rec)); // [隔离-加固] withUsername 强覆盖 username，防止串其他账号
   if(currentUser && cloudUsable()){
     sbFetch('follow_ups', {
       method:'POST',
@@ -6140,7 +6127,7 @@ async function completeFollowup(id){
   const own = await ensureMine('followups', id);
   if(!own){ toast('无权操作该记录'); return; }
   own.is_completed = true;
-  await DB.put('followups', own);
+  await DB.put('followups', withUsername(own)); // [隔离-加固] 更新前再强制覆盖 username，防御性防止串号
   toast('已标记完成');
   renderFollowups();
 }
