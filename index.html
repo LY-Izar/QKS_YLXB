@@ -995,17 +995,15 @@
         <input class="inp" id="medDose" placeholder="如：每次1片，饭后">
         <button class="btn line" onclick="voiceToInput('medDose')" title="语音输入剂量">🎤</button>
       </div>
-      <label class="f" style="margin-top:12px;">提醒时间
-        <input class="inp" type="time" id="medTime">
-      </label>
-      <label class="f">频率
-        <select class="inp" id="medFreq">
+      <label class="f" style="margin-top:12px;">频率
+        <select class="inp" id="medFreq" onchange="renderTimeInputs(this.value)">
           <option value="daily">每天一次</option>
           <option value="twice">每天两次（早/晚）</option>
           <option value="thrice">每天三次（早/中/晚）</option>
           <option value="once">仅一次</option>
         </select>
       </label>
+      <div id="medTimes" style="margin-top:12px;"></div>
       <div id="medAdvice"></div>
       <button class="btn block" onclick="addMed()">保存用药</button>
       <button class="btn block ghost" style="margin-top:10px;" onclick="showAllAdvice()">💡 AI 用药建议</button>
@@ -3001,29 +2999,72 @@ function startBeijingClock(){
 }
 
 /* ==================== 用药提醒 ==================== */
-function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
-function addTime(t, hours){ let m = timeToMin(t) + hours*60; m = ((m%1440)+1440)%1440; return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
-function timePoints(med){
-  const t = med.time;
-  if(med.freq==='daily') return [t];
-  if(med.freq==='twice') return [t, addTime(t,12)];
-  if(med.freq==='thrice') return [t, addTime(t,4), addTime(t,8)];
-  return [t];
+const FREQ_PRESETS = {
+  daily:  ['08:00'],
+  twice:  ['08:00', '20:00'],
+  thrice: ['08:00', '12:00', '18:00'],
+  once:   ['08:00']
+};
+const FREQ_LABELS = {
+  daily: ['早'],
+  twice: ['早', '晚'],
+  thrice: ['早', '中', '晚'],
+  once: ['一次']
+};
+
+function renderTimeInputs(freq, existingTimes){
+  const c = $('medTimes');
+  const count = FREQ_PRESETS[freq]?.length || 1;
+  const defaults = existingTimes || FREQ_PRESETS[freq] || ['08:00'];
+  const labels = FREQ_LABELS[freq] || [''];
+  c.innerHTML = '';
+  for(let i=0;i<count;i++){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'width:42px;font-weight:600;color:var(--muted);font-size:14px;';
+    lbl.textContent = labels[i] || ('第' + (i+1) + '次');
+    const inp = document.createElement('input');
+    inp.className = 'inp';
+    inp.type = 'time';
+    inp.value = defaults[i] || '08:00';
+    inp.dataset.idx = i;
+    inp.style.flex = '1';
+    wrap.appendChild(lbl);
+    wrap.appendChild(inp);
+    c.appendChild(wrap);
+  }
 }
+
+function collectTimes(){
+  const c = $('medTimes');
+  if(!c) return [];
+  const inputs = c.querySelectorAll('input[type="time"]');
+  return Array.from(inputs).map(i => i.value).filter(v => v);
+}
+
+function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+function timePoints(med){
+  if(med.times && med.times.length) return med.times;
+  if(med.time) return [med.time];
+  return [];
+}
+
 async function addMed(){
   const name = $('medName').value.trim();
   const dose = $('medDose').value.trim();
-  const time = $('medTime').value;
   const freq = $('medFreq').value;
+  const times = collectTimes();
   if(!name){ toast('请填写药品名称'); return; }
-  if(!time){ toast('请选择提醒时间'); return; }
-  const med = {name, dose, time, freq, created:Date.now(), reminded:{}};
+  if(times.length === 0){ toast('请至少设置一个提醒时间'); return; }
+  const med = {name, dose, freq, times, time: times[0], created:Date.now(), reminded:{}};
   await DB.put('meds', med);
-  $('medName').value=''; $('medDose').value=''; $('medTime').value='';
+  $('medName').value=''; $('medDose').value='';
+  renderTimeInputs(freq);
   renderMeds();
   toast('已保存用药：' + name);
   speak('已保存用药' + name + '，到点会提醒您。');
-  addEvent('用药', '添加了用药「' + name + '」，' + (dose||'') + '，提醒时间 ' + time);
+  addEvent('用药', '添加了用药「' + name + '」，' + (dose||'') + '，提醒时间 ' + times.join('、'));
   if('Notification' in window && Notification.permission !== 'granted'){
     Notification.requestPermission();
   }
@@ -3039,13 +3080,15 @@ async function renderMeds(){
   const freqLabel = {daily:'每天1次', twice:'每天2次', thrice:'每天3次', once:'仅一次'};
   meds.forEach(m=>{
     const drug = matchDrug(m.name);
+    const times = timePoints(m);
     const d = document.createElement('div');
     d.className = 'med-item';
+    const timesHtml = times.map(t => '<span class="pill">' + t + '</span>').join(' ');
     d.innerHTML = '<div class="t"><div class="nm">💊 ' + m.name + '</div>' +
       '<div class="tm">' + (m.dose||'') + ' · ' + freqLabel[m.freq] + '</div>' +
       (drug ? '<div class="tm" style="color:var(--primary-deep);">💡 ' + drug.advice + '</div>' : '') +
       '</div>' +
-      '<div class="pill">' + m.time + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">' + timesHtml + '</div>' +
       '<button class="btn sm line" onclick="delMed(' + m.id + ')">删除</button>';
     el.appendChild(d);
   });
@@ -3604,6 +3647,7 @@ async function init(){
     await DB.open();
   }catch(e){ console.warn('IndexedDB open failed:', e); }
   renderMeds();
+  renderTimeInputs('daily');
   // 药名输入实时匹配 AI 建议
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
