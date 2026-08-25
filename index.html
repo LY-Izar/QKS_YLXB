@@ -105,12 +105,9 @@
       transition:opacity .3s ease-out;
     }
   }
-  /* 家属端卡片在黑暗模式优先用边缘光，停用 Spotlight 光斑 */
-  body.dark #view-family .card::after{
+  body.dark .card::after{
     background:none;mix-blend-mode:normal;
   }
-
-  /* 关怀模式（大字·高对比·暖色） */
   body.care{
     --bg:#fff8ec;
     --surface:#ffffff;
@@ -557,7 +554,7 @@
   .view.active{display:block;}
   body.dark main{background:var(--bg);}
   body.dark .view{background:transparent;}
-  body.dark #view-family{background:linear-gradient(180deg,var(--bg) 0%,color-mix(in srgb,var(--bg) 85%,var(--surface)) 100%);min-height:calc(100vh - 150px);}
+  body.dark #view-family{background:var(--bg);}
   @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 
   h1{
@@ -770,58 +767,10 @@
 
   /* ===== 家属端专属特效（React Bits 风格，关怀模式下全部关闭） ===== */
   #view-family{position:relative;z-index:0;}
-  /* LightRays 光线背景：仅家属端黑暗模式显示 */
-  #fxRays{
-    position:absolute;inset:0;width:100%;height:100%;
-    z-index:-1;pointer-events:none;display:none;
-  }
-  body.dark #view-family #fxRays{display:block;}
-  body.care #fxRays{display:none !important;}
-  #view-family .fx-aurora{
-    position:absolute;inset:-30%;z-index:-1;pointer-events:none;
-    background:
-      radial-gradient(38% 32% at 22% 28%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 70%),
-      radial-gradient(32% 28% at 78% 18%, rgba(96,165,250,.20), transparent 70%),
-      radial-gradient(42% 38% at 62% 82%, rgba(167,139,250,.16), transparent 70%);
-    filter:blur(28px);
-    animation:auroraDrift 16s ease-in-out infinite alternate;
-  }
-  body.dark #view-family .fx-aurora{
-    background:
-      radial-gradient(38% 32% at 22% 28%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 70%),
-      radial-gradient(32% 28% at 78% 18%, rgba(96,165,250,.14), transparent 70%),
-      radial-gradient(42% 38% at 62% 82%, rgba(167,139,250,.12), transparent 70%);
-    filter:blur(36px) brightness(.85);
-  }
-  @keyframes auroraDrift{
-    0%{transform:translate(0,0) scale(1) rotate(0deg);}
-    50%{transform:translate(3%,-4%) scale(1.08) rotate(2deg);}
-    100%{transform:translate(-3%,3%) scale(.96) rotate(-2deg);}
-  }
-  #view-family .fx-dots{
-    position:absolute;inset:0;z-index:-1;pointer-events:none;
-    background-image:radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px);
-    background-size:24px 24px;
-    -webkit-mask-image:linear-gradient(180deg,transparent,#000 25%,#000 75%,transparent);
-    mask-image:linear-gradient(180deg,transparent,#000 25%,#000 75%,transparent);
-  }
-  #view-family h1{
-    background:linear-gradient(90deg,var(--primary),#60a5fa,#a78bfa,var(--primary));
-    background-size:300% 100%;
-    -webkit-background-clip:text;background-clip:text;
-    color:transparent;-webkit-text-fill-color:transparent;
-    animation:gradFlow 9s linear infinite;
-  }
-  @keyframes gradFlow{to{background-position:300% 0;}}
+  #view-family h1{color:var(--ink);}
   #view-family .card{position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s,border-color .25s;}
-  #view-family .card::after{
-    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-    background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--primary) 13%, transparent), transparent 65%);
-    opacity:0;transition:opacity .35s;
-  }
   @media (hover:hover){
     #view-family .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:color-mix(in srgb, var(--primary) 30%, var(--border));}
-    #view-family .card:hover::after{opacity:1;}
   }
   #view-family .btn:not(.ghost):not(.line){position:relative;overflow:hidden;}
   #view-family .btn:not(.ghost):not(.line)::before{
@@ -833,17 +782,12 @@
   @keyframes btnShine{0%,55%{left:-80%;}100%{left:170%;}}
   #view-family .med-item{animation:feedIn .45s ease both;}
   @keyframes feedIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
-  body.care #view-family .fx-aurora,
-  body.care #view-family .fx-dots{display:none;}
-  body.care #view-family h1{
-    background:none;color:var(--ink);-webkit-text-fill-color:var(--ink);animation:none;
-  }
+  body.care #view-family h1{color:var(--ink);}
   body.care #view-family .card{overflow:visible;}
-  body.care #view-family .card::after{display:none;}
   body.care #view-family .btn:not(.ghost):not(.line)::before{display:none;}
   body.care #view-family .med-item{animation:none;}
   @media (prefers-reduced-motion:reduce){
-    #view-family .fx-aurora,#view-family h1,
+    #view-family h1,
     #view-family .btn:not(.ghost):not(.line)::before,
     #view-family .med-item{animation:none;}
   }
@@ -1109,9 +1053,6 @@
 
   <!-- 家属端 -->
   <div class="view" id="view-family">
-    <canvas id="fxRays"></canvas>
-    <div class="fx-aurora"></div>
-    <div class="fx-dots"></div>
     <h1 id="familyTitle">家属端</h1>
     <p class="lead" id="familyLead">让家人实时了解您的就医与用药情况。</p>
     <div class="card" id="cardElderCode">
@@ -2381,137 +2322,6 @@ function initGlassNav(){
   }, {passive:true});
 }
 
-/* LightRays 光线背景（家属端黑暗模式，原生 WebGL 移植） */
-const raysState = {gl:null, raf:0, running:false, mouse:{x:.5,y:.5}, smooth:{x:.5,y:.5}};
-function raysSupported(){
-  try{
-    const c = document.createElement('canvas');
-    return !!(window.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
-  }catch(e){ return false; }
-}
-function updateLightRays(){
-  const canvas = $('fxRays');
-  if(!canvas) return;
-  const active = document.body.classList.contains('dark')
-    && $('view-family') && $('view-family').classList.contains('active')
-    && !document.body.classList.contains('care')
-    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(active && !raysState.running && raysSupported()) startLightRays(canvas);
-  if(!active && raysState.running) stopLightRays();
-}
-function startLightRays(canvas){
-  const gl = canvas.getContext('webgl', {alpha:true, antialias:false});
-  if(!gl) return;
-  raysState.gl = gl; raysState.running = true;
-  const vertSrc = 'attribute vec2 position;varying vec2 vUv;void main(){vUv=position*0.5+0.5;gl_Position=vec4(position,0.0,1.0);}';
-  const fragSrc = [
-    'precision highp float;',
-    'uniform float iTime;uniform vec2 iResolution;',
-    'uniform vec2 rayPos;uniform vec2 rayDir;uniform vec3 raysColor;',
-    'uniform float raysSpeed;uniform float lightSpread;uniform float rayLength;',
-    'uniform float fadeDistance;uniform float saturation;',
-    'uniform vec2 mousePos;uniform float mouseInfluence;',
-    'varying vec2 vUv;',
-    'float rayStrength(vec2 raySource,vec2 rayRefDirection,vec2 coord,float seedA,float seedB,float speed){',
-    'vec2 sourceToCoord=coord-raySource;vec2 dirNorm=normalize(sourceToCoord);',
-    'float cosAngle=dot(dirNorm,rayRefDirection);',
-    'float spreadFactor=pow(max(cosAngle,0.0),1.0/max(lightSpread,0.001));',
-    'float distance=length(sourceToCoord);',
-    'float maxDistance=iResolution.x*rayLength;',
-    'float lengthFalloff=clamp((maxDistance-distance)/maxDistance,0.0,1.0);',
-    'float fadeFalloff=clamp((iResolution.x*fadeDistance-distance)/(iResolution.x*fadeDistance),0.5,1.0);',
-    'float baseStrength=clamp((0.45+0.15*sin(cosAngle*seedA+iTime*speed))+(0.3+0.2*cos(-cosAngle*seedB+iTime*speed)),0.0,1.0);',
-    'return baseStrength*lengthFalloff*fadeFalloff*spreadFactor;',
-    '}',
-    'void main(){',
-    'vec2 coord=gl_FragCoord.xy;',
-    'vec2 finalRayDir=rayDir;',
-    'if(mouseInfluence>0.0){vec2 mouseScreenPos=mousePos*iResolution.xy;',
-    'vec2 mouseDirection=normalize(mouseScreenPos-rayPos);',
-    'finalRayDir=normalize(mix(rayDir,mouseDirection,mouseInfluence));}',
-    'vec4 rays1=vec4(1.0)*rayStrength(rayPos,finalRayDir,coord,36.2214,21.11349,1.5*raysSpeed);',
-    'vec4 rays2=vec4(1.0)*rayStrength(rayPos,finalRayDir,coord,22.3991,18.0234,1.1*raysSpeed);',
-    'vec4 fragColor=rays1*0.5+rays2*0.4;',
-    'float brightness=1.0-(coord.y/iResolution.y);',
-    'fragColor.x*=0.1+brightness*0.8;fragColor.y*=0.3+brightness*0.6;fragColor.z*=0.5+brightness*0.5;',
-    'if(saturation!=1.0){float gray=dot(fragColor.rgb,vec3(0.299,0.587,0.114));',
-    'fragColor.rgb=mix(vec3(gray),fragColor.rgb,saturation);}',
-    'fragColor.rgb*=raysColor;',
-    'gl_FragColor=fragColor;',
-    '}'
-  ].join('\n');
-  function compile(type, src){
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src); gl.compileShader(s);
-    return s;
-  }
-  const prog = gl.createProgram();
-  gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertSrc));
-  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSrc));
-  gl.linkProgram(prog);
-  if(!gl.getProgramParameter(prog, gl.LINK_STATUS)){ raysState.running = false; return; }
-  gl.useProgram(prog);
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, 'position');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = {};
-  ['iTime','iResolution','rayPos','rayDir','raysColor','raysSpeed','lightSpread','rayLength','fadeDistance','saturation','mousePos','mouseInfluence'].forEach(n=>{ U[n] = gl.getUniformLocation(prog, n); });
-  gl.uniform3f(U.raysColor, 0.30, 0.86, 0.62);
-  gl.uniform1f(U.raysSpeed, 1.2);
-  gl.uniform1f(U.lightSpread, 1.3);
-  gl.uniform1f(U.rayLength, 3.0);
-  gl.uniform1f(U.fadeDistance, 0.7);
-  gl.uniform1f(U.saturation, 0.6);
-  gl.uniform1f(U.mouseInfluence, 0.3);
-  function resize(){
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if(!w || !h) return;
-    canvas.width = w * dpr; canvas.height = h * dpr;
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.uniform2f(U.iResolution, canvas.width, canvas.height);
-    gl.uniform2f(U.rayPos, canvas.width * 0.5, -canvas.height * 0.2);
-    gl.uniform2f(U.rayDir, 0, 1);
-  }
-  resize();
-  window.addEventListener('resize', resize);
-  const t0 = performance.now();
-  function loop(t){
-    if(!raysState.running) return;
-    gl.uniform1f(U.iTime, (t - t0) * 0.001);
-    raysState.smooth.x = raysState.smooth.x * 0.92 + raysState.mouse.x * 0.08;
-    raysState.smooth.y = raysState.smooth.y * 0.92 + raysState.mouse.y * 0.08;
-    gl.uniform2f(U.mousePos, raysState.smooth.x, raysState.smooth.y);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    raysState.raf = requestAnimationFrame(loop);
-  }
-  raysState.raf = requestAnimationFrame(loop);
-  raysState._onResize = resize;
-  raysState._onMouse = e=>{
-    const r = canvas.getBoundingClientRect();
-    if(r.width && r.height){
-      raysState.mouse.x = (e.clientX - r.left) / r.width;
-      raysState.mouse.y = 1 - (e.clientY - r.top) / r.height;
-    }
-  };
-  window.addEventListener('mousemove', raysState._onMouse);
-}
-function stopLightRays(){
-  raysState.running = false;
-  cancelAnimationFrame(raysState.raf);
-  if(raysState._onResize) window.removeEventListener('resize', raysState._onResize);
-  if(raysState._onMouse) window.removeEventListener('mousemove', raysState._onMouse);
-  try{
-    if(raysState.gl){
-      const ext = raysState.gl.getExtension('WEBGL_lose_context');
-      if(ext) ext.loseContext();
-    }
-  }catch(e){}
-  raysState.gl = null; raysState._onResize = null; raysState._onMouse = null;
-}
 function toggleMode(){
   const care = document.body.classList.contains('care');
   localStorage.setItem('med_mode', care ? 'normal' : 'care');
@@ -2567,7 +2377,6 @@ function go(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const target = $('view-' + view);
   if(target) target.classList.add('active');
-  updateLightRays();
   document.querySelectorAll('.nav-link').forEach(t=>{
     t.classList.toggle('active', (t.dataset.v === view) || (view==='hospital' && t.dataset.v==='more'));
   });
