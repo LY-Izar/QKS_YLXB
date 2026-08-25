@@ -2148,6 +2148,9 @@ let familyBinds = [];
 let currentViewBind = '';
 function loadFamilyBinds(){
   familyBinds = [];
+  currentViewBind = '';
+  // 未登录不加载任何绑定，防止读到设备级残留数据
+  if(!currentUser) return;
   try{
     const raw = localStorage.getItem(lsKey('med_binds'));
     if(raw){
@@ -2159,8 +2162,8 @@ function loadFamilyBinds(){
   if(familyBinds.length === 0){
     const old = localStorage.getItem(lsKey('med_bind'));
     if(old && old.length === 6) familyBinds = [old];
-    // 迁移设备级旧数据到账号级
-    if(familyBinds.length === 0 && currentUser){
+    // 迁移设备级旧数据到账号级，迁移后删除旧键防泄漏
+    if(familyBinds.length === 0){
       const oldShared = localStorage.getItem('med_bind');
       if(oldShared && oldShared.length === 6){
         familyBinds = [oldShared];
@@ -2176,9 +2179,11 @@ let autoLocated = false;
 let map = null, mapMarkers = [];
 let listening = false;
 function saveFamilyBinds(){
+  // 未登录（体验模式）不落盘，避免绑定数据写入设备级键泄漏给他人
+  if(!currentUser) return;
   localStorage.setItem(lsKey('med_binds'), JSON.stringify(familyBinds));
-  localStorage.setItem(lsKey('med_bind'), familyBinds[0] || '');
-  if(currentUser && DB.db){
+  localStorage.removeItem('med_bind');
+  if(DB.db){
     DB.get('users', currentUser).then(rec=>{
       if(rec){ rec.boundElderCodes = familyBinds; DB.put('users', rec); }
     }).catch(()=>{});
@@ -3170,6 +3175,8 @@ function resetAppState(){
   flowStarted = false;
   recentDepts = [];
   listening = false;
+  familyBinds = [];
+  currentViewBind = '';
   if($('symInput')) $('symInput').value = '';
   if($('bindCode')) $('bindCode').value = '';
   if($('medName')) $('medName').value = '';
