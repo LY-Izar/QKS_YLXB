@@ -1946,6 +1946,7 @@ let flowStarted = false;
 let recentDepts = [];
 let myFamilyCode = '';
 let familyBinds = [];
+let currentViewBind = '';
 function loadFamilyBinds(){
   familyBinds = [];
   try{
@@ -1969,10 +1970,8 @@ function loadFamilyBinds(){
     }
   }
   if(familyBinds.length) currentViewBind = familyBinds[0];
-  else currentViewBind = '';
 }
 loadFamilyBinds();
-let currentViewBind = familyBinds[0] || '';
 let userLoc = null;
 let autoLocated = false;
 let map = null, mapMarkers = [];
