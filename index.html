@@ -32,6 +32,36 @@
     --shadow:0 2px 12px rgba(16,58,50,0.08);
     --shadow-lg:0 8px 28px rgba(16,58,50,0.12);
   }
+  /* 暗色模式（家属端等标准界面可用，关怀模式下自动回退暖色） */
+  body.dark{
+    --bg:#0e1512;
+    --surface:#16211d;
+    --surface-2:#1c2a25;
+    --border:#2a3b34;
+    --ink:#e9f2ee;
+    --muted:#8fa79c;
+    --primary:#35b184;
+    --primary-deep:#1f8a63;
+    --primary-soft:rgba(53,177,132,.16);
+    --accent:#e07a3f;
+    --danger:#e05d5d;
+    --warn:#d99a3d;
+    --ok:#4caf7d;
+    --shadow:0 2px 12px rgba(0,0,0,.35);
+    --shadow-lg:0 8px 28px rgba(0,0,0,.45);
+  }
+  body.dark .badge.green{background:rgba(76,175,125,.18);color:#7ee2a8;}
+  body.dark .badge.yellow{background:rgba(217,154,61,.18);color:#ffd57a;}
+  body.dark .badge.red{background:rgba(224,93,93,.18);color:#ff9c9c;}
+  body.dark .grid .tile:nth-child(2) .ic{background:rgba(96,165,250,.14);}
+  body.dark .grid .tile:nth-child(3) .ic{background:rgba(240,110,130,.14);}
+  body.dark .grid .tile:nth-child(4) .ic{background:rgba(230,180,60,.14);}
+  body.dark .grid .tile:nth-child(5) .ic{background:rgba(80,200,140,.14);}
+  body.dark .grid .tile:nth-child(6) .ic{background:rgba(170,130,250,.14);}
+  body.dark .grid .tile:nth-child(7) .ic{background:rgba(80,200,210,.14);}
+  body.dark .voice-fab{border-color:var(--bg);}
+  body.dark .mask{background:rgba(0,0,0,.6);}
+
   /* 关怀模式（大字·高对比·暖色） */
   body.care{
     --bg:#fff8ec;
@@ -308,6 +338,81 @@
   }
   body.care .hero-ic{width:104px;height:104px;font-size:54px;border-radius:32px;}
 
+  /* ===== 家属端专属特效（React Bits 风格，关怀模式下全部关闭） ===== */
+  #view-family{position:relative;z-index:0;}
+  #view-family .fx-aurora{
+    position:absolute;inset:-30%;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(38% 32% at 22% 28%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 70%),
+      radial-gradient(32% 28% at 78% 18%, rgba(96,165,250,.20), transparent 70%),
+      radial-gradient(42% 38% at 62% 82%, rgba(167,139,250,.16), transparent 70%);
+    filter:blur(28px);
+    animation:auroraDrift 16s ease-in-out infinite alternate;
+  }
+  @keyframes auroraDrift{
+    0%{transform:translate(0,0) scale(1) rotate(0deg);}
+    50%{transform:translate(3%,-4%) scale(1.08) rotate(2deg);}
+    100%{transform:translate(-3%,3%) scale(.96) rotate(-2deg);}
+  }
+  #view-family .fx-dots{
+    position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background-image:radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.2px);
+    background-size:24px 24px;
+    -webkit-mask-image:linear-gradient(180deg,transparent,#000 25%,#000 75%,transparent);
+    mask-image:linear-gradient(180deg,transparent,#000 25%,#000 75%,transparent);
+  }
+  #view-family h1{
+    background:linear-gradient(90deg,var(--primary),#60a5fa,#a78bfa,var(--primary));
+    background-size:300% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    color:transparent;-webkit-text-fill-color:transparent;
+    animation:gradFlow 9s linear infinite;
+  }
+  @keyframes gradFlow{to{background-position:300% 0;}}
+  #view-family .card{position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s,border-color .25s;}
+  #view-family .card::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--primary) 13%, transparent), transparent 65%);
+    opacity:0;transition:opacity .35s;
+  }
+  @media (hover:hover){
+    #view-family .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:color-mix(in srgb, var(--primary) 30%, var(--border));}
+    #view-family .card:hover::after{opacity:1;}
+  }
+  #view-family .btn:not(.ghost):not(.line){position:relative;overflow:hidden;}
+  #view-family .btn:not(.ghost):not(.line)::before{
+    content:'';position:absolute;top:0;left:-80%;width:45%;height:100%;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.34),transparent);
+    transform:skewX(-20deg);
+    animation:btnShine 3.4s ease-in-out infinite;
+  }
+  @keyframes btnShine{0%,55%{left:-80%;}100%{left:170%;}}
+  #view-family .med-item{animation:feedIn .45s ease both;}
+  @keyframes feedIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+  body.care #view-family .fx-aurora,
+  body.care #view-family .fx-dots{display:none;}
+  body.care #view-family h1{
+    background:none;color:var(--ink);-webkit-text-fill-color:var(--ink);animation:none;
+  }
+  body.care #view-family .card{overflow:visible;}
+  body.care #view-family .card::after{display:none;}
+  body.care #view-family .btn:not(.ghost):not(.line)::before{display:none;}
+  body.care #view-family .med-item{animation:none;}
+  @media (prefers-reduced-motion:reduce){
+    #view-family .fx-aurora,#view-family h1,
+    #view-family .btn:not(.ghost):not(.line)::before,
+    #view-family .med-item{animation:none;}
+  }
+
+  /* ===== 主题切换按钮 ===== */
+  .theme-btn{
+    flex:none;width:42px;height:42px;border-radius:50%;font-size:19px;
+    background:var(--primary-soft);color:var(--ink);
+    display:grid;place-items:center;transition:.2s;
+  }
+  .theme-btn:active{transform:scale(.9);}
+  body.care .theme-btn{display:none;}
+
   /* ===== 底部导航 ===== */
   .tabbar{
     position:fixed;bottom:0;left:0;right:0;z-index:40;
@@ -397,6 +502,7 @@
   <div class="logo">医</div>
   <div class="tt">医路相伴<span class="st"> · 老年人智能就医导航</span></div>
   <div class="sp"></div>
+  <button class="theme-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式">🌙</button>
   <button class="mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
 </div>
 
@@ -556,6 +662,8 @@
 
   <!-- 家属端 -->
   <div class="view" id="view-family">
+    <div class="fx-aurora"></div>
+    <div class="fx-dots"></div>
     <h1 id="familyTitle">家属端</h1>
     <p class="lead" id="familyLead">让家人实时了解您的就医与用药情况。</p>
     <div class="card" id="cardElderCode">
@@ -1757,6 +1865,34 @@ function applyMode(){
   const care = localStorage.getItem('med_mode') === 'care';
   document.body.classList.toggle('care', care);
   $('modeToggle').textContent = care ? '标准模式' : '关怀模式';
+  applyTheme();
+}
+
+/* ==================== 暗色模式 ==================== */
+let themeDark = localStorage.getItem('med_theme') === 'dark';
+function applyTheme(){
+  const dark = themeDark && !document.body.classList.contains('care');
+  document.body.classList.toggle('dark', dark);
+  const btn = $('btnTheme');
+  if(btn) btn.textContent = themeDark ? '☀️' : '🌙';
+}
+function toggleTheme(){
+  themeDark = !themeDark;
+  localStorage.setItem('med_theme', themeDark ? 'dark' : 'light');
+  applyTheme();
+  toast(themeDark ? '已切换到深色模式' : '已切换到浅色模式');
+}
+
+/* 家属端卡片 Spotlight 跟随光斑 */
+function initSpotlight(){
+  if(!window.matchMedia('(hover:hover)').matches) return;
+  document.querySelectorAll('#view-family .card').forEach(c=>{
+    c.addEventListener('pointermove', e=>{
+      const r = c.getBoundingClientRect();
+      c.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+      c.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    });
+  });
 }
 function toggleMode(){
   const care = document.body.classList.contains('care');
@@ -2694,6 +2830,7 @@ async function init(){
   renderDrugCats();
   renderDrugLib();
   initChannel();
+  initSpotlight();
   // 药名输入实时匹配 AI 建议
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
