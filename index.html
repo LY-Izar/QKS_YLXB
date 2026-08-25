@@ -2824,7 +2824,6 @@ function speak(text, rate){
     };
     const doSpeak = ()=>{
       if(seq !== speakSeq) return;
-      toast('🔊 正在朗读…', 2500);
       let started = false, errored = '';
       // 长文本按句切分，规避 Chrome 远程语音约 15 秒静默截断
       const chunks = (String(text).match(/[^。！？；\n]+[。！？；\n]*/g) || [text]).map(s=>s.trim()).filter(Boolean);
@@ -4228,6 +4227,84 @@ async function checkMeds(){
   }
 }
 
+/* ==================== 医院资质审查过滤器 ==================== */
+/* 只保留"正规、具备综合资质"的综合医院；
+   排除：专科医院、医疗保健/体检/美容/养生、小型诊所/门诊/卫生室/卫生站。 */
+const GENERAL_HOSPITAL_NAME_KEYWORDS = [
+  /人民医院/, /中心医院/, /总医院/, /附属医院/,
+  /医学院/, /医科大学/, /医专/,
+  /第[一二三四五六七八九十百千\d]+医院/,
+  /中医院/, /中西医结合/, /中西医/,  // 公立中医院通常为综合类
+  /红十字/, /红会/,
+  /省医院/, /市医院/, /区医院/, /县医院/, /镇医院/, /乡医院/,
+  /职工医院/, /厂矿医院/, /企业医院/,
+  /部队医院/, /军医院/, /武警医院/, /陆军/, /海军/, /空军/, /解放军/,
+  /康复医院/, /老年病医院/
+];
+const GENERAL_HOSPITAL_LEVEL_REGEX = /(三级|二级|一级)[甲乙]?等?|三甲|三乙|三丙|二甲|二乙|二丙|一甲|一乙|一丙|甲等|乙等|丙等|三级|二级|一级/;
+/* 黑名单：命中任一项 → 直接排除（用户输入/POI列表都严格执行） */
+const HOSPITAL_BLACKLIST_REGEX = new RegExp([
+  // 专科病名 / 专科方向
+  '眼科','口腔','牙科','齿科','牙防','口腔防治',
+  '妇产','妇幼','产科','妇科','女子','母婴','月子','产后','催乳','计生服务','计生',
+  '儿科','儿童','婴幼儿','新生儿',
+  '肿瘤','癌症','瘤科','血液病','血夜','结核','传染','肝病','肝炎','胰腺','肝胆','胃肠','消化专科','肾病','泌尿专科','糖尿病','痛风','风湿','肥胖','减重',
+  '骨科','骨伤','脊柱','疼痛','脉管炎','周围血管','烧伤','烫伤','皮肤','性病','肛肠','痔疮','便秘','腋臭','脱发','植发','白癜风','牛皮癣','银屑',
+  '男科','泌尿[^外科]','前列腺',
+  '精神','心理','神经[^内外科]','精神卫生','心理卫生','戒毒','戒瘾',
+  '耳鼻喉','耳鼻咽喉','头颈外','视光','配镜','近视','斜弱视',
+  '美容','整形','医美','纤体','减肥','美体','皮肤管理','美莱','华美','艺星','伊美尔','鹏爱','叶子',
+  // 非医院 / 小型 / 保健养生
+  '保健','养生','健康管理','康养','安养','养老','护理[^院]','颐养',
+  '体检','影像','检验','检测','血透','透析','核酸','发热',
+  '按摩','推拿','理疗','艾灸','中医馆','国医馆','中医堂','中医诊所','正骨','整脊',
+  '宠物','动物','畜禽',
+  // 诊所 / 门诊 / 卫生站
+  '诊所','卫生所','卫生室','卫生站','医务室','卫生服务站','服务站','社区卫生[^服务中心]',
+  '门诊[^部]','门诊部[^门]','个体','村医','家庭医生','黑诊所','游医'
+].join('|'));
+
+/**
+ * 医院列表显示用（严格）：必须不命中黑名单，且名称/等级至少命中一项白名单
+ * @param {{name:string,level?:string,dept?:string[]}} h
+ */
+function isQualifiedGeneralHospital(h){
+  if(!h || !h.name) return false;
+  const name = String(h.name);
+  const level = h.level ? String(h.level) : '';
+  if(HOSPITAL_BLACKLIST_REGEX.test(name)) return false;
+  if(level && HOSPITAL_BLACKLIST_REGEX.test(level)) return false;
+  const hitName = GENERAL_HOSPITAL_NAME_KEYWORDS.some(r => r.test(name));
+  const hitLevel = GENERAL_HOSPITAL_LEVEL_REGEX.test(level);
+  return hitName || hitLevel;
+}
+
+/**
+ * 用户自由输入"确诊医院/复诊医院"时的宽松校验：
+ * - 命中黑名单 → 阻止提交并提示
+ * - 未命中白名单但也不在黑名单 → 允许提交但给出确认性警告
+ * @param {string} name
+ * @returns {{ok:boolean,msg?:string,warn?:string}}
+ */
+function validateHospitalInput(name){
+  name = (name || '').trim();
+  if(!name) return { ok:true };
+  if(HOSPITAL_BLACKLIST_REGEX.test(name)){
+    return {
+      ok:false,
+      msg:'该医院名包含专科/诊所/保健/体检/美容等关键词，不符合正规综合医院资质。\n请选择「人民医院 / 中心医院 / 第X医院 / 中医院 / 附属医院 / 医学院医院」等具备综合资质的二级及以上公立医院。'
+    };
+  }
+  const hitWhite = GENERAL_HOSPITAL_NAME_KEYWORDS.some(r => r.test(name));
+  if(!hitWhite){
+    return {
+      ok:true,
+      warn:'请确认该医院为正规综合医院（二级及以上 / 人民 / 中心 / 第X医院 / 中医院 / 附属医院），不要选专科、诊所、保健、体检或小型门诊。'
+    };
+  }
+  return { ok:true };
+}
+
 /* ==================== 找医院 / 地图 ==================== */
 function haversine(lat1,lng1,lat2,lng2){
   const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
@@ -4382,25 +4459,30 @@ function initLeafletMap(){
 }
 function renderHospitals(){
   if(amapReady && amap) return renderHospitalsAMap();
-  let list = HOSPITALS.map(h=>({...h}));
+  let list = HOSPITALS.map(h=>({...h})).filter(isQualifiedGeneralHospital);
   if(userLoc){
     list.forEach(h=>{ h.dist = haversine(userLoc.lat, userLoc.lng, h.lat, h.lng); });
     list.sort((a,b)=>a.dist-b.dist);
     list = list.slice(0,5);
   }
   const el = $('hospList'); el.innerHTML = '';
-  list.forEach(h=>{
-    const dist = userLoc ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
-    const match = recentDepts.some(d=>h.dept.some(x=>x.includes(d)||d.includes(x)));
-    const d = document.createElement('div');
-    d.className = 'hosp-item';
-    d.innerHTML = '<div class="dist">' + dist + '</div>' +
-      '<div style="flex:1;"><div class="nm">' + h.name + (match?'<span class="tag">匹配科室</span>':'') + '</div>' +
-      '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
-      '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
-    el.appendChild(d);
-  });
-  $('mapHint').textContent = userLoc ? '已定位，为您推荐最近的 5 所医院。' : '未定位，显示示例医院（供演示）。';
+  if(!list.length){
+    el.innerHTML = '<p class="hint" style="padding:14px;border:1px dashed rgba(239,68,68,.3);border-radius:10px;background:rgba(239,68,68,.04);color:var(--danger-text,#ef4444);">附近未找到符合正规综合资质的医院。<br>请选择「人民医院 / 中心医院 / 第X医院 / 中医院 / 附属医院」等二级及以上公立医院就诊，避免前往专科、诊所、保健、体检机构或小型门诊。</p>';
+    $('mapHint').textContent = userLoc ? '已按综合医院资质筛选，暂无符合条件的医院，请前往市区大型公立医院。' : '示例医院暂无可展示的综合医院。';
+  } else {
+    list.forEach(h=>{
+      const dist = userLoc ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
+      const match = recentDepts.some(d=>h.dept.some(x=>x.includes(d)||d.includes(x)));
+      const d = document.createElement('div');
+      d.className = 'hosp-item';
+      d.innerHTML = '<div class="dist">' + dist + '</div>' +
+        '<div style="flex:1;"><div class="nm">' + h.name + (match?'<span class="tag">匹配科室</span>':'') + '</div>' +
+        '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
+        '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
+      el.appendChild(d);
+    });
+    $('mapHint').textContent = (userLoc ? '已定位，已按综合医院资质筛选，推荐最近的 ' + list.length + ' 所正规医院。' : '未定位，显示经资质审查的示例综合医院（供演示）。');
+  }
   // 地图标注
   if(map){
     mapMarkers.forEach(m=>map.removeLayer(m)); mapMarkers = [];
@@ -4421,10 +4503,17 @@ function renderHospitals(){
 function renderHospitalsAMap(){
   if(!amap) return;
   amap.clearMap();
+  const QUALIFIED_EMPTY_HTML = '<p class="hint" style="padding:14px;border:1px dashed rgba(239,68,68,.3);border-radius:10px;background:rgba(239,68,68,.04);color:var(--danger-text,#ef4444);">附近未找到符合正规综合资质的医院。<br>请选择「人民医院 / 中心医院 / 第X医院 / 中医院 / 附属医院」等二级及以上公立医院就诊，避免前往专科、诊所、保健、体检机构或小型门诊。</p>';
   const drawStatic = ()=>{
     amapHospitals = [];
     const el = $('hospList'); el.innerHTML = '';
-    HOSPITALS.forEach(h=>{
+    const list = HOSPITALS.filter(isQualifiedGeneralHospital);
+    if(!list.length){
+      el.innerHTML = QUALIFIED_EMPTY_HTML;
+      $('mapHint').textContent = '示例医院暂无可展示的综合医院（已按资质审查规则过滤）。';
+      return;
+    }
+    list.forEach(h=>{
       const m = new AMap.Marker({position:[h.lng, h.lat], title:h.name});
       m.setMap(amap);
       m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
@@ -4435,15 +4524,16 @@ function renderHospitalsAMap(){
         '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
         '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
       el.appendChild(d);
+      amapHospitals.push({...h});
     });
+    $('mapHint').textContent = '未定位，显示经资质审查的示例综合医院；点击「获取我的位置」可搜索附近真实综合医院。';
     if(userLoc) amap.setFitView();
   };
   if(!userLoc){
-    $('mapHint').textContent = '未定位，显示示例医院；点击「获取我的位置」可搜索附近真实医院。';
     drawStatic();
     return;
   }
-  $('mapHint').textContent = '正在通过高德搜索附近医院…';
+  $('mapHint').textContent = '正在通过高德搜索附近医院…（已开启综合医院资质审查）';
   amap.setCenter([userLoc.lng, userLoc.lat]);
   const me = new AMap.Marker({
     position:[userLoc.lng, userLoc.lat],
@@ -4451,37 +4541,49 @@ function renderHospitalsAMap(){
     content:'<div style="width:14px;height:14px;border-radius:50%;background:#0f9d8f;border:3px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.4);"></div>'
   });
   me.setMap(amap);
-  if(!amapPlace) amapPlace = new AMap.PlaceSearch({city:'全国', pageSize:10, pageIndex:1, extensions:'all'});
-  amapPlace.searchNearBy('医院', [userLoc.lng, userLoc.lat], 10000, (status, result)=>{
+  if(!amapPlace) amapPlace = new AMap.PlaceSearch({city:'全国', pageSize:20, pageIndex:1, extensions:'all'});
+  // 扩大搜索半径到 20km，pageSize 20，过滤后取前 5，避免 10km 内全是小诊所导致列表空
+  amapPlace.searchNearBy('医院', [userLoc.lng, userLoc.lat], 20000, (status, result)=>{
     const pois = (status === 'complete' && result && result.poiList && result.poiList.pois) ? result.poiList.pois : [];
-    if(pois.length === 0){
-      $('mapHint').textContent = '高德未搜索到附近医院，显示示例医院。';
-      drawStatic();
-      return;
-    }
-    amapHospitals = pois.map(p=>({
+    let mapped = pois.map(p=>({
       name:p.name,
       lat:p.location.getLat(),
       lng:p.location.getLng(),
       level:p.type ? p.type.split(';').filter(Boolean).pop() : '医院',
       dist:haversine(userLoc.lat, userLoc.lng, p.location.getLat(), p.location.getLng())
-    })).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    })).filter(isQualifiedGeneralHospital).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    // 真实搜索过滤后不足，用本地示例 HOSPITALS（也过滤+按距离算）补足到 5
+    if(mapped.length < 3){
+      const localFallback = HOSPITALS.filter(isQualifiedGeneralHospital).map(h=>({
+        ...h, dist: haversine(userLoc.lat, userLoc.lng, h.lat, h.lng)
+      })).sort((a,b)=>a.dist-b.dist);
+      const usedNames = new Set(mapped.map(m=>m.name));
+      localFallback.forEach(h=>{ if(mapped.length >= 5) return; if(!usedNames.has(h.name)) mapped.push(h); });
+    }
+    amapHospitals = mapped;
     const el = $('hospList'); el.innerHTML = '';
+    if(!amapHospitals.length){
+      el.innerHTML = QUALIFIED_EMPTY_HTML;
+      $('mapHint').textContent = '已按综合医院资质筛选，20km 内暂无符合条件的正规医院，请前往市区大型公立医院。';
+      return;
+    }
     amapHospitals.forEach(h=>{
-      const m = new AMap.Marker({position:[h.lng, h.lat], title:h.name});
-      m.setMap(amap);
-      m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
-      const dist = h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里';
+      if(h.lat !== undefined && h.lng !== undefined){
+        const m = new AMap.Marker({position:[h.lng, h.lat], title:h.name});
+        m.setMap(amap);
+        m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
+      }
+      const dist = h.dist != null ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
       const d = document.createElement('div');
       d.className = 'hosp-item';
       d.innerHTML = '<div class="dist">' + dist + '</div>' +
         '<div style="flex:1;"><div class="nm">' + h.name + '</div>' +
-        '<div class="ds">' + h.level + '</div></div>' +
-        '<button class="btn sm line" onclick="goHospital(\'' + h.name.replace(/'/g,"\\'") + '\')">导航</button>';
+        '<div class="ds">' + (h.level||'正规综合医院') + ((h.dept && h.dept.length) ? (' · ' + h.dept.join('、')) : '') + '</div></div>' +
+        '<button class="btn sm line" onclick="goHospital(\'' + String(h.name||'').replace(/'/g,"\\'") + '\')">导航</button>';
       el.appendChild(d);
     });
-    $('mapHint').textContent = '高德已定位，为您推荐最近的 ' + amapHospitals.length + ' 所医院。';
-    amap.setFitView();
+    $('mapHint').textContent = '高德已定位，已按综合医院资质筛选（去除专科、诊所、保健、体检机构），推荐最近的 ' + amapHospitals.length + ' 所正规医院。';
+    try{ amap.setFitView(); }catch(e){}
   });
 }
 function goHospital(name){
@@ -5051,6 +5153,9 @@ async function saveChronic(){
   if(!type){ toast('请先选择疾病类型'); return; }
   const date = $('chronicDate').value || '';
   const hosp = sanitizeInput($('chronicHosp').value, 50);
+  // 医院资质审查（宽松：黑名单阻止，灰名单警告）
+  const hospCheck = validateHospitalInput(hosp);
+  if(!hospCheck.ok){ toast(hospCheck.msg); if(autoSpeak) autoSpeak(hospCheck.msg); return; }
   const targets = collectTargets(type);
   const rec = {
     username: currentUser || 'guest',
@@ -5067,8 +5172,8 @@ async function saveChronic(){
       body: JSON.stringify({ id: Date.now(), username: currentUser, disease_type: type, diagnose_date: date, hospital: hosp, target_json: JSON.stringify(targets) })
     }).catch(()=>{});
   }
-  toast('档案已保存');
-  autoSpeak('档案已保存');
+  toast('档案已保存' + (hospCheck.warn ? '（提示：'+hospCheck.warn+'）' : ''));
+  autoSpeak('档案已保存' + (hospCheck.warn ? ('。' + hospCheck.warn) : ''));
   $('chronicType').value = '';
   $('chronicFormFields').style.display = 'none';
   $('chronicDate').value = '';
@@ -5643,6 +5748,9 @@ async function saveFollowup(){
   if(!date){ toast('请选择复诊日期'); return; }
   const dept = sanitizeInput($('followupDept').value, 50);
   const hosp = sanitizeInput($('followupHosp').value, 50);
+  // 医院资质审查（宽松：黑名单阻止，灰名单警告）
+  const hospCheck = validateHospitalInput(hosp);
+  if(!hospCheck.ok){ toast(hospCheck.msg); if(autoSpeak) autoSpeak(hospCheck.msg); return; }
   const remind = parseInt($('followupRemind').value) || 7;
   const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
   const rec = {
@@ -5663,8 +5771,8 @@ async function saveFollowup(){
       body: JSON.stringify({ username: currentUser, disease_type: rec.disease_type, next_visit_date: date, department: dept, hospital: hosp, notes: '', reminder_days_before: remind })
     }).catch(()=>{});
   }
-  toast('复诊提醒已添加');
-  autoSpeak('复诊提醒已添加，' + date + ' ' + dept);
+  toast('复诊提醒已添加' + (hospCheck.warn ? '（提示：'+hospCheck.warn+'）' : ''));
+  autoSpeak('复诊提醒已添加，' + date + ' ' + dept + (hospCheck.warn ? ('。' + hospCheck.warn) : ''));
   $('followupDate').value = '';
   $('followupDept').value = '';
   $('followupHosp').value = '';
