@@ -1208,6 +1208,31 @@
   </div>
 </div>
 
+<!-- 浏览器推送开启失败教程弹层（家属端） -->
+<div class="mask" id="pushFailMask">
+  <div class="sheet">
+    <h3>🔔 浏览器推送开启失败？请按以下步骤排查</h3>
+    <p class="sub" style="line-height:1.9;">
+      <b>1. 检查系统权限：</b><br>
+      Windows：设置 → 隐私和安全性 → 通知，开启浏览器通知；再检查「专注助手/勿扰模式」是否关闭。<br>
+      手机：系统设置 → 应用 → 浏览器 → 通知，允许通知。<br><br>
+      <b>2. 检查浏览器权限：</b><br>
+      点击地址栏左侧的 🔒 / ⚙ 图标 → 找到「通知」→ 设为「允许」，然后刷新页面重试。<br><br>
+      <b>3. 确认访问方式：</b><br>
+      浏览器推送需要 HTTPS 网址（本站已支持）。若从本地文件打开（file:// 开头）则无法使用。<br><br>
+      <b>4. 浏览器兼容性：</b><br>
+      推荐使用 Chrome 或 Edge 电脑版/手机版。部分小众浏览器或无痕模式不支持推送。<br><br>
+      <b>5. iOS 用户：</b><br>
+      需将网页「添加到主屏幕」后从主屏幕图标打开，才能使用推送。
+    </p>
+    <div class="gap6" style="margin-top:12px;">
+      <button class="btn block" onclick="retryPushAfterFail()">我已调整，再试一次</button>
+      <button class="btn block ghost" onclick="closePushFailMask()">关闭教程</button>
+    </div>
+    <p class="hint">仍然失败？可改用下方「微信推送」功能，微信收提醒更省心。</p>
+  </div>
+</div>
+
 <script>
 /* ==================== 数据：症状知识库 ==================== */
 // 紧急度: red=立即急诊 yellow=尽快就医(1-2天) green=可先观察
@@ -2218,9 +2243,38 @@ async function togglePWA(){
     updatePWABadge();
   }else{
     const r = await subscribePush();
-    toast(r.msg);
-    if(r.ok) updatePWABadge();
+    if(r.ok){
+      toast(r.msg);
+      updatePWABadge();
+    }else{
+      handlePushFail(r.msg);
+    }
   }
+}
+/* 推送开启失败：家属端弹教程，老人端提示联系家属 */
+function handlePushFail(msg){
+  closePushFailMask();
+  if(myRole === 'elder'){
+    const tip = '浏览器推送开启失败，请联系家属帮您处理。';
+    toast(tip, 6000);
+    speak(tip);
+  }else{
+    // 家属端（含默认身份）：先提示具体原因，再弹教程
+    toast(msg || '浏览器推送开启失败', 5000);
+    const m = $('pushFailMask');
+    if(m){ m.classList.add('show'); }
+    else { toast(msg || '浏览器推送开启失败', 6000); }
+  }
+}
+function closePushFailMask(){
+  const m = $('pushFailMask');
+  if(m) m.classList.remove('show');
+}
+async function retryPushAfterFail(){
+  closePushFailMask();
+  const r = await subscribePush();
+  if(r.ok){ toast(r.msg); updatePWABadge(); }
+  else { handlePushFail(r.msg); }
 }
 
 async function updatePWABadge(){
@@ -2281,33 +2335,59 @@ async function updatePPBadge(){
 
 /* ==================== 语音 ==================== */
 let voicesReady = false;
+let voicesList = [];
 function loadVoices(){
   if(!('speechSynthesis' in window)) return;
   const vs = speechSynthesis.getVoices();
-  if(vs && vs.length > 0) voicesReady = true;
+  if(vs && vs.length > 0){ voicesList = vs; voicesReady = true; }
 }
 if('speechSynthesis' in window){
   loadVoices();
   speechSynthesis.onvoiceschanged = loadVoices;
+  // 部分浏览器（尤其 Edge）首次交互才会加载语音列表，点击时补拉一次
+  document.addEventListener('pointerdown', ()=>{ if(!voicesReady) loadVoices(); }, {capture:true});
 }
+let speakSeq = 0;
 function speak(text, rate){
   try{
-    if(!('speechSynthesis' in window)) return;
+    if(!('speechSynthesis' in window)){
+      toast('当前浏览器不支持语音朗读，建议使用 Edge 或 Chrome'); return;
+    }
     if(!text || !text.trim()) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-CN';
-    const vs = speechSynthesis.getVoices();
-    const zhVoice = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('zh'));
-    if(zhVoice) u.voice = zhVoice;
-    u.rate = rate || (document.body.classList.contains('care') ? 0.82 : 1.0);
-    u.pitch = 1.0;
-    speechSynthesis.speak(u);
-  }catch(e){}
+    const seq = ++speakSeq;
+    try{ speechSynthesis.cancel(); }catch(e){}
+    const careSlow = document.body.classList.contains('care') ? 0.82 : 1.0;
+    const doSpeak = ()=>{
+      if(seq !== speakSeq) return; // 已被新的朗读请求取代
+      const vs = voicesList.length ? voicesList : speechSynthesis.getVoices();
+      const zhVoice = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('zh'));
+      // 长文本按句切分，规避 Chrome 远程语音约 15 秒静默截断
+      const chunks = text.match(/[^。！？；\n]+[。！？；\n]*/g) || [text];
+      chunks.forEach(ch=>{
+        const u = new SpeechSynthesisUtterance(ch.trim());
+        u.lang = 'zh-CN';
+        if(zhVoice) u.voice = zhVoice;
+        u.rate = rate || careSlow;
+        u.pitch = 1.0;
+        u.onerror = ev=>{
+          if(ev.error && ev.error !== 'interrupted' && ev.error !== 'canceled'){
+            toast('语音朗读失败（' + ev.error + '），请再点一次重试');
+          }
+        };
+        try{ speechSynthesis.speak(u); }catch(e){}
+      });
+    };
+    // cancel 后立即 speak 在 Chrome/Edge 可能被吞掉，稍作延迟更可靠
+    setTimeout(doSpeak, 80);
+  }catch(e){
+    toast('语音朗读异常，请重试');
+  }
 }
 function stopSpeak(){ try{ speechSynthesis.cancel(); }catch(e){} }
 function speakCurrent(){
-  const v = document.querySelector('.view.active').id;
+  const activeView = document.querySelector('.view.active');
+  if(!activeView){ toast('未找到当前页面'); return; }
+  const v = activeView.id;
   const map = {
     'view-welcome':'欢迎使用医路相伴，老年人智能就医导航。建议开启关怀模式，字体更大更清晰。',
     'view-home': myRole === 'family'
@@ -2316,12 +2396,14 @@ function speakCurrent(){
     'view-symptom':'症状自查。请点选症状，或在下方输入症状文字，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
+    'view-druglib':'药品库。可以按药名、商品名或英文名搜索常用药，查看用途、用法和注意事项。',
     'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
     'view-family': myRole === 'family'
       ? '查看亲属。输入老人端的邀请码，即可实时查看老人的症状自查、用药情况和前往医院记录。'
       : '绑定家人。把屏幕上的邀请码告诉家人，家人就可以在手机上查看您的健康动态。'
   };
-  speak(map[v] || '');
+  const txt = map[v] || '正在打开' + (activeView.querySelector('h1')?.textContent || '本') + '页面。';
+  speak(txt);
 }
 function voiceToggle(){
   if(listening){ finishListen(); }
