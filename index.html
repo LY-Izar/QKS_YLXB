@@ -2373,6 +2373,47 @@ const INTERACTIONS = [
 /* ==================== 全局状态 ==================== */
 let currentUser = localStorage.getItem('med_user') || null;
 function lsKey(base){ return currentUser ? base + '_' + encodeURIComponent(currentUser) : base; }
+
+/* ====== 账号隔离辅助：所有本地 IndexedDB 用户数据统一走这 4 个 API ====== */
+/** 写任何个人数据（meds/chronic/metrics/followups/events/medlog）前强制注入 username */
+function withUsername(rec){
+  return Object.assign({}, rec || {}, { username: currentUser || 'guest' });
+}
+/** 取某 store 中当前登录用户的全部记录（guest 也按 guest 隔离，避免串到真实账号） */
+async function allMine(storeName){
+  if(!DB.db) return [];
+  const u = currentUser || 'guest';
+  const all = await DB.all(storeName);
+  return all.filter(r => r && r.username === u);
+}
+/** 单条读取并校验归属：不是当前用户的数据返回 null，避免直接用 id 查到别人 */
+async function ensureMine(storeName, id){
+  if(!DB.db || id == null) return null;
+  try{
+    const r = await DB.get(storeName, id);
+    if(!r) return null;
+    const u = currentUser || 'guest';
+    return (r.username === u) ? r : null;
+  }catch(e){ return null; }
+}
+/** 取当前用户自己的慢病档案列表（避免 DB.all('chronic').find 漏 username 过滤） */
+async function getMyChronic(id){
+  if(id == null) return null;
+  const list = await allMine('chronic');
+  return list.find(c => c.id === id) || null;
+}
+/** 清除设备级残留 localStorage 键（防止体验账号/未登录态遗留的缓存被后续账号看到） */
+function purgeSharedUserCache(){
+  const DANGEROUS_SHARED = [
+    'med_user', // 这个是登录态，保留
+  ];
+  // 删除历史遗留设备级个人数据键（迁移过的都在 lsKey 名下有一份了）
+  ['med_bind','med_binds','med_last_metrics','med_profile_cache','med_selected_elder',
+   'med_last_chronic','med_theme_user','med_push_user','med_pp_user','med_hospital_user',
+   'med_selected_viewbind','med_elder_compliance_cache'].forEach(k => {
+    try{ localStorage.removeItem(k); }catch(e){}
+  });
+}
 let selectedSyms = new Set();
 let flowIndex = 0;
 let flowStarted = false;
@@ -3445,21 +3486,53 @@ function resetAppState(){
   listening = false;
   familyBinds = [];
   currentViewBind = '';
+  selectedChronicId = null;
+  // 销毁两张慢病趋势图实例，防止切账号后仍然引用旧图 DOM/缓存
+  try{ _destroyChronicChart(); }catch(e){}
+  try{ if(typeof destroyFamilyChart === 'function') destroyFamilyChart(); }catch(e){}
+  _familyChartCache = null;
+  // 清空输入框（含个人推送 token / 地址 / 医院等敏感字段）
   if($('symInput')) $('symInput').value = '';
   if($('bindCode')) $('bindCode').value = '';
   if($('medName')) $('medName').value = '';
   if($('medDose')) $('medDose').value = '';
   if($('addrInput')) $('addrInput').value = '';
   if($('ppTokenInput')) $('ppTokenInput').value = '';
+  if($('chronicHosp')) $('chronicHosp').value = '';
+  if($('chronicDate')) $('chronicDate').value = '';
+  if($('metricNote')) $('metricNote').value = '';
+  if($('m_v1')) $('m_v1').value = '';
+  if($('m_v2')) $('m_v2').value = '';
+  if($('followupDate')) $('followupDate').value = '';
+  if($('followupDept')) $('followupDept').value = '';
+  if($('followupHosp')) $('followupHosp').value = '';
+  // 清空事件 feed / 家属端摘要卡 / 依从性卡，防止残留旧账号内容
   const feed = $('familyFeed');
   if(feed) feed.innerHTML = '';
+  const sumEl = $('chronicSummaryContent');
+  if(sumEl) sumEl.innerHTML = '<p class="hint">请登录家属账号并绑定老人查看慢病档案摘要。</p>';
+  const famListEl = $('familyMetricList');
+  if(famListEl) famListEl.innerHTML = '<p class="hint">暂无指标记录。</p>';
+  const familyChartEmpty = $('familyChartEmpty');
+  if(familyChartEmpty){ familyChartEmpty.style.display='flex'; familyChartEmpty.textContent = '未登录或未选择老人。'; }
+  const complStats = $('complianceStats');
+  if(complStats) complStats.innerHTML = '';
+  const complCal = $('complianceCalendar');
+  if(complCal) complCal.innerHTML = '';
+  const elderComplStats = $('elderComplianceStats');
+  if(elderComplStats) elderComplStats.innerHTML = '';
+  const elderComplCal = $('elderComplianceCalendar');
+  if(elderComplCal) elderComplCal.innerHTML = '';
+  // 家属端已绑定列表区域：重新渲染为空（因为 familyBinds 已清空）
+  try{ if(typeof renderBoundList === 'function') renderBoundList(); }catch(e){}
   renderSyms();
   renderFlow();
   renderMeds();
   renderBodyParts();
   renderTimeInputs($('medFreq')?.value || 'daily');
-  selectedChronicId = null;
   renderChronicList();
+  // 清理旧版设备级个人缓存，避免下个账号看到
+  try{ purgeSharedUserCache(); }catch(e){}
 }
 async function doRegister(){
   const u = sanitizeUsername($('authUser').value);
@@ -3611,6 +3684,8 @@ async function doLogin(){
 function quickUse(){
   currentUser = null;
   localStorage.removeItem('med_user');
+  // 体验模式：清理设备级残留个人缓存，避免下个账号看到
+  try{ purgeSharedUserCache(); }catch(e){}
   resetAppState();
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   go('home');
@@ -3987,7 +4062,8 @@ async function addMed(){
   const times = collectTimes();
   if(!name){ toast('请填写药品名称'); return; }
   if(times.length === 0){ toast('请至少设置一个提醒时间'); return; }
-  const med = {name, dose, freq, times, time: times[0], created:Date.now(), reminded:{}};
+  // 强制绑定当前登录用户，避免同机不同账号看到相同用药提醒
+  const med = withUsername({name, dose, freq, times, time: times[0], created:Date.now(), reminded:{}});
   await DB.put('meds', med);
   $('medName').value=''; $('medDose').value='';
   renderTimeInputs(freq);
@@ -4001,7 +4077,7 @@ async function addMed(){
 }
 async function renderMeds(){
   if(!DB.db){ $('medList').innerHTML = ''; return; }
-  const meds = await DB.all('meds');
+  const meds = await allMine('meds'); // 只取当前登录用户的用药
   const el = $('medList'); el.innerHTML = '';
   if(meds.length === 0){
     el.innerHTML = '<div class="card center" style="color:var(--muted);">还没有用药记录，请在上方添加。</div>';
@@ -4026,6 +4102,9 @@ async function renderMeds(){
   if(myRole !== 'family') renderCompliance();
 }
 async function delMed(id){
+  // 只能删除自己的用药记录，防止 id 碰巧相同时删到其他账号
+  const own = await ensureMine('meds', id);
+  if(!own){ toast('无权删除该记录'); return; }
   await DB.del('meds', id);
   renderMeds();
   toast('已删除');
@@ -4061,7 +4140,7 @@ function ruleHit(ruleName, drug){
   return (drug.keys || []).includes(ruleName);
 }
 async function showAllAdvice(){
-  const meds = await DB.all('meds');
+  const meds = await allMine('meds'); // 只基于当前用户自己的用药做相互作用检测
   const curDrug = matchDrug(sanitizeInput($('medName').value, 50));
   const seen = new Set();
   const unique = [];
@@ -4609,7 +4688,8 @@ function initChannel(){
   }
 }
 function addEvent(type, text){
-  const ev = {familyCode: myFamilyCode, type, text, time:Date.now()};
+  // 写入时强制绑定当前用户：同机不同账号、相同家庭码时，也能区分是谁操作的事件
+  const ev = withUsername({familyCode: myFamilyCode, type, text, time:Date.now()});
   DB.put('events', ev);
   if(bc) bc.postMessage(ev);
   appendFeed(ev, true);
@@ -5197,8 +5277,7 @@ function collectTargets(type){
 }
 
 async function renderChronicList(){
-  const all = await DB.all('chronic');
-  const mine = all.filter(c => c.username === (currentUser || 'guest'));
+  const mine = await allMine('chronic'); // 只取当前用户自己的慢病档案
   const statusEl = $('chronicStatus');
   const listEl = $('chronicList');
   if(!statusEl || !listEl) return;
@@ -5247,14 +5326,14 @@ async function renderChronicList(){
 let selectedChronicId = null;
 
 async function selectChronic(id){
+  // 归属校验：防止手动传入/复用 id 选到其他账号的档案
+  const own = await getMyChronic(id);
+  if(!own){ toast('无权访问该档案'); selectedChronicId = null; renderChronicList(); return; }
   selectedChronicId = id;
   showChronicCards();
   try{
-    const chronic = await DB.get('chronic', id);
-    if(chronic){
-      const label = DISEASE_LABELS[chronic.disease_type] || chronic.disease_type;
-      autoSpeak('已选择' + label + '档案，现在可以录入指标和查看趋势');
-    }
+    const label = DISEASE_LABELS[own.disease_type] || own.disease_type;
+    autoSpeak('已选择' + label + '档案，现在可以录入指标和查看趋势');
   }catch(e){}
   renderChronicList();
   onMetricTypeChange();
@@ -5278,9 +5357,15 @@ function showChronicCards(){
 
 async function delChronic(id){
   if(!confirm('删除该慢病档案将同时删除其所有指标记录，确认？')) return;
+  // 归属校验：不是自己的档案拒绝删除
+  const own = await ensureMine('chronic', id);
+  if(!own){ toast('无权删除该档案'); return; }
   await DB.del('chronic', id);
-  const all = await DB.all('metrics');
-  await Promise.all(all.filter(m => m.disease_id === id).map(m => DB.del('metrics', m.id)));
+  // 删指标也只删当前账号自己的（即使 disease_id 碰巧重复也不会误删）
+  const u = currentUser || 'guest';
+  const allMetrics = await DB.all('metrics');
+  const mineToDel = allMetrics.filter(m => m.username === u && m.disease_id === id);
+  await Promise.all(mineToDel.map(m => DB.del('metrics', m.id)));
   if(currentUser && cloudUsable()){
     sbFetch('chronic_profiles?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
   }
@@ -5332,8 +5417,10 @@ async function saveMetric(){
   if(!v1 || v1 <= 0){ toast('请输入有效数值'); return; }
   const v2 = type === 'bp' ? (parseFloat($('m_v2')?.value) || null) : null;
   const note = sanitizeInput($('metricNote').value, 100);
-  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
-  const diseaseType = chronic ? chronic.disease_type : 'other';
+  // 归属校验：指标必须写到自己的档案里
+  const chronic = await getMyChronic(selectedChronicId);
+  if(!chronic){ toast('档案不存在或无权操作'); selectedChronicId = null; renderChronicList(); return; }
+  const diseaseType = chronic.disease_type;
   const rec = {
     disease_id: selectedChronicId,
     username: currentUser || 'guest',
@@ -5418,16 +5505,16 @@ function assessMetricLevel(m, chronic){
 }
 
 async function renderMetricHistory(){
-  const all = await DB.all('metrics');
-  const mine = all.filter(m => m.disease_id === selectedChronicId).sort((a,b) => new Date(b.measured_at) - new Date(a.measured_at)).slice(0, 10);
+  const mine = await allMine('metrics'); // 只显示自己录入的指标
+  const list = mine.filter(m => m.disease_id === selectedChronicId).sort((a,b) => new Date(b.measured_at) - new Date(a.measured_at)).slice(0, 10);
   const el = $('metricHistory');
-  if(!mine.length){
+  if(!list.length){
     el.innerHTML = '<p class="hint">暂无记录</p>';
     return;
   }
-  const chronic = (await DB.get('chronic', selectedChronicId)) || null;
+  const chronic = await getMyChronic(selectedChronicId); // 只拿自己档案做阈值评估
   el.innerHTML = '<p class="sub" style="margin-bottom:4px;">最近记录</p>'
-    + mine.map(m => {
+    + list.map(m => {
       const label = METRIC_LABELS[m.metric_type] || m.metric_type;
       const val = m.metric_type === 'bp' ? m.value1 + '/' + (m.value2||'-') + ' mmHg'
         : m.value1 + (m.metric_type === 'weight' ? ' kg' : (m.metric_type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
@@ -5446,6 +5533,8 @@ async function renderMetricHistory(){
 }
 
 async function delMetric(id){
+  const own = await ensureMine('metrics', id);
+  if(!own){ toast('无权删除该记录'); return; }
   await DB.del('metrics', id);
   renderMetricHistory();
   renderChart(currentChronicRange);
@@ -5501,8 +5590,8 @@ async function _renderChartCore(range){
   const days = currentChronicRange === '7d' ? 7 : (currentChronicRange === '90d' ? 90 : 30);
   const now = new Date();
   const since = new Date(now.getTime() - days * 86400000);
-  const all = await DB.all('metrics');
-  const mine = all.filter(m => m.disease_id === selectedChronicId && new Date(m.measured_at) >= since)
+  const mineMetrics = await allMine('metrics'); // 只用自己的指标画图
+  const mine = mineMetrics.filter(m => m.disease_id === selectedChronicId && new Date(m.measured_at) >= since)
     .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
   const el = $('chronicChart');
   const emptyEl = $('chronicChartEmpty');
@@ -5548,7 +5637,7 @@ async function _renderChartCore(range){
   }
   _chronicHideEmpty(emptyEl);
   $('chartHint').textContent = '';
-  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
+  const chronic = await getMyChronic(selectedChronicId); // 只拿自己档案做阈值着色
   const labels = mine.map(m => new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
   const d1 = mine.map(m => Number(m.value1));
   const d2 = mine.map(m => m.value2 !== null && m.value2 !== undefined ? Number(m.value2) : null);
@@ -5648,7 +5737,7 @@ async function renderCompliance(targetUser, statsId, calId){
   let myLogs = [];
   let hasMeds = false;
   if(targetUser === (currentUser || 'guest')){
-    const meds = await DB.all('meds');
+    const meds = await allMine('meds'); // 只统计当前账号自己的用药
     hasMeds = meds.length > 0;
     const now = new Date();
     const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
@@ -5718,15 +5807,17 @@ async function renderElderCompliance(elderCode){
 }
 
 async function markMedTaken(medId, date, timeSlot, status){
+  const u = currentUser || 'guest';
   const logs = await DB.all('medlog');
-  const existing = logs.find(l => l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
+  // 只在自己的记录里找 existing：避免两个用户 meds.id 碰巧一致时改到别人的服药日志
+  const existing = logs.find(l => l.username === u && l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
   if(existing){
     existing.status = status;
     existing.actual_time = new Date().toISOString();
     await DB.put('medlog', existing);
   } else {
     await DB.put('medlog', {
-      med_id: medId, username: currentUser || 'guest',
+      med_id: medId, username: u,
       scheduled_date: date, scheduled_time: timeSlot,
       status: status, actual_time: new Date().toISOString()
     });
@@ -5752,11 +5843,12 @@ async function saveFollowup(){
   const hospCheck = validateHospitalInput(hosp);
   if(!hospCheck.ok){ toast(hospCheck.msg); if(autoSpeak) autoSpeak(hospCheck.msg); return; }
   const remind = parseInt($('followupRemind').value) || 7;
-  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
+  const chronic = await getMyChronic(selectedChronicId); // 归属校验
+  if(!chronic){ toast('档案不存在或无权操作'); selectedChronicId = null; renderChronicList(); return; }
   const rec = {
     disease_id: selectedChronicId,
     username: currentUser || 'guest',
-    disease_type: chronic ? chronic.disease_type : 'other',
+    disease_type: chronic.disease_type,
     next_visit_date: date,
     department: dept,
     hospital: hosp,
@@ -5780,15 +5872,15 @@ async function saveFollowup(){
 }
 
 async function renderFollowups(){
-  const all = await DB.all('followups');
-  const mine = all.filter(f => f.disease_id === selectedChronicId && !f.is_completed).sort((a,b) => new Date(a.next_visit_date) - new Date(b.next_visit_date));
+  const mine = await allMine('followups'); // 只显示自己的复诊提醒
+  const list = mine.filter(f => f.disease_id === selectedChronicId && !f.is_completed).sort((a,b) => new Date(a.next_visit_date) - new Date(b.next_visit_date));
   const el = $('followupList');
-  if(!mine.length){
+  if(!list.length){
     el.innerHTML = '<p class="hint">暂无复诊提醒</p>';
     return;
   }
   const now = new Date().toISOString().slice(0, 10);
-  el.innerHTML = mine.map(f => {
+  el.innerHTML = list.map(f => {
     const isSoon = f.next_visit_date <= now;
     const label = DISEASE_LABELS[f.disease_type] || f.disease_type;
     return '<div class="med-item" style="' + (isSoon ? 'border-color:#ef4444;' : '') + '">'
@@ -5802,15 +5894,16 @@ async function renderFollowups(){
 }
 
 async function completeFollowup(id){
-  const rec = await DB.get('followups', id);
-  if(rec){ rec.is_completed = true; await DB.put('followups', rec); }
+  const own = await ensureMine('followups', id);
+  if(!own){ toast('无权操作该记录'); return; }
+  own.is_completed = true;
+  await DB.put('followups', own);
   toast('已标记完成');
   renderFollowups();
 }
 
 async function renderChronicAlerts(){
-  const all = await DB.all('chronic');
-  const chronic = all.find(c => c.id === selectedChronicId);
+  const chronic = await getMyChronic(selectedChronicId); // 只校验自己的档案
   if(!chronic){ $('chronicAlertList').innerHTML = ''; return; }
   if(currentUser && cloudUsable()){
     try{
