@@ -2423,7 +2423,7 @@ async function doLogin(){
           if(rows[0].pass_hash === h){
             code = rows[0].family_code;
             role = rows[0].role || null;
-            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:role || pickedRole, created:Date.now()});
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, created:Date.now()});
           } else { wrongPass = true; }
         }
       } else if(res.status === 400){
@@ -2434,7 +2434,7 @@ async function doLogin(){
           if(rows.length){
             if(rows[0].pass_hash === h){
               code = rows[0].family_code;
-              await DB.put('users', {id:u, pass_hash:h, familyCode:code, created:Date.now()});
+              await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, created:Date.now()});
             } else { wrongPass = true; }
           }
         }
@@ -2452,7 +2452,20 @@ async function doLogin(){
   }
   currentUser = u; localStorage.setItem('med_user', u);
   myFamilyCode = code || String(Math.floor(100000 + Math.random()*900000));
-  setRole(role || pickedRole);
+  // 同一账号以登录时选择的身份为准，两端适配分别按所选身份
+  setRole(pickedRole);
+  // 将所选身份写回云端与本机，下次登录默认选中该身份
+  if(cloudUsable()){
+    try{
+      await sbFetch('users?id=eq.' + encodeURIComponent(u), {
+        method:'PATCH',
+        headers:{'Prefer':'return=minimal'},
+        body: JSON.stringify({role:pickedRole})
+      });
+    }catch(e){}
+  }
+  const localRec = await DB.get('users', u);
+  if(localRec){ localRec.role = pickedRole; await DB.put('users', localRec); }
   toast('登录成功，欢迎回来');
   closeAuth(); afterLogin();
 }
@@ -2466,7 +2479,7 @@ function quickUse(){
 }
 function afterLogin(){
   const rec = DB.get('users', currentUser);
-  rec.then(r => { if(r){ myFamilyCode = r.familyCode; if(r.role) setRole(r.role); updateUserUI(); } });
+  rec.then(r => { if(r){ myFamilyCode = r.familyCode; updateUserUI(); } });
   // 按身份切换界面模式：老人自动关怀模式，家属标准模式+默认黑暗模式
   localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
   if(myRole === 'family'){
