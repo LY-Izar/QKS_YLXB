@@ -474,25 +474,26 @@
 
   <!-- 家属端 -->
   <div class="view" id="view-family">
-    <h1>家属端</h1>
-    <p class="lead">让家人实时了解您的就医与用药情况。</p>
-    <div class="card">
-      <h2>👨‍👩‍👧 绑定家属</h2>
-      <p class="sub">把下面的"家庭码"告诉家人，家人在自己设备上输入即可实时同步。</p>
+    <h1 id="familyTitle">家属端</h1>
+    <p class="lead" id="familyLead">让家人实时了解您的就医与用药情况。</p>
+    <div class="card" id="cardElderCode">
+      <h2>👨‍👩‍👧 我的邀请码</h2>
+      <p class="sub">把下面的邀请码告诉家人，家人在「我是家属」身份下输入，即可在手机上查看您的健康动态。</p>
       <div class="gap6">
         <div class="inp center" style="font-family:ui-monospace,monospace;font-weight:800;letter-spacing:2px;font-size:20px;" id="familyCode">—</div>
-        <button class="btn block ghost sm" onclick="copyCode()">复制家庭码</button>
+        <button class="btn block ghost sm" onclick="copyCode()">复制邀请码</button>
       </div>
-      <div class="divider"></div>
-      <h2>🔗 我是家属</h2>
-      <p class="sub">输入长辈的家庭码，实时查看他的用药与就医动态。</p>
+    </div>
+    <div class="card" id="cardFamilyBind">
+      <h2>🔗 绑定老人</h2>
+      <p class="sub">输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。</p>
       <div class="gap6">
-        <input class="inp" id="bindCode" placeholder="输入 6 位家庭码">
+        <input class="inp" id="bindCode" placeholder="输入老人的 6 位邀请码">
         <button class="btn block" onclick="bindFamily()">绑定并查看</button>
       </div>
     </div>
-    <div class="card">
-      <h2>📋 家人实时动态</h2>
+    <div class="card" id="cardFamilyFeed">
+      <h2>📋 家人健康动态</h2>
       <div id="familyFeed"></div>
     </div>
   </div>
@@ -524,6 +525,12 @@
     </label>
     <label class="f">密码
       <input class="inp" id="authPass" type="password" placeholder="请输入密码">
+    </label>
+    <label class="f" id="rolePick">我的身份
+      <div class="gap6">
+        <button class="btn block" id="roleElder" onclick="pickRole('elder')">👵 我是老人</button>
+        <button class="btn block ghost" id="roleFamily" onclick="pickRole('family')">👨‍👩‍👧 我是家属</button>
+      </div>
     </label>
     <div class="gap6">
       <button class="btn block" onclick="doLogin()">登录</button>
@@ -1342,6 +1349,7 @@ function notify(msg){
 /* ==================== 语音 ==================== */
 function speak(text, rate){
   try{
+    if(myRole === 'family') return;
     if(!('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -1361,7 +1369,7 @@ function speakCurrent(){
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
     'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
-    'view-family':'家属端。把家庭码告诉家人，家人可以实时查看您的用药和就医动态。'
+    'view-family':'家属端。把屏幕上的邀请码告诉家人，家人就可以在手机上查看您的健康动态。'
   };
   speak(map[v] || '');
 }
@@ -1720,9 +1728,23 @@ async function sbFetch(path, opts){
 }
 
 /* ==================== 登录 / 注册 ==================== */
+let myRole = localStorage.getItem('med_role') || 'elder';
+let pickedRole = myRole;
+function pickRole(r){
+  pickedRole = r;
+  $('roleElder').className = 'btn block' + (r === 'elder' ? '' : ' ghost');
+  $('roleFamily').className = 'btn block' + (r === 'family' ? '' : ' ghost');
+}
+function setRole(r){
+  myRole = r || 'elder';
+  localStorage.setItem('med_role', myRole);
+  pickedRole = myRole;
+  updateFamilyView();
+}
 function openAuth(){
   $('authMask').classList.add('show');
   $('authTitle').textContent = currentUser ? '切换账号' : '登录 / 注册';
+  pickRole(myRole);
 }
 function closeAuth(){ $('authMask').classList.remove('show'); }
 async function doRegister(){
@@ -1737,11 +1759,19 @@ async function doRegister(){
   }
   if(h){
     try{
-      const res = await sbFetch('users', {
+      let res = await sbFetch('users', {
         method: 'POST',
         headers: {'Prefer': 'return=minimal'},
-        body: JSON.stringify({id:u, pass_hash:h, family_code:code})
+        body: JSON.stringify({id:u, pass_hash:h, family_code:code, role:pickedRole})
       });
+      if(!res.ok && res.status === 400){
+        // 云端尚未加 role 列，降级重试
+        res = await sbFetch('users', {
+          method: 'POST',
+          headers: {'Prefer': 'return=minimal'},
+          body: JSON.stringify({id:u, pass_hash:h, family_code:code})
+        });
+      }
       if(res.ok){
         note = '账号已存云端，任意设备可登录';
       } else {
@@ -1752,9 +1782,10 @@ async function doRegister(){
       }
     }catch(e){ note = '已保存本机（云端连接失败）'; }
   }
-  await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, created:Date.now()});
+  await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, role:pickedRole, created:Date.now()});
   currentUser = u; localStorage.setItem('med_user', u);
   myFamilyCode = code;
+  setRole(pickedRole);
   toast('注册成功，' + note);
   closeAuth(); afterLogin();
 }
@@ -1769,25 +1800,38 @@ async function localVerify(rec, p){
 async function doLogin(){
   const u = $('authUser').value.trim(), p = $('authPass').value;
   if(!u || !p){ toast('请输入账号和密码'); return; }
-  let code = null, wrongPass = false, netFail = false;
+  let code = null, role = null, wrongPass = false, netFail = false;
   if(cloudUsable()){
     try{
       const h = await hashPass(p);
-      const res = await sbFetch('users?select=id,pass_hash,family_code&id=eq.' + encodeURIComponent(u));
+      let res = await sbFetch('users?select=id,pass_hash,family_code,role&id=eq.' + encodeURIComponent(u));
       if(res.ok){
         const rows = await res.json();
         if(rows.length){
           if(rows[0].pass_hash === h){
             code = rows[0].family_code;
-            await DB.put('users', {id:u, pass_hash:h, familyCode:code, created:Date.now()});
+            role = rows[0].role || null;
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:role || pickedRole, created:Date.now()});
           } else { wrongPass = true; }
+        }
+      } else if(res.status === 400){
+        // 云端尚未加 role 列，降级查询
+        const res2 = await sbFetch('users?select=id,pass_hash,family_code&id=eq.' + encodeURIComponent(u));
+        if(res2.ok){
+          const rows = await res2.json();
+          if(rows.length){
+            if(rows[0].pass_hash === h){
+              code = rows[0].family_code;
+              await DB.put('users', {id:u, pass_hash:h, familyCode:code, created:Date.now()});
+            } else { wrongPass = true; }
+          }
         }
       }
     }catch(e){ netFail = true; }
   }
   if(!code && !wrongPass){
     const rec = await DB.get('users', u);
-    if(await localVerify(rec, p)) code = rec.familyCode;
+    if(await localVerify(rec, p)){ code = rec.familyCode; role = rec.role || null; }
   }
   if(!code){
     if(netFail && cloudUsable()){ toast('云端连接失败，本机也没有该账号'); speak('登录失败，请检查网络'); }
@@ -1796,6 +1840,7 @@ async function doLogin(){
   }
   currentUser = u; localStorage.setItem('med_user', u);
   myFamilyCode = code || String(Math.floor(100000 + Math.random()*900000));
+  setRole(role || pickedRole);
   toast('登录成功，欢迎回来');
   closeAuth(); afterLogin();
 }
@@ -1809,9 +1854,13 @@ function quickUse(){
 }
 function afterLogin(){
   const rec = DB.get('users', currentUser);
-  rec.then(r => { if(r) myFamilyCode = r.familyCode; });
-  go('home'); updateUserUI();
-  speak('登录成功，欢迎回来');
+  rec.then(r => { if(r){ myFamilyCode = r.familyCode; if(r.role) setRole(r.role); updateUserUI(); } });
+  // 按身份切换界面模式：老人自动关怀模式，家属标准模式
+  localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
+  applyMode();
+  if(myRole === 'family' && familyBind) pullCloudEvents(familyBind);
+  go(myRole === 'family' ? 'family' : 'home'); updateUserUI();
+  if(myRole === 'elder') speak('登录成功，欢迎回来');
 }
 function updateUserUI(){
   if(currentUser){
@@ -1824,6 +1873,18 @@ function updateUserUI(){
     $('btnLogin').textContent = '登录 / 注册';
   }
   $('familyCode').textContent = currentUser ? (myFamilyCode || '—') : '请先登录获取';
+  updateFamilyView();
+}
+function updateFamilyView(){
+  const elder = myRole !== 'family';
+  const showCode = $('cardElderCode'), showBind = $('cardFamilyBind'), showFeed = $('cardFamilyFeed');
+  if(showCode) showCode.style.display = elder ? '' : 'none';
+  if(showBind) showBind.style.display = elder ? 'none' : '';
+  if(showFeed) showFeed.style.display = elder ? 'none' : '';
+  $('familyTitle').textContent = elder ? '家属端' : '家人健康';
+  $('familyLead').textContent = elder
+    ? '把邀请码告诉家人，家人就能在手机上看到您的健康动态。'
+    : '绑定老人后，可实时查看老人的症状自查、用药情况和前往医院记录。';
 }
 
 /* ==================== 症状自查 ==================== */
@@ -2450,6 +2511,7 @@ function renderHospitalsAMap(){
 function goHospital(name){
   speak('已选择' + name + '。您可以使用手机地图软件进行导航。');
   toast('正在打开 ' + name);
+  addEvent('医院', '准备前往「' + name + '」就诊');
   const h = amapHospitals.find(x=>x.name===name) || HOSPITALS.find(x=>x.name===name);
   if(h) window.open('https://uri.amap.com/navigation?to=' + h.lng + ',' + h.lat + ',' + encodeURIComponent(h.name), '_blank');
   else toast('未找到该医院的导航信息');
@@ -2473,6 +2535,28 @@ function addEvent(type, text){
   DB.put('events', ev);
   if(bc) bc.postMessage(ev);
   appendFeed(ev, true);
+  // 老人端事件上传云端，供家属跨设备查看
+  if(myRole === 'elder' && cloudUsable()){
+    sbFetch('events', {
+      method: 'POST',
+      headers: {'Prefer': 'return=minimal'},
+      body: JSON.stringify({family_code:myFamilyCode, type:type, text:text})
+    }).catch(()=>{});
+  }
+}
+async function pullCloudEvents(code){
+  if(!cloudUsable() || !code) return;
+  try{
+    const res = await sbFetch('events?select=id,family_code,type,text,created_at&family_code=eq.' + encodeURIComponent(code) + '&order=created_at.desc&limit=30');
+    if(!res.ok) return;
+    const rows = await res.json();
+    if(!rows.length) return;
+    const feed = $('familyFeed');
+    feed.innerHTML = '';
+    rows.reverse().forEach(e => {
+      appendFeed({familyCode:e.family_code, type:e.type, text:e.text, time:new Date(e.created_at).getTime()}, false);
+    });
+  }catch(e){}
 }
 function appendFeed(ev, isSelf){
   const feed = $('familyFeed');
@@ -2486,21 +2570,23 @@ function appendFeed(ev, isSelf){
 }
 function copyCode(){
   const code = $('familyCode').textContent;
-  if(code === '—' || code === '请先登录获取'){ toast('请先登录获取家庭码'); return; }
-  if(navigator.clipboard){ navigator.clipboard.writeText(code).then(()=>toast('已复制家庭码')); }
-  else { toast('家庭码：' + code); }
+  if(code === '—' || code === '请先登录获取'){ toast('请先登录获取邀请码'); return; }
+  if(navigator.clipboard){ navigator.clipboard.writeText(code).then(()=>toast('已复制邀请码')); }
+  else { toast('邀请码：' + code); }
 }
 function bindFamily(){
   const code = $('bindCode').value.trim();
-  if(code.length !== 6){ toast('请输入 6 位家庭码'); return; }
+  if(code.length !== 6){ toast('请输入 6 位邀请码'); return; }
   familyBind = code;
   localStorage.setItem('med_bind', code);
   $('familyFeed').innerHTML = '';
-  toast('已绑定家庭码 ' + code + '，可实时查看家人动态');
-  speak('绑定成功，现在可以实时查看家人的动态。');
-  // 拉取历史事件
+  toast('已绑定邀请码 ' + code + '，正在获取家人动态');
+  pullCloudEvents(code);
+  // 本机历史事件兜底
   DB.all('events').then(evs=>{
-    evs.filter(e=>e.familyCode===code).slice(-10).forEach(e=>appendFeed(e, false));
+    if($('familyFeed').children.length === 0){
+      evs.filter(e=>e.familyCode===code).slice(-10).forEach(e=>appendFeed(e, false));
+    }
   });
 }
 
@@ -2521,13 +2607,20 @@ async function init(){
   $('drugSearch').addEventListener('input', renderDrugLib);
   if(currentUser){
     const rec = await DB.get('users', currentUser);
-    if(rec) myFamilyCode = rec.familyCode;
+    if(rec){
+      myFamilyCode = rec.familyCode;
+      if(rec.role) setRole(rec.role);
+    }
     updateUserUI();
+    // 已登录家属自动拉取绑定老人的云端动态
+    if(myRole === 'family' && familyBind) pullCloudEvents(familyBind);
   } else {
     myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   }
   // 定时检查用药提醒（每30秒）
   setInterval(checkMeds, 30000);
+  // 家属端定时刷新老人动态（每60秒）
+  setInterval(()=>{ if(myRole === 'family' && familyBind) pullCloudEvents(familyBind); }, 60000);
   checkMeds();
 }
 document.addEventListener('DOMContentLoaded', init);
