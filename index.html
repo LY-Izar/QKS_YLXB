@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
     /* 普通模式（清爽医护蓝绿） */
@@ -558,6 +559,7 @@
   body.dark main{background:var(--bg);}
   body.dark .view{background:transparent;}
   body.dark #view-family{background:var(--bg);}
+  body.dark #view-chronic{background:var(--bg);}
   @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 
   h1{
@@ -894,6 +896,7 @@
     <li><a class="nav-link" data-v="symptom" onclick="go('symptom')"><span class="nm-s">自查</span><span class="nm-f">症状自查</span></a></li>
     <li><a class="nav-link" data-v="flow" onclick="go('flow')"><span class="nm-s">流程</span><span class="nm-f">就医流程</span></a></li>
     <li><a class="nav-link" data-v="med" onclick="go('med')"><span class="nm-s">用药</span><span class="nm-f">用药提醒</span></a></li>
+    <li><a class="nav-link" data-v="chronic" onclick="go('chronic')"><span class="nm-s">慢病</span><span class="nm-f">慢性病管理</span></a></li>
     <li><a class="nav-link" data-v="more" onclick="go('hospital')"><span class="nm-s">医院</span><span class="nm-f">找医院</span></a></li>
     <li><a class="nav-link" data-v="welcome" onclick="go('welcome')">账户</a></li>
   </ul>
@@ -934,6 +937,7 @@
       <button class="tile feature" onclick="go('symptom')"><span class="ic">🔍</span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
       <button class="tile" onclick="go('flow')"><span class="ic">🗺️</span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
       <button class="tile" onclick="go('med')"><span class="ic">💊</span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
+      <button class="tile" onclick="go('chronic')"><span class="ic">📊</span><span class="nm">慢病管理</span><span class="ds">记指标 · 看趋势 · 防未然</span></button>
       <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
       <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
       <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc">👨‍👩‍👧</span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
@@ -1041,6 +1045,113 @@
     <p class="hint center">本知识库仅供健康参考，不能替代医生诊断与处方；用药以医嘱和药品说明书为准。</p>
   </div>
 
+  <!-- 慢病管理 -->
+  <div class="view" id="view-chronic">
+    <h1>慢性病管理</h1>
+    <p class="lead">记录指标、查看趋势、管理用药，慢性病不再难管。</p>
+    <div class="card" style="margin-bottom:12px;">
+      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+    </div>
+
+    <!-- 慢病档案 -->
+    <div class="card">
+      <h2>📋 我的慢病档案</h2>
+      <div id="chronicList"></div>
+      <div class="divider"></div>
+      <label class="f">疾病类型</label>
+      <select class="inp" id="chronicType" onchange="onChronicTypeChange()">
+        <option value="">请选择…</option>
+        <option value="hypertension">高血压</option>
+        <option value="diabetes">糖尿病</option>
+        <option value="coronary">冠心病</option>
+        <option value="hyperlipid">高血脂</option>
+        <option value="copd">慢阻肺</option>
+        <option value="other">其他</option>
+      </select>
+      <div id="chronicFormFields" style="display:none;">
+        <label class="f" style="margin-top:10px;">确诊日期</label>
+        <input class="inp" type="date" id="chronicDate" maxlength="20">
+        <label class="f" style="margin-top:10px;">确诊医院</label>
+        <div class="inputrow">
+          <input class="inp" id="chronicHosp" placeholder="如：市第一人民医院" maxlength="50" autocomplete="off">
+          <button class="btn line" onclick="voiceToInput('chronicHosp')" title="语音输入">🎤</button>
+        </div>
+        <label class="f" style="margin-top:10px;">个人目标范围</label>
+        <div id="chronicTargets" style="margin-top:6px;"></div>
+        <button class="btn block" style="margin-top:10px;" onclick="saveChronic()">保存档案</button>
+      </div>
+    </div>
+
+    <!-- 指标录入 -->
+    <div class="card" id="chronicMetricCard" style="display:none;">
+      <h2>📝 录入指标</h2>
+      <label class="f">指标类型</label>
+      <select class="inp" id="metricType" onchange="onMetricTypeChange()">
+        <option value="bp">血压（收缩压/舒张压）</option>
+        <option value="fasting">空腹血糖</option>
+        <option value="postprandial">餐后血糖</option>
+        <option value="heart_rate">心率</option>
+        <option value="weight">体重</option>
+      </select>
+      <div id="metricInputArea" style="margin-top:10px;"></div>
+      <label class="f" style="margin-top:10px;">备注（可选）</label>
+      <div class="inputrow">
+        <input class="inp" id="metricNote" placeholder="如：饭后两小时" maxlength="100" autocomplete="off">
+        <button class="btn line" onclick="voiceToInput('metricNote')" title="语音输入">🎤</button>
+      </div>
+      <button class="btn block" style="margin-top:10px;" onclick="saveMetric()">✅ 保存指标</button>
+      <div id="metricHistory" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- 趋势图表 -->
+    <div class="card" id="chronicChartCard" style="display:none;">
+      <h2>📈 趋势图表</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <button class="btn sm line" onclick="renderChart('7d')">近7天</button>
+        <button class="btn sm line" onclick="renderChart('30d')">近30天</button>
+        <button class="btn sm line" onclick="renderChart('90d')">近90天</button>
+      </div>
+      <div style="position:relative;height:300px;">
+        <canvas id="chronicChart"></canvas>
+      </div>
+      <div class="hint" id="chartHint" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- 用药依从性 -->
+    <div class="card" id="chronicComplianceCard" style="display:none;">
+      <h2>✅ 用药依从性</h2>
+      <div id="complianceStats" style="margin-bottom:12px;"></div>
+      <div id="complianceCalendar"></div>
+    </div>
+
+    <!-- 复诊提醒 -->
+    <div class="card" id="chronicFollowupCard" style="display:none;">
+      <h2>🏥 复诊提醒</h2>
+      <div id="followupList"></div>
+      <div class="divider"></div>
+      <label class="f">复诊日期</label>
+      <input class="inp" type="date" id="followupDate" maxlength="20">
+      <label class="f" style="margin-top:10px;">科室</label>
+      <input class="inp" id="followupDept" placeholder="如：心内科" maxlength="50" autocomplete="off">
+      <label class="f" style="margin-top:10px;">医院</label>
+      <input class="inp" id="followupHosp" placeholder="如：市第一人民医院" maxlength="50" autocomplete="off">
+      <label class="f" style="margin-top:10px;">提前几天提醒</label>
+      <select class="inp" id="followupRemind">
+        <option value="1">提前1天</option>
+        <option value="3">提前3天</option>
+        <option value="7" selected>提前7天</option>
+        <option value="14">提前14天</option>
+      </select>
+      <button class="btn block" style="margin-top:10px;" onclick="saveFollowup()">添加复诊提醒</button>
+    </div>
+
+    <!-- 预警列表 -->
+    <div class="card" id="chronicAlertCard" style="display:none;">
+      <h2>⚠️ 健康预警</h2>
+      <div id="chronicAlertList"></div>
+    </div>
+  </div>
+
   <!-- 找医院 -->
   <div class="view" id="view-hospital">
     <h1>找附近医院</h1>
@@ -1092,6 +1203,10 @@
     <div class="card" id="cardFamilyFeed">
       <h2>📋 家人健康动态</h2>
       <div id="familyFeed"></div>
+    </div>
+    <div class="card" id="cardChronicSummary" style="display:none;">
+      <h2>📊 慢病摘要</h2>
+      <div id="chronicSummaryContent"></div>
     </div>
     <div class="card" id="cardPushSettings">
       <h2>🔔 远程提醒设置</h2>
@@ -2266,12 +2381,16 @@ const DB = {
   db: null,
   open(){
     return new Promise((res, rej)=>{
-      const req = indexedDB.open('medical_nav', 1);
+      const req = indexedDB.open('medical_nav', 2);
       req.onupgradeneeded = e => {
         const d = e.target.result;
         if(!d.objectStoreNames.contains('users')) d.createObjectStore('users', {keyPath:'id'});
         if(!d.objectStoreNames.contains('meds')) d.createObjectStore('meds', {keyPath:'id', autoIncrement:true});
         if(!d.objectStoreNames.contains('events')) d.createObjectStore('events', {keyPath:'id', autoIncrement:true});
+        if(!d.objectStoreNames.contains('chronic')) d.createObjectStore('chronic', {keyPath:'id', autoIncrement:true});
+        if(!d.objectStoreNames.contains('metrics')) d.createObjectStore('metrics', {keyPath:'id', autoIncrement:true});
+        if(!d.objectStoreNames.contains('followups')) d.createObjectStore('followups', {keyPath:'id', autoIncrement:true});
+        if(!d.objectStoreNames.contains('medlog')) d.createObjectStore('medlog', {keyPath:'id', autoIncrement:true});
       };
       req.onsuccess = e => { this.db = e.target.result; res(); };
       req.onerror = e => rej(e);
@@ -2629,6 +2748,7 @@ function speakCurrent(){
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
     'view-druglib':'药品库。可以按药名、商品名或英文名搜索常用药，查看用途、用法和注意事项。',
+    'view-chronic':'慢性病管理。可以创建慢病档案、录入血压血糖等指标、查看趋势图表、管理用药依从性和复诊提醒。',
     'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
     'view-family': myRole === 'family'
       ? '查看亲属。输入老人端的邀请码，即可实时查看老人的症状自查、用药情况和前往医院记录。'
@@ -3079,6 +3199,9 @@ function go(view){
     updatePWABadge();
     updatePPBadge();
   }
+  if(view === 'chronic'){
+    renderChronicList();
+  }
   // 页面自动播报：老人端全程触发；家属端不自动出声（需点🔊按钮）
   if(myRole === 'elder' && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
 }
@@ -3189,6 +3312,8 @@ function resetAppState(){
   renderFlow();
   renderMeds();
   renderTimeInputs($('medFreq')?.value || 'daily');
+  selectedChronicId = null;
+  renderChronicList();
 }
 async function doRegister(){
   const u = sanitizeUsername($('authUser').value);
@@ -4357,8 +4482,75 @@ function selectElder(code){
   currentViewBind = code;
   renderBoundList();
   pullCloudEvents(code);
+  renderChronicSummary(code);
   const idx = familyBinds.indexOf(code);
   toast('正在查看老人 ' + (idx + 1) + ' 的健康动态');
+}
+
+async function renderChronicSummary(elderCode){
+  const card = $('cardChronicSummary');
+  const el = $('chronicSummaryContent');
+  if(!card || !el) return;
+  if(myRole !== 'family' || !elderCode || !cloudUsable()){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  el.innerHTML = '<p class="hint">加载中…</p>';
+  try{
+    const elderUser = await getElderUsername(elderCode);
+    if(!elderUser){
+      el.innerHTML = '<p class="hint">无法获取老人账号信息</p>';
+      return;
+    }
+    let html = '';
+    const res = await sbFetch('health_metrics?username=eq.' + encodeURIComponent(elderUser) + '&order=measured_at.desc&limit=20');
+    if(res.ok){
+      const rows = await res.json();
+      const byType = {};
+      rows.forEach(r => {
+        if(!byType[r.metric_type]) byType[r.metric_type] = r;
+      });
+      if(Object.keys(byType).length){
+        html += '<div class="gap6">';
+        for(const [type, m] of Object.entries(byType)){
+          const label = METRIC_LABELS[type] || type;
+          const val = type === 'bp' ? m.value1 + '/' + (m.value2||'-') + ' mmHg'
+            : m.value1 + (type === 'weight' ? ' kg' : (type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
+          const time = new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+          html += '<div class="med-item"><div style="flex:1;"><b>' + label + '</b> <span style="font-size:18px;font-weight:700;color:var(--primary);">' + val + '</span><div class="hint">' + time + '</div></div></div>';
+        }
+        html += '</div>';
+      } else {
+        html += '<p class="hint">老人暂未录入指标</p>';
+      }
+    }
+    const alertRes = await sbFetch('chronic_alerts?username=eq.' + encodeURIComponent(elderUser) + '&is_read=eq.false&order=created_at.desc&limit=5');
+    if(alertRes.ok){
+      const alerts = await alertRes.json();
+      if(alerts.length){
+        html += '<div class="divider"></div><p class="sub" style="margin-bottom:4px;">未读预警（' + alerts.length + '）</p>';
+        alerts.forEach(a => {
+          const color = a.alert_level === 'critical' ? '#ef4444' : (a.alert_level === 'warning' ? '#eab308' : '#3b82f6');
+          html += '<div class="med-item" style="border-left:3px solid ' + color + ';"><div style="font-weight:700;color:' + color + ';">' + (a.title||'预警') + '</div><div>' + (a.message||'') + '</div></div>';
+        });
+      }
+    }
+    el.innerHTML = html || '<p class="hint">暂无慢病数据</p>';
+  }catch(e){
+    el.innerHTML = '<p class="hint">数据加载失败，请稍后重试</p>';
+  }
+}
+
+async function getElderUsername(code){
+  try{
+    const res = await sbFetch('users?family_code=eq.' + code + '&select=username');
+    if(res.ok){
+      const rows = await res.json();
+      if(rows.length) return rows[0].username;
+    }
+  }catch(e){}
+  return null;
 }
 function unbindOne(code){
   if(!confirm('确定要解除绑定邀请码 ' + code + ' 的老人吗？')) return;
@@ -4400,6 +4592,513 @@ function bindFamily(){
   });
 }
 
+/* ==================== 慢性病管理 ==================== */
+const DISEASE_LABELS = {
+  hypertension:'高血压', diabetes:'糖尿病', coronary:'冠心病',
+  hyperlipid:'高血脂', copd:'慢阻肺', other:'其他'
+};
+const METRIC_LABELS = {
+  bp:'血压', fasting:'空腹血糖', postprandial:'餐后血糖',
+  heart_rate:'心率', weight:'体重'
+};
+const DEFAULT_TARGETS = {
+  hypertension:{ systolic_low:90, systolic_high:140, diastolic_low:60, diastolic_high:90 },
+  diabetes:{ fasting_low:4.4, fasting_high:7.0, postprandial_low:4.4, postprandial_high:11.1 },
+  coronary:{ heart_rate_low:60, heart_rate_high:100 },
+  hyperlipid:{},
+  copd:{},
+  other:{}
+};
+let chronicChart = null;
+let currentChronicRange = '30d';
+
+function onChronicTypeChange(){
+  const v = $('chronicType').value;
+  $('chronicFormFields').style.display = v ? 'block' : 'none';
+  if(!v) return;
+  const t = DEFAULT_TARGETS[v] || {};
+  let html = '';
+  if(v === 'hypertension'){
+    html = '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<label class="f" style="flex:1;min-width:80px;">收缩压上限<input class="inp" type="number" id="t_sy_hi" value="' + (t.systolic_high||140) + '" style="width:70px;"></label>'
+      + '<label class="f" style="flex:1;min-width:80px;">收缩压下限<input class="inp" type="number" id="t_sy_lo" value="' + (t.systolic_low||90) + '" style="width:70px;"></label>'
+      + '<label class="f" style="flex:1;min-width:80px;">舒张压上限<input class="inp" type="number" id="t_dia_hi" value="' + (t.diastolic_high||90) + '" style="width:70px;"></label>'
+      + '<label class="f" style="flex:1;min-width:80px;">舒张压下限<input class="inp" type="number" id="t_dia_lo" value="' + (t.diastolic_low||60) + '" style="width:70px;"></label>'
+      + '</div>';
+  } else if(v === 'diabetes'){
+    html = '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<label class="f" style="flex:1;min-width:80px;">空腹上限<input class="inp" type="number" step="0.1" id="t_fast_hi" value="' + (t.fasting_high||7.0) + '" style="width:70px;"></label>'
+      + '<label class="f" style="flex:1;min-width:80px;">空腹下限<input class="inp" type="number" step="0.1" id="t_fast_lo" value="' + (t.fasting_low||4.4) + '" style="width:70px;"></label>'
+      + '<label class="f" style="flex:1;min-width:80px;">餐后上限<input class="inp" type="number" step="0.1" id="t_pp_hi" value="' + (t.postprandial_high||11.1) + '" style="width:70px;"></label>'
+      + '</div>';
+  } else if(v === 'coronary'){
+    html = '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<label class="f" style="flex:1;min-width:80px;">心率上限<input class="inp" type="number" id="t_hr_hi" value="' + (t.heart_rate_high||100) + '" style="width:70px;"></label>'
+      + '<label class="f" style="flex:1;min-width:80px;">心率下限<input class="inp" type="number" id="t_hr_lo" value="' + (t.heart_rate_low||60) + '" style="width:70px;"></label>'
+      + '</div>';
+  } else {
+    html = '<p class="hint">该疾病暂无默认目标范围，请遵医嘱。</p>';
+  }
+  $('chronicTargets').innerHTML = html;
+}
+
+async function saveChronic(){
+  const type = $('chronicType').value;
+  if(!type){ toast('请先选择疾病类型'); return; }
+  const date = $('chronicDate').value || '';
+  const hosp = sanitizeInput($('chronicHosp').value, 50);
+  const targets = collectTargets(type);
+  const rec = {
+    username: currentUser || 'guest',
+    disease_type: type,
+    diagnose_date: date,
+    hospital: hosp,
+    target_json: JSON.stringify(targets)
+  };
+  const id = await DB.put('chronic', rec);
+  if(currentUser && cloudUsable()){
+    sbFetch('chronic_profiles', {
+      method:'POST',
+      headers:{'Prefer':'return=representation'},
+      body: JSON.stringify({ id: Date.now(), username: currentUser, disease_type: type, diagnose_date: date, hospital: hosp, target_json: JSON.stringify(targets) })
+    }).catch(()=>{});
+  }
+  toast('档案已保存');
+  autoSpeak('档案已保存');
+  $('chronicType').value = '';
+  $('chronicFormFields').style.display = 'none';
+  $('chronicDate').value = '';
+  $('chronicHosp').value = '';
+  renderChronicList();
+}
+
+function collectTargets(type){
+  const t = {};
+  const get = id => { const el = $(id); return el ? parseFloat(el.value) : null; };
+  if(type === 'hypertension'){
+    t.systolic_high = get('t_sy_hi'); t.systolic_low = get('t_sy_lo');
+    t.diastolic_high = get('t_dia_hi'); t.diastolic_low = get('t_dia_lo');
+  } else if(type === 'diabetes'){
+    t.fasting_high = get('t_fast_hi'); t.fasting_low = get('t_fast_lo');
+    t.postprandial_high = get('t_pp_hi');
+  } else if(type === 'coronary'){
+    t.heart_rate_high = get('t_hr_hi'); t.heart_rate_low = get('t_hr_lo');
+  }
+  return t;
+}
+
+async function renderChronicList(){
+  const all = await DB.all('chronic');
+  const mine = all.filter(c => c.username === (currentUser || 'guest'));
+  const el = $('chronicList');
+  if(!mine.length){
+    el.innerHTML = '<p class="hint">暂无慢病档案，请在下方选择疾病类型创建。</p>';
+    hideChronicCards();
+    return;
+  }
+  el.innerHTML = mine.map(c => {
+    const label = DISEASE_LABELS[c.disease_type] || c.disease_type;
+    return '<div class="med-item" style="display:flex;align-items:center;gap:10px;">'
+      + '<div style="flex:1;cursor:pointer;" onclick="selectChronic(' + c.id + ')">'
+      + '<div style="font-weight:700;font-size:15px;">' + label + (c.id === selectedChronicId ? ' ●' : '') + '</div>'
+      + '<div class="hint">' + (c.diagnose_date ? '确诊 ' + c.diagnose_date : '') + (c.hospital ? ' · ' + c.hospital : '') + '</div>'
+      + '</div>'
+      + '<button class="btn sm line" onclick="delChronic(' + c.id + ')">删除</button>'
+      + '</div>';
+  }).join('');
+  if(!selectedChronicId) selectChronic(mine[0].id);
+}
+
+let selectedChronicId = null;
+
+function selectChronic(id){
+  selectedChronicId = id;
+  showChronicCards();
+  renderChronicList();
+  onMetricTypeChange();
+  renderMetricHistory();
+  renderChart(currentChronicRange);
+  renderCompliance();
+  renderFollowups();
+  renderChronicAlerts();
+}
+
+function hideChronicCards(){
+  ['chronicMetricCard','chronicChartCard','chronicComplianceCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
+    const el = $(id); if(el) el.style.display = 'none';
+  });
+}
+
+function showChronicCards(){
+  ['chronicMetricCard','chronicChartCard','chronicComplianceCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
+    const el = $(id); if(el) el.style.display = 'block';
+  });
+}
+
+async function delChronic(id){
+  if(!confirm('删除该慢病档案将同时删除其所有指标记录，确认？')) return;
+  await DB.del('chronic', id);
+  const all = await DB.all('metrics');
+  await Promise.all(all.filter(m => m.disease_id === id).map(m => DB.del('metrics', m.id)));
+  if(currentUser && cloudUsable()){
+    sbFetch('chronic_profiles?id=eq.' + id, { method:'DELETE' }).catch(()=>{});
+  }
+  if(selectedChronicId === id) selectedChronicId = null;
+  toast('已删除');
+  renderChronicList();
+}
+
+function onMetricTypeChange(){
+  const type = $('metricType').value;
+  const area = $('metricInputArea');
+  if(type === 'bp'){
+    area.innerHTML = '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<input class="inp" id="m_v1" type="number" placeholder="收缩压" style="width:100px;" inputmode="numeric">'
+      + '<span style="font-size:18px;">/</span>'
+      + '<input class="inp" id="m_v2" type="number" placeholder="舒张压" style="width:100px;" inputmode="numeric">'
+      + '<span class="hint">mmHg</span>'
+      + '<button class="btn line" onclick="voiceBP()">🎤 语音</button>'
+      + '</div>';
+  } else {
+    const ph = { fasting:'空腹血糖 mmol/L', postprandial:'餐后血糖 mmol/L', heart_rate:'心率 次/分', weight:'体重 kg' }[type] || '数值';
+    area.innerHTML = '<div style="display:flex;gap:8px;align-items:center;">'
+      + '<input class="inp" id="m_v1" type="number" step="0.1" placeholder="' + ph + '" style="width:160px;" inputmode="decimal">'
+      + '<button class="btn line" onclick="voiceToInput(\'m_v1\')" title="语音输入">🎤</button>'
+      + '</div>';
+  }
+}
+
+function voiceBP(){
+  askVoice('请说血压，如：高压130低压80', text => {
+    const m = text.match(/(\d{2,3})/g);
+    if(m && m.length >= 2){
+      $('m_v1').value = m[0];
+      $('m_v2').value = m[1];
+      toast('识别：' + m[0] + '/' + m[1]);
+    } else if(m && m.length === 1){
+      $('m_v1').value = m[0];
+      toast('已填入收缩压 ' + m[0] + '，请补充舒张压');
+    } else {
+      toast('未识别到血压数值，请手动输入');
+    }
+  });
+}
+
+async function saveMetric(){
+  if(!selectedChronicId){ toast('请先创建或选择慢病档案'); return; }
+  const type = $('metricType').value;
+  const v1 = parseFloat($('m_v1')?.value);
+  if(!v1 || v1 <= 0){ toast('请输入有效数值'); return; }
+  const v2 = type === 'bp' ? (parseFloat($('m_v2')?.value) || null) : null;
+  const note = sanitizeInput($('metricNote').value, 100);
+  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
+  const diseaseType = chronic ? chronic.disease_type : 'other';
+  const rec = {
+    disease_id: selectedChronicId,
+    username: currentUser || 'guest',
+    disease_type: diseaseType,
+    metric_type: type,
+    value1: v1,
+    value2: v2,
+    measured_at: new Date().toISOString(),
+    note: note
+  };
+  await DB.put('metrics', rec);
+  if(currentUser && cloudUsable()){
+    sbFetch('health_metrics', {
+      method:'POST',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({ username: currentUser, disease_type: diseaseType, metric_type: type, value1: v1, value2: v2, measured_at: rec.measured_at, note: note })
+    }).catch(()=>{});
+  }
+  toast('指标已保存');
+  const label = METRIC_LABELS[type] || type;
+  const display = type === 'bp' ? v1 + '/' + v2 + ' mmHg' : v1 + (type === 'weight' ? ' kg' : (type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
+  autoSpeak(label + ' ' + display + ' 已记录');
+  checkThreshold(type, v1, v2, chronic);
+  $('m_v1').value = '';
+  if($('m_v2')) $('m_v2').value = '';
+  $('metricNote').value = '';
+  renderMetricHistory();
+  renderChart(currentChronicRange);
+}
+
+function checkThreshold(type, v1, v2, chronic){
+  if(!chronic) return;
+  const targets = JSON.parse(chronic.target_json || '{}');
+  let level = null, msg = '';
+  if(type === 'bp'){
+    const sy = v1, dia = v2 || 0;
+    if(sy >= 180 || dia >= 110){
+      level = 'critical'; msg = '血压严重超标（' + sy + '/' + dia + '），请立即就医';
+    } else if(sy >= (targets.systolic_high||140) || dia >= (targets.diastolic_high||90)){
+      level = 'warning'; msg = '血压偏高（' + sy + '/' + dia + '），请注意监测';
+    }
+  } else if(type === 'fasting'){
+    if(v1 >= 11.1){ level = 'critical'; msg = '空腹血糖严重偏高（' + v1 + '），请尽快就医'; }
+    else if(v1 >= (targets.fasting_high||7.0)){ level = 'warning'; msg = '空腹血糖偏高（' + v1 + '），请关注饮食和用药'; }
+    else if(v1 < (targets.fasting_low||3.9)){ level = 'warning'; msg = '空腹血糖偏低（' + v1 + '），注意防范低血糖'; }
+  } else if(type === 'postprandial'){
+    if(v1 >= 16.7){ level = 'critical'; msg = '餐后血糖严重偏高（' + v1 + '），请尽快就医'; }
+    else if(v1 >= (targets.postprandial_high||11.1)){ level = 'warning'; msg = '餐后血糖偏高（' + v1 + '），请注意饮食控制'; }
+  } else if(type === 'heart_rate'){
+    if(v1 > 120 || v1 < 50){ level = 'warning'; msg = '心率异常（' + v1 + ' 次/分），请关注'; }
+  }
+  if(level){
+    const alertMsg = msg;
+    notify(alertMsg);
+    if(currentUser && cloudUsable()){
+      sbFetch('chronic_alerts', {
+        method:'POST',
+        headers:{'Prefer':'return=minimal'},
+        body: JSON.stringify({ username: currentUser, disease_type: chronic.disease_type, alert_level: level, title: '指标预警', message: alertMsg })
+      }).catch(()=>{});
+    }
+  }
+}
+
+async function renderMetricHistory(){
+  const all = await DB.all('metrics');
+  const mine = all.filter(m => m.disease_id === selectedChronicId).sort((a,b) => new Date(b.measured_at) - new Date(a.measured_at)).slice(0, 10);
+  const el = $('metricHistory');
+  if(!mine.length){
+    el.innerHTML = '<p class="hint">暂无记录</p>';
+    return;
+  }
+  el.innerHTML = '<p class="sub" style="margin-bottom:4px;">最近记录</p>'
+    + mine.map(m => {
+      const label = METRIC_LABELS[m.metric_type] || m.metric_type;
+      const val = m.metric_type === 'bp' ? m.value1 + '/' + (m.value2||'-') + ' mmHg'
+        : m.value1 + (m.metric_type === 'weight' ? ' kg' : (m.metric_type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
+      const time = new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      return '<div class="med-item" style="display:flex;align-items:center;gap:8px;">'
+        + '<div style="flex:1;"><b>' + label + '</b> ' + val
+        + (m.note ? ' <span class="hint">' + sanitizeInput(m.note, 50) + '</span>' : '')
+        + '<div class="hint">' + time + '</div></div>'
+        + '<button class="btn sm line" onclick="delMetric(' + m.id + ')">删</button>'
+        + '</div>';
+    }).join('');
+}
+
+async function delMetric(id){
+  await DB.del('metrics', id);
+  renderMetricHistory();
+  renderChart(currentChronicRange);
+}
+
+async function renderChart(range){
+  if(!window.Chart){ return; }
+  currentChronicRange = range;
+  const days = range === '7d' ? 7 : (range === '90d' ? 90 : 30);
+  const now = new Date();
+  const since = new Date(now.getTime() - days * 86400000);
+  const all = await DB.all('metrics');
+  const mine = all.filter(m => m.disease_id === selectedChronicId && new Date(m.measured_at) >= since)
+    .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
+  const el = $('chronicChart');
+  if(!el) return;
+  if(chronicChart){ chronicChart.destroy(); chronicChart = null; }
+  if(!mine.length){
+    $('chartHint').textContent = '该时段暂无数据';
+    return;
+  }
+  $('chartHint').textContent = '';
+  const ctx = el.getContext('2d');
+  const labels = mine.map(m => new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
+  const d1 = mine.map(m => m.value1);
+  const d2 = mine.map(m => m.value2);
+  const datasets = [{
+    label: '收缩压/主值',
+    data: d1,
+    borderColor: '#0f9d8f',
+    backgroundColor: 'rgba(15,157,143,0.1)',
+    tension: 0.3,
+    fill: true
+  }];
+  if(mine.some(m => m.value2 !== null && m.value2 !== undefined)){
+    datasets.push({
+      label: '舒张压',
+      data: d2,
+      borderColor: '#f59e0b',
+      backgroundColor: 'rgba(245,158,11,0.1)',
+      tension: 0.3,
+      fill: false
+    });
+  }
+  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
+  const targets = chronic ? JSON.parse(chronic.target_json || '{}') : {};
+  const annotations = [];
+  if(targets.systolic_high){
+    annotations.push({ type:'line', yMin: targets.systolic_high, yMax: targets.systolic_high, borderColor:'rgba(239,68,68,0.4)', borderWidth:1, borderDash:[5,5], label:{display:false} });
+  }
+  chronicChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { font:{ size: body.classList.contains('care') ? 16 : 12 } } },
+        tooltip: { bodyFont:{ size: body.classList.contains('care') ? 16 : 12 }, titleFont:{ size: body.classList.contains('care') ? 16 : 12 } }
+      },
+      scales: {
+        x: { ticks: { font:{ size: body.classList.contains('care') ? 14 : 10 }, maxRotation:45 } },
+        y: { ticks: { font:{ size: body.classList.contains('care') ? 14 : 10 } } }
+      }
+    }
+  });
+}
+
+async function renderCompliance(){
+  const meds = await DB.all('meds');
+  if(!meds.length){
+    $('complianceStats').innerHTML = '<p class="hint">暂未添加用药，请先到"用药提醒"添加药品。</p>';
+    $('complianceCalendar').innerHTML = '';
+    return;
+  }
+  const now = new Date();
+  const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
+  const logs = await DB.all('medlog');
+  const myLogs = logs.filter(l => l.username === (currentUser || 'guest') && new Date(l.scheduled_date) >= thirtyAgo);
+  const total = myLogs.length || 1;
+  const taken = myLogs.filter(l => l.status === 'taken').length;
+  const rate = Math.round(taken / total * 100);
+  $('complianceStats').innerHTML = '<div style="display:flex;align-items:center;gap:12px;">'
+    + '<div style="font-size:32px;font-weight:700;color:' + (rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + rate + '%</div>'
+    + '<div class="hint">近30天用药依从率<br>已服 ' + taken + ' / 应服 ' + total + ' 次</div>'
+    + '</div>';
+  const days = [];
+  for(let i = 29; i >= 0; i--){
+    const d = new Date(now.getTime() - i * 86400000);
+    const ds = d.toISOString().slice(0, 10);
+    const dayLogs = myLogs.filter(l => l.scheduled_date === ds);
+    const dayTotal = dayLogs.length;
+    const dayTaken = dayLogs.filter(l => l.status === 'taken').length;
+    const dayRate = dayTotal > 0 ? dayTaken / dayTotal : null;
+    const bg = dayRate === null ? 'var(--surface-2)' : (dayRate >= 1 ? '#22c55e' : (dayRate >= 0.5 ? '#eab308' : '#ef4444'));
+    days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;">'
+      + '<div style="width:24px;height:24px;border-radius:6px;background:' + bg + ';"></div>'
+      + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + (d.getMonth()+1) + '/' + d.getDate() + '</div>'
+      + '</div>');
+  }
+  $('complianceCalendar').innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + days.join('') + '</div>'
+    + '<div class="hint" style="margin-top:6px;">绿色=全部服用，黄色=部分服用，红色=未服，灰色=无记录</div>';
+}
+
+async function markMedTaken(medId, date, timeSlot, status){
+  const logs = await DB.all('medlog');
+  const existing = logs.find(l => l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
+  if(existing){
+    existing.status = status;
+    existing.actual_time = new Date().toISOString();
+    await DB.put('medlog', existing);
+  } else {
+    await DB.put('medlog', {
+      med_id: medId, username: currentUser || 'guest',
+      scheduled_date: date, scheduled_time: timeSlot,
+      status: status, actual_time: new Date().toISOString()
+    });
+  }
+  if(currentUser && cloudUsable()){
+    sbFetch('medication_logs', {
+      method:'POST',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({ username: currentUser, med_name: String(medId), scheduled_date: date, scheduled_time: timeSlot, status: status })
+    }).catch(()=>{});
+  }
+  toast(status === 'taken' ? '已记录服药' : '已记录跳过');
+  renderCompliance();
+}
+
+async function saveFollowup(){
+  if(!selectedChronicId){ toast('请先选择慢病档案'); return; }
+  const date = $('followupDate').value;
+  if(!date){ toast('请选择复诊日期'); return; }
+  const dept = sanitizeInput($('followupDept').value, 50);
+  const hosp = sanitizeInput($('followupHosp').value, 50);
+  const remind = parseInt($('followupRemind').value) || 7;
+  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
+  const rec = {
+    disease_id: selectedChronicId,
+    username: currentUser || 'guest',
+    disease_type: chronic ? chronic.disease_type : 'other',
+    next_visit_date: date,
+    department: dept,
+    hospital: hosp,
+    reminder_days_before: remind,
+    is_completed: false
+  };
+  await DB.put('followups', rec);
+  if(currentUser && cloudUsable()){
+    sbFetch('follow_ups', {
+      method:'POST',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({ username: currentUser, disease_type: rec.disease_type, next_visit_date: date, department: dept, hospital: hosp, notes: '', reminder_days_before: remind })
+    }).catch(()=>{});
+  }
+  toast('复诊提醒已添加');
+  autoSpeak('复诊提醒已添加，' + date + ' ' + dept);
+  $('followupDate').value = '';
+  $('followupDept').value = '';
+  $('followupHosp').value = '';
+  renderFollowups();
+}
+
+async function renderFollowups(){
+  const all = await DB.all('followups');
+  const mine = all.filter(f => f.disease_id === selectedChronicId && !f.is_completed).sort((a,b) => new Date(a.next_visit_date) - new Date(b.next_visit_date));
+  const el = $('followupList');
+  if(!mine.length){
+    el.innerHTML = '<p class="hint">暂无复诊提醒</p>';
+    return;
+  }
+  const now = new Date().toISOString().slice(0, 10);
+  el.innerHTML = mine.map(f => {
+    const isSoon = f.next_visit_date <= now;
+    const label = DISEASE_LABELS[f.disease_type] || f.disease_type;
+    return '<div class="med-item" style="' + (isSoon ? 'border-color:#ef4444;' : '') + '">'
+      + '<div style="flex:1;">'
+      + '<div style="font-weight:700;">🏥 ' + f.next_visit_date + ' ' + (f.department || '') + '</div>'
+      + '<div class="hint">' + label + (f.hospital ? ' · ' + f.hospital : '') + '</div>'
+      + '</div>'
+      + '<button class="btn sm line" onclick="completeFollowup(' + f.id + ')">已完成</button>'
+      + '</div>';
+  }).join('');
+}
+
+async function completeFollowup(id){
+  const rec = await DB.get('followups', id);
+  if(rec){ rec.is_completed = true; await DB.put('followups', rec); }
+  toast('已标记完成');
+  renderFollowups();
+}
+
+async function renderChronicAlerts(){
+  const all = await DB.all('chronic');
+  const chronic = all.find(c => c.id === selectedChronicId);
+  if(!chronic){ $('chronicAlertList').innerHTML = ''; return; }
+  if(currentUser && cloudUsable()){
+    try{
+      const res = await sbFetch('chronic_alerts?username=eq.' + encodeURIComponent(currentUser) + '&order=created_at.desc&limit=10');
+      if(res.ok){
+        const rows = await res.json();
+        if(rows.length){
+          $('chronicAlertList').innerHTML = rows.map(r => {
+            const color = r.alert_level === 'critical' ? '#ef4444' : (r.alert_level === 'warning' ? '#eab308' : '#3b82f6');
+            return '<div class="med-item" style="border-left:3px solid ' + color + ';">'
+              + '<div style="font-weight:700;color:' + color + ';">' + (r.title || '预警') + '</div>'
+              + '<div>' + (r.message || '') + '</div>'
+              + '<div class="hint">' + new Date(r.created_at).toLocaleString('zh-CN') + '</div>'
+              + '</div>';
+          }).join('');
+          return;
+        }
+      }
+    }catch(e){}
+  }
+  $('chronicAlertList').innerHTML = '<p class="hint">暂无预警记录</p>';
+}
+
 /* ==================== 初始化 ==================== */
 async function init(){
   applyMode();
@@ -4421,6 +5120,7 @@ async function init(){
   }catch(e){ console.warn('IndexedDB open failed:', e); }
   renderMeds();
   renderTimeInputs('daily');
+  renderChronicList();
   // 药名输入实时匹配 AI 建议
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
