@@ -2751,6 +2751,7 @@ async function addMed(){
   }
 }
 async function renderMeds(){
+  if(!DB.db){ $('medList').innerHTML = ''; return; }
   const meds = await DB.all('meds');
   const el = $('medList'); el.innerHTML = '';
   if(meds.length === 0){
@@ -2937,7 +2938,7 @@ async function scanMed(){
   input.click();
 }
 async function checkMeds(){
-  if(!currentUser) return; // 仅登录用户提醒
+  if(!currentUser || !DB.db) return; // 仅登录用户提醒
   const meds = await DB.all('meds');
   const now = new Date();
   const today = now.toDateString();
@@ -3299,12 +3300,10 @@ function bindFamily(){
 
 /* ==================== 初始化 ==================== */
 async function init(){
-  await DB.open();
   applyMode();
   updateUserUI();
   renderSyms();
   renderFlow();
-  renderMeds();
   $('drugCount').textContent = DRUG_DB.length;
   renderDrugCats();
   renderDrugLib();
@@ -3312,11 +3311,18 @@ async function init(){
   initSpotlight();
   initEdgeGlow();
   initGlassNav();
+  try{
+    await DB.open();
+  }catch(e){ console.warn('IndexedDB open failed:', e); }
+  renderMeds();
   // 药名输入实时匹配 AI 建议
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
   if(currentUser){
-    const rec = await DB.get('users', currentUser);
+    let rec = null;
+    try{
+      if(DB.db) rec = await DB.get('users', currentUser);
+    }catch(e){ console.warn('DB.get failed:', e); }
     if(rec){
       myFamilyCode = rec.familyCode;
       if(rec.role) setRole(rec.role);
