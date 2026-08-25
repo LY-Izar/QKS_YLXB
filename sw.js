@@ -1,6 +1,6 @@
 /* 医路相伴 Service Worker - 处理 PWA 推送通知 */
 
-const CACHE_NAME = 'yilubangban-v1';
+const CACHE_NAME = 'yilubangban-v3';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -27,10 +27,10 @@ self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  // 网络优先策略（HTML 页面）
+  // 网络优先策略（HTML 页面）——带 cache: no-store 避免拿到 HTTP 缓存旧页面
   if (req.mode === 'navigate' || req.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      fetch(req).then(res => {
+      fetch(req, { cache: 'no-store' }).then(res => {
         const copy = res.clone();
         caches.open(CACHE_NAME).then(c => c.put(req, copy)).catch(() => {});
         return res;
