@@ -144,6 +144,11 @@
     color:var(--ink);
     font-size:var(--fs-base);line-height:1.6;
     transition:background .3s,color .3s;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    padding-top:env(safe-area-inset-top,0px);
+    overscroll-behavior-y:contain;
   }
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;font-size:inherit;}
   input,select,textarea{font-family:inherit;font-size:inherit;color:var(--ink);}
@@ -347,16 +352,203 @@
   body.care .nav-icon-btn{display:none;}
   body.care .nav-mode-btn{font-size:.95rem;padding:9px 12px;border-width:2.5px;flex:none;}
 
-  @media (max-width:640px){
-    #navbar{top:10px;left:12px;right:12px;padding:8px 10px;border-radius:26px;gap:6px;}
-    .nav-brand{display:none;}
-    .nav-link{font-size:.78rem;padding:7px 7px;}
-    .nav-icon-btn{width:31px;height:31px;font-size:15px;}
-    .nav-mode-btn{font-size:.75rem;padding:6px 9px;}
+  /* ===== 汉堡菜单按钮（默认隐藏，移动端显示） ===== */
+  .nav-hamburger{
+    display:none;
+    flex-direction:column;
+    justify-content:center;align-items:center;
+    width:40px;height:40px;border-radius:12px;
+    background:rgba(255,255,255,.25);
+    border:1.5px solid rgba(255,255,255,.35);
+    cursor:pointer;transition:.25s;
+    flex:none;z-index:1001;
+  }
+  .nav-hamburger span{
+    display:block;width:20px;height:2px;margin:3px 0;
+    background:var(--ink);border-radius:2px;transition:.3s;
+  }
+  body.dark .nav-hamburger{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);}
+  body.dark .nav-hamburger span{background:#E8F4FF;}
+  body.care .nav-hamburger{background:rgba(255,255,255,.5);border-color:var(--border);}
+  body.care .nav-hamburger span{background:var(--ink);}
+  .nav-hamburger.active span:nth-child(1){transform:translateY(8px) rotate(45deg);}
+  .nav-hamburger.active span:nth-child(2){opacity:0;}
+  .nav-hamburger.active span:nth-child(3){transform:translateY(-8px) rotate(-45deg);}
+
+  @media (max-width:768px){
+    /* 导航栏适配 */
+    #navbar{
+      top:10px;left:12px;right:12px;padding:8px 12px;
+      border-radius:26px;gap:6px;
+    }
+    .nav-brand{font-size:1rem;}
+    .nav-hamburger{display:flex;}
+    .nav-icon-btn{width:36px;height:36px;font-size:16px;}
+    .nav-mode-btn{font-size:.8rem;padding:6px 10px;}
     body.care #navbar{left:8px;right:8px;padding:8px 10px;}
-    body.care .nav-link{font-size:.9rem;padding:8px 8px;}
-    body.care .nav-mode-btn{font-size:.8rem;padding:8px 10px;}
-    main{padding-top:78px;}
+    body.care .nav-mode-btn{font-size:.85rem;padding:7px 12px;}
+
+    /* 侧边抽屉 */
+    .nav-links{
+      position:fixed;
+      top:0;right:-320px;
+      width:280px;height:100vh;height:100dvh;
+      flex-direction:column;
+      background:linear-gradient(180deg,
+        rgba(255,255,255,.92) 0%,
+        rgba(240,247,244,.96) 100%);
+      backdrop-filter:blur(28px) saturate(160%);
+      -webkit-backdrop-filter:blur(28px) saturate(160%);
+      padding:90px 22px 30px;
+      gap:4px;
+      transition:right .4s cubic-bezier(.22,1,.36,1);
+      z-index:1000;
+      border-left:1.5px solid var(--border);
+      border-top-left-radius:28px;
+      border-bottom-left-radius:28px;
+      box-shadow:-12px 0 48px rgba(0,0,0,.28);
+    }
+    body.dark .nav-links{
+      background:linear-gradient(180deg,
+        rgba(22,33,29,.96) 0%,
+        rgba(14,21,18,.98) 100%);
+      border-left-color:rgba(255,255,255,.14);
+      box-shadow:-12px 0 48px rgba(0,0,0,.48);
+    }
+    body.care .nav-links{
+      background:linear-gradient(180deg,
+        rgba(255,248,236,.98) 0%,
+        rgba(255,241,214,.98) 100%);
+      border-left-color:var(--border);
+    }
+    .nav-links.open{right:0;}
+    .nav-links li{margin:4px 0;width:100%;}
+    .nav-link{
+      display:flex;
+      padding:14px 18px;
+      font-size:1.05rem;
+      border-radius:14px;
+      width:100%;
+    }
+    body.care .nav-link{font-size:1.25rem;padding:16px 18px;}
+
+    /* 内容区适配 */
+    main{padding-top:76px;padding-left:12px;padding-right:12px;}
+    .grid{grid-template-columns:1fr;gap:12px;}
+    .tile{min-height:100px;padding:16px 14px;}
+    body.care .tile{min-height:140px;padding:20px 16px;}
+
+    /* 卡片适配 */
+    .card{padding:14px;margin-bottom:12px;}
+    .card h2{font-size:1.25rem;}
+    .card .sub{font-size:14px;}
+
+    /* 表单适配 */
+    .inp{font-size:16px;min-height:48px;padding:10px 12px;}
+    body.care .inp{font-size:22px;min-height:60px;}
+    .btn{font-size:17px;padding:0 18px;}
+    body.care .btn{font-size:22px;padding:0 24px;min-height:64px;}
+
+    /* 标题适配 */
+    h1{font-size:1.5rem;}
+    .lead{font-size:15px;margin-bottom:16px;}
+
+    /* 宫格图标适配 */
+    .tile .ic{width:52px;height:52px;font-size:26px;border-radius:14px;}
+    body.care .tile .ic{width:64px;height:64px;font-size:32px;border-radius:16px;}
+    .tile .nm{font-size:17px;}
+    body.care .tile .nm{font-size:22px;}
+    .tile .ds{font-size:13px;}
+    body.care .tile .ds{font-size:16px;}
+
+    /* 症状选项适配 */
+    .sym-chip{padding:8px 14px;font-size:15px;}
+    body.care .sym-chip{font-size:20px;padding:12px 18px;}
+
+    /* 步骤适配 */
+    .step{padding:14px;gap:12px;}
+    .step .num{width:32px;height:32px;font-size:15px;}
+    body.care .step .num{width:42px;height:42px;font-size:20px;}
+    .step .sn{font-size:16px;}
+    body.care .step .sn{font-size:21px;}
+
+    /* 用药卡片适配 */
+    .med-item{padding:12px;}
+    .med-item .nm{font-size:17px;}
+    body.care .med-item .nm{font-size:22px;}
+
+    /* 医院列表适配 */
+    .hosp-item{padding:12px;}
+    .hosp-item .nm{font-size:16px;}
+    body.care .hosp-item .nm{font-size:21px;}
+
+    /* 语音按钮适配 */
+    .voice-fab{width:52px;height:52px;font-size:22px;right:12px;bottom:20px;}
+    body.care .voice-fab{width:66px;height:66px;font-size:28px;right:12px;bottom:32px;}
+
+    /* 语音条适配 */
+    .voicebar{bottom:88px;font-size:14px;}
+    body.care .voicebar{font-size:18px;bottom:118px;}
+
+    /* 徽章适配 */
+    .badge{font-size:13px;padding:4px 10px;}
+    body.care .badge{font-size:17px;padding:6px 14px;}
+
+    /* 弹层适配 */
+    .sheet{padding:18px 16px;}
+    .sheet h3{font-size:1.2rem;}
+
+    /* 地图适配 */
+    #map{height:300px;}
+    body.care #map{height:380px;}
+
+    /* 紧急标记 */
+    .badge.big{padding:6px 14px;font-size:15px;}
+    body.care .badge.big{padding:10px 18px;font-size:21px;}
+
+    /* 建议框适配 */
+    .advice-box{padding:12px;font-size:15px;}
+    body.care .advice-box{font-size:20px;padding:14px;}
+  }
+
+  @media (max-width:480px){
+    /* 小屏进一步优化 */
+    #navbar{top:8px;left:8px;right:8px;padding:7px 10px;border-radius:24px;}
+    .nav-brand{font-size:.92rem;}
+    .nav-hamburger{width:36px;height:36px;}
+    .nav-icon-btn{width:32px;height:32px;font-size:14px;}
+    .nav-mode-btn{font-size:.72rem;padding:5px 8px;}
+
+    /* 内容区 */
+    main{padding:70px 10px 20px;}
+
+    /* 网格 */
+    .grid{grid-template-columns:1fr 1fr;gap:10px;}
+    .tile{min-height:90px;padding:14px 12px;gap:8px;}
+    .tile .ic{width:46px;height:46px;font-size:22px;border-radius:12px;}
+    body.care .grid{grid-template-columns:1fr;}
+    body.care .tile{min-height:120px;}
+
+    /* 字体缩小 */
+    h1{font-size:1.35rem;}
+    .card h2{font-size:1.15rem;}
+    .tile .nm{font-size:15px;}
+    .tile .ds{font-size:12px;}
+
+    /* 侧边抽屉宽度适配 */
+    .nav-links{width:260px;}
+  }
+
+  /* ===== 触控优化：禁用hover，增大触摸目标 ===== */
+  @media (hover:none) and (pointer:coarse){
+    .tile:active{transform:scale(.96);}
+    .hosp-item:active{background:var(--surface-2);}
+    .card:active{transform:scale(.99);}
+    .btn:active{transform:scale(.97);}
+    .nav-link:active{background:var(--primary-soft);}
+    .sym-chip:active{transform:scale(.95);}
+    .step:active{background:var(--surface-2);}
+    .med-item:active{background:var(--surface-2);}
   }
 
   /* ===== 内容区 ===== */
@@ -671,6 +863,18 @@
   .voice-fab.listening{background:linear-gradient(135deg,var(--danger),#9b2c2c);animation:pulse 1s infinite;}
   @keyframes pulse{50%{box-shadow:0 0 0 12px color-mix(in srgb, var(--danger) 22%, transparent);}}
 
+  /* 安全区域适配（iOS刘海屏） */
+  @supports (padding:env(safe-area-inset-bottom)){
+    .voice-fab{bottom:calc(24px + env(safe-area-inset-bottom));}
+    .voicebar{bottom:calc(96px + env(safe-area-inset-bottom));}
+    @media (max-width:768px){
+      .voice-fab{bottom:calc(20px + env(safe-area-inset-bottom));}
+      body.care .voice-fab{bottom:calc(32px + env(safe-area-inset-bottom));}
+      .voicebar{bottom:calc(88px + env(safe-area-inset-bottom));}
+      body.care .voicebar{bottom:calc(118px + env(safe-area-inset-bottom));}
+    }
+  }
+
   /* ===== 弹层 ===== */
   .mask{position:fixed;inset:0;background:rgba(12,20,18,.45);z-index:70;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
   .mask.show{display:flex;}
@@ -735,7 +939,10 @@
 <!-- 顶部悬浮导航栏（液态玻璃胶囊） -->
 <nav id="navbar">
   <div class="nav-brand"><span class="nav-logo">医</span><span class="nav-name">医路相伴</span></div>
-  <ul class="nav-links">
+  <button class="nav-hamburger" id="navHamburger" onclick="toggleNavMenu()" aria-label="菜单">
+    <span></span><span></span><span></span>
+  </button>
+  <ul class="nav-links" id="navLinks">
     <li><a class="nav-link active" data-v="home" onclick="go('home')">首页</a></li>
     <li><a class="nav-link" data-v="symptom" onclick="go('symptom')"><span class="nm-s">自查</span><span class="nm-f">症状自查</span></a></li>
     <li><a class="nav-link" data-v="flow" onclick="go('flow')"><span class="nm-s">流程</span><span class="nm-f">就医流程</span></a></li>
@@ -2321,7 +2528,41 @@ function enableCare(){
 }
 
 /* ==================== 导航 ==================== */
+/* ==================== 移动端菜单控制 ==================== */
+let navMenuOpen = false;
+function toggleNavMenu(){
+  navMenuOpen = !navMenuOpen;
+  const links = $('navLinks');
+  const hamburger = $('navHamburger');
+  if(!links || !hamburger) return;
+  links.classList.toggle('open', navMenuOpen);
+  hamburger.classList.toggle('active', navMenuOpen);
+  let mask = $('navMenuMask');
+  if(navMenuOpen){
+    if(!mask){
+      mask = document.createElement('div');
+      mask.id = 'navMenuMask';
+      mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:998;opacity:0;transition:opacity .3s;';
+      mask.onclick = toggleNavMenu;
+      document.body.appendChild(mask);
+      requestAnimationFrame(()=>mask.style.opacity='1');
+    }
+    document.body.style.overflow = 'hidden';
+  } else {
+    if(mask){
+      mask.style.opacity = '0';
+      setTimeout(()=>mask.remove(), 300);
+    }
+    document.body.style.overflow = '';
+  }
+}
+/* 点击导航链接后自动关闭菜单 */
+function closeNavMenu(){
+  if(navMenuOpen) toggleNavMenu();
+}
+
 function go(view){
+  closeNavMenu();
   if(view === 'more') view = 'hospital';
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   const target = $('view-' + view);
