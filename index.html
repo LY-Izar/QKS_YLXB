@@ -81,9 +81,9 @@
       inset 0 0 6px 0 rgba(194,153,255,.22),
       inset 0 0 14px 1px rgba(194,153,255,.12);
     -webkit-mask:conic-gradient(from var(--cursor-angle) at 50% 50%,
-      #000 2%, transparent 5%, transparent 95%, #000 98%);
+      #000 2%, transparent 3%, transparent 97%, #000 98%);
     mask:conic-gradient(from var(--cursor-angle) at 50% 50%,
-      #000 2%, transparent 5%, transparent 95%, #000 98%);
+      #000 2%, transparent 3%, transparent 97%, #000 98%);
     opacity:calc((var(--edge-proximity) - var(--edge-sens)) / (100 - var(--edge-sens)));
     transition:opacity .3s ease-out;
   }
@@ -3177,6 +3177,13 @@ function initEdgeGlow(){
     if(angle < 0) angle += 360;
     card.style.setProperty('--edge-proximity', (edge * 100).toFixed(3));
     card.style.setProperty('--cursor-angle', angle.toFixed(3) + 'deg');
+  }, {passive:true});
+  document.addEventListener('pointerout', e=>{
+    const card = e.target && e.target.closest ? e.target.closest('.card') : null;
+    if(!card) return;
+    const related = e.relatedTarget;
+    if(related && card.contains(related)) return;
+    card.style.setProperty('--edge-proximity', '0');
   }, {passive:true});
 }
 
