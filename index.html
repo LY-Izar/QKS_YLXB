@@ -4544,10 +4544,10 @@ async function renderChronicSummary(elderCode){
 
 async function getElderUsername(code){
   try{
-    const res = await sbFetch('users?family_code=eq.' + code + '&select=username');
+    const res = await sbFetch('users?family_code=eq.' + code + '&select=id');
     if(res.ok){
       const rows = await res.json();
-      if(rows.length) return rows[0].username;
+      if(rows.length) return rows[0].id;
     }
   }catch(e){}
   return null;
