@@ -1965,30 +1965,37 @@ function notify(msg){
 /* ==================== PWA 推送通知 ==================== */
 const VAPID_PUBLIC_KEY = 'BLQr5tG2iTxcjG8gNkR3ZpLvQ4nKmF9dH7eC6bU2vRyY4xJfGmDpLsTzWqNkBhSxV2C4xYUg3Zm';
 let swReg = null;
+let initPushPromise = null;
 
 async function initPush(){
-  if(!('serviceWorker' in navigator)) return;
-  try{
-    swReg = await navigator.serviceWorker.register('./sw.js');
-    swReg.addEventListener('updatefound', () => {
-      const nw = swReg.installing;
-      nw.addEventListener('statechange', () => {
-        if(nw.state === 'activated') navigator.serviceWorker.controller?.postMessage({type:'SKIP_WAITING'});
+  if(initPushPromise) return initPushPromise;
+  initPushPromise = (async () => {
+    if(!('serviceWorker' in navigator)) return;
+    try{
+      swReg = await navigator.serviceWorker.register('./sw.js');
+      swReg.addEventListener('updatefound', () => {
+        const nw = swReg.installing;
+        if(nw){
+          nw.addEventListener('statechange', () => {
+            if(nw.state === 'activated') navigator.serviceWorker.controller?.postMessage({type:'SKIP_WAITING'});
+          });
+        }
       });
-    });
-    navigator.serviceWorker.addEventListener('message', e => {
-      if(e.data?.type === 'NAVIGATE' && e.data.url){
-        const v = e.data.url.split('#')[1];
-        if(v) go(v);
-      }
-    });
-  }catch(e){ console.warn('SW 注册失败:', e); }
+      navigator.serviceWorker.addEventListener('message', e => {
+        if(e.data?.type === 'NAVIGATE' && e.data.url){
+          const v = e.data.url.split('#')[1];
+          if(v) go(v);
+        }
+      });
+    }catch(e){ console.warn('SW 注册失败:', e); }
+  })();
+  return initPushPromise;
 }
 
 async function subscribePush(){
-  if(!swReg){ await initPush(); }
-  if(!swReg) return {ok:false, msg:'当前浏览器不支持推送'};
-  if(!('PushManager' in swReg)) return {ok:false, msg:'当前浏览器不支持推送'};
+  await initPush();
+  if(!swReg) return {ok:false, msg:'Service Worker 注册失败，请使用 HTTPS 或 localhost 访问'};
+  if(!('pushManager' in swReg)) return {ok:false, msg:'当前浏览器不支持 Web Push，建议使用 Chrome 或 Edge 电脑版'};
   try{
     const status = await swReg.pushManager.getSubscription();
     if(status) await status.unsubscribe();
@@ -2019,9 +2026,15 @@ async function unsubscribePush(){
 }
 
 async function checkPushStatus(){
-  if(!swReg || !('PushManager' in swReg)) return 'unsupported';
-  const sub = await swReg.pushManager.getSubscription();
-  return sub ? 'subscribed' : 'unsubscribed';
+  await initPush();
+  if(!swReg) return 'sw-fail';
+  if(!('pushManager' in swReg)) return 'pushmanager-fail';
+  try{
+    const sub = await swReg.pushManager.getSubscription();
+    return sub ? 'subscribed' : 'unsubscribed';
+  }catch(e){
+    return 'error:' + e.message;
+  }
 }
 
 function urlB64ToUint8(b64){
@@ -2080,15 +2093,25 @@ async function updatePWABadge(){
   const status = await checkPushStatus();
   const badge = $('pwaStatus');
   const btn = $('pwaBtn');
-  if(status === 'unsupported'){
-    badge.textContent = '当前浏览器不支持';
+  if(status === 'sw-fail'){
+    badge.textContent = 'Service Worker 注册失败（需 HTTPS 或 localhost）';
+    btn.disabled = true;
+    btn.textContent = '不可用';
+  }else if(status === 'pushmanager-fail'){
+    badge.textContent = '当前浏览器不支持 Web Push（建议用 Chrome/Edge 电脑版）';
     btn.disabled = true;
     btn.textContent = '不支持';
+  }else if(status.startsWith('error:')){
+    badge.textContent = '检测异常：' + status.slice(6);
+    btn.disabled = true;
+    btn.textContent = '不可用';
   }else if(status === 'subscribed'){
     badge.textContent = '✅ 已开启，关闭页面也能收到';
+    btn.disabled = false;
     btn.textContent = '关闭推送';
   }else{
     badge.textContent = '未开启';
+    btn.disabled = false;
     btn.textContent = '开启推送';
   }
 }
@@ -2641,6 +2664,25 @@ function openAuth(){
   pickRole(myRole);
 }
 function closeAuth(){ $('authMask').classList.remove('show'); }
+function resetAppState(){
+  selectedSyms.clear();
+  flowIndex = 0;
+  flowStarted = false;
+  recentDepts = [];
+  listening = false;
+  if($('symInput')) $('symInput').value = '';
+  if($('bindCode')) $('bindCode').value = '';
+  if($('medName')) $('medName').value = '';
+  if($('medDose')) $('medDose').value = '';
+  if($('addrInput')) $('addrInput').value = '';
+  if($('ppTokenInput')) $('ppTokenInput').value = '';
+  const feed = $('familyFeed');
+  if(feed) feed.innerHTML = '';
+  renderSyms();
+  renderFlow();
+  renderMeds();
+  renderTimeInputs($('medFreq')?.value || 'daily');
+}
 async function doRegister(){
   const u = $('authUser').value.trim(), p = $('authPass').value;
   if(!u || !p){ toast('请输入账号和密码'); return; }
@@ -2678,6 +2720,7 @@ async function doRegister(){
   }
   await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, role:pickedRole, created:Date.now()});
   currentUser = u; localStorage.setItem('med_user', u);
+  resetAppState();
   myFamilyCode = code;
   setRole(pickedRole);
   toast('注册成功，' + note);
@@ -2694,22 +2737,23 @@ async function localVerify(rec, p){
 async function doLogin(){
   const u = $('authUser').value.trim(), p = $('authPass').value;
   if(!u || !p){ toast('请输入账号和密码'); return; }
-  let code = null, role = null, wrongPass = false, netFail = false;
+  let code = null, role = null, boundElder = null, wrongPass = false, netFail = false;
   if(cloudUsable()){
     try{
       const h = await hashPass(p);
-      let res = await sbFetch('users?select=id,pass_hash,family_code,role&id=eq.' + encodeURIComponent(u));
+      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code&id=eq.' + encodeURIComponent(u));
       if(res.ok){
         const rows = await res.json();
         if(rows.length){
           if(rows[0].pass_hash === h){
             code = rows[0].family_code;
             role = rows[0].role || null;
-            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, created:Date.now()});
+            boundElder = rows[0].bound_elder_code || null;
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCode:boundElder, created:Date.now()});
           } else { wrongPass = true; }
         }
       } else if(res.status === 400){
-        // 云端尚未加 role 列，降级查询
+        // 云端尚未加 role/bound_elder_code 列，降级查询
         const res2 = await sbFetch('users?select=id,pass_hash,family_code&id=eq.' + encodeURIComponent(u));
         if(res2.ok){
           const rows = await res2.json();
@@ -2725,7 +2769,7 @@ async function doLogin(){
   }
   if(!code && !wrongPass){
     const rec = await DB.get('users', u);
-    if(await localVerify(rec, p)){ code = rec.familyCode; role = rec.role || null; }
+    if(await localVerify(rec, p)){ code = rec.familyCode; role = rec.role || null; boundElder = rec.boundElderCode || null; }
   }
   if(!code){
     if(netFail && cloudUsable()){ toast('云端连接失败，本机也没有该账号'); speak('登录失败，请检查网络'); }
@@ -2734,6 +2778,13 @@ async function doLogin(){
   }
   currentUser = u; localStorage.setItem('med_user', u);
   myFamilyCode = code || String(Math.floor(100000 + Math.random()*900000));
+  // 重置页面状态
+  resetAppState();
+  // 恢复绑定关系
+  if(boundElder){
+    familyBind = boundElder;
+    localStorage.setItem('med_bind', boundElder);
+  }
   // 同一账号以登录时选择的身份为准，两端适配分别按所选身份
   setRole(pickedRole);
   // 将所选身份写回云端与本机，下次登录默认选中该身份
@@ -2747,21 +2798,31 @@ async function doLogin(){
     }catch(e){}
   }
   const localRec = await DB.get('users', u);
-  if(localRec){ localRec.role = pickedRole; await DB.put('users', localRec); }
+  if(localRec){ localRec.role = pickedRole; if(boundElder) localRec.boundElderCode = boundElder; await DB.put('users', localRec); }
   toast('登录成功，欢迎回来');
   closeAuth(); afterLogin();
 }
 function quickUse(){
   currentUser = null;
   localStorage.removeItem('med_user');
+  resetAppState();
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   go('home');
   updateUserUI();
   speak('已进入体验模式，暂不保存您的数据。');
 }
-function afterLogin(){
+async function afterLogin(){
   const rec = DB.get('users', currentUser);
-  rec.then(r => { if(r){ myFamilyCode = r.familyCode; updateUserUI(); } });
+  rec.then(r => {
+    if(r){
+      myFamilyCode = r.familyCode;
+      if(r.boundElderCode){
+        familyBind = r.boundElderCode;
+        localStorage.setItem('med_bind', r.boundElderCode);
+      }
+      updateUserUI();
+    }
+  });
   // 按身份切换界面模式：老人自动关怀模式，家属标准模式+默认黑暗模式
   localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
   if(myRole === 'family'){
@@ -2772,6 +2833,24 @@ function afterLogin(){
   if(myRole === 'family' && familyBind) pullCloudEvents(familyBind);
   go(myRole === 'family' ? 'family' : 'home'); updateUserUI();
   if(myRole === 'elder') speak('登录成功，欢迎回来');
+  // 家属端登录后从云端同步最新绑定关系
+  if(myRole === 'family' && cloudUsable()){
+    try{
+      let res = await sbFetch('users?select=bound_elder_code&id=eq.' + encodeURIComponent(currentUser));
+      if(res.ok){
+        const rows = await res.json();
+        if(rows && rows.length && rows[0].bound_elder_code){
+          familyBind = rows[0].bound_elder_code;
+          localStorage.setItem('med_bind', familyBind);
+          pullCloudEvents(familyBind);
+          // 同步到本机 IndexedDB
+          DB.get('users', currentUser).then(r => {
+            if(r){ r.boundElderCode = familyBind; DB.put('users', r); }
+          }).catch(()=>{});
+        }
+      }
+    }catch(e){}
+  }
 }
 function updateUserUI(){
   if(currentUser){
@@ -3625,6 +3704,20 @@ function bindFamily(){
       evs.filter(e=>e.familyCode===code).slice(-10).forEach(e=>appendFeed(e, false));
     }
   });
+  // 持久化绑定关系到云端
+  if(currentUser && cloudUsable()){
+    sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {
+      method:'PATCH',
+      headers:{'Prefer':'return=minimal'},
+      body: JSON.stringify({bound_elder_code: code})
+    }).catch(()=>{});
+  }
+  // 同时写入 IndexedDB 本地
+  if(currentUser && DB.db){
+    DB.get('users', currentUser).then(rec=>{
+      if(rec){ rec.boundElderCode = code; DB.put('users', rec); }
+    }).catch(()=>{});
+  }
 }
 
 /* ==================== 初始化 ==================== */
@@ -3659,6 +3752,35 @@ async function init(){
     if(rec){
       myFamilyCode = rec.familyCode;
       if(rec.role) setRole(rec.role);
+      if(rec.boundElderCode){
+        familyBind = rec.boundElderCode;
+        localStorage.setItem('med_bind', rec.boundElderCode);
+      }
+    }
+    // 从云端同步绑定关系（覆盖本机过期数据）
+    if(myRole === 'family' && cloudUsable()){
+      try{
+        let res = await sbFetch('users?select=bound_elder_code,family_code,role&id=eq.' + encodeURIComponent(currentUser));
+        if(!res.ok && res.status === 400){
+          // 云端尚未加 bound_elder_code 列，降级查询
+          res = await sbFetch('users?select=family_code,role&id=eq.' + encodeURIComponent(currentUser));
+        }
+        if(res.ok){
+          const rows = await res.json();
+          if(rows.length){
+            if(rows[0].bound_elder_code){
+              familyBind = rows[0].bound_elder_code;
+              localStorage.setItem('med_bind', rows[0].bound_elder_code);
+              if(DB.db){
+                const r2 = await DB.get('users', currentUser);
+                if(r2){ r2.boundElderCode = rows[0].bound_elder_code; await DB.put('users', r2); }
+              }
+            }
+            if(rows[0].family_code) myFamilyCode = rows[0].family_code;
+            if(rows[0].role) setRole(rows[0].role);
+          }
+        }
+      }catch(e){ console.warn('云端绑定同步失败:', e); }
     }
     updateUserUI();
     // 已登录家属自动拉取绑定老人的云端动态
