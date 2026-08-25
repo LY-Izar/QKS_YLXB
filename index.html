@@ -1062,6 +1062,13 @@
       <button class="btn block line" style="margin-top:10px;" onclick="go('druglib')">📖 浏览药品库（共 <b id="drugCount">0</b> 种）</button>
     </div>
     <div id="medList"></div>
+
+    <!-- 用药依从性（老人端） -->
+    <div class="card" id="medComplianceCard" style="margin-top:12px;">
+      <h2>✅ 我的用药依从性</h2>
+      <div id="complianceStats" style="margin-bottom:12px;"></div>
+      <div id="complianceCalendar"></div>
+    </div>
   </div>
 
   <!-- 药品库 -->
@@ -1157,13 +1164,6 @@
       <div class="hint" id="chartHint" style="margin-top:8px;"></div>
     </div>
 
-    <!-- 用药依从性 -->
-    <div class="card" id="chronicComplianceCard" style="display:none;">
-      <h2>✅ 用药依从性</h2>
-      <div id="complianceStats" style="margin-bottom:12px;"></div>
-      <div id="complianceCalendar"></div>
-    </div>
-
     <!-- 复诊提醒 -->
     <div class="card" id="chronicFollowupCard" style="display:none;">
       <h2>🏥 复诊提醒</h2>
@@ -1247,6 +1247,11 @@
     <div class="card" id="cardChronicSummary" style="display:none;">
       <h2>📊 慢病摘要</h2>
       <div id="chronicSummaryContent"></div>
+    </div>
+    <div class="card" id="cardElderCompliance" style="display:none;">
+      <h2>✅ 老人用药依从性</h2>
+      <div id="elderComplianceStats" style="margin-bottom:12px;"></div>
+      <div id="elderComplianceCalendar"></div>
     </div>
     <div class="card" id="cardPushSettings">
       <h2>🔔 远程提醒设置</h2>
@@ -2499,10 +2504,26 @@ const DB = {
 };
 
 /* ==================== 提示 / 通知 ==================== */
-function toast(msg, ms=4000){
+const _toastQueue = [];
+let _toastBusy = false;
+function _flushToast(){
+  if(_toastBusy || !_toastQueue.length) return;
+  const item = _toastQueue.shift();
+  _toastBusy = true;
   const b = $('notifyBanner');
-  b.textContent = msg; b.classList.add('show');
-  clearTimeout(b._t); b._t = setTimeout(()=>b.classList.remove('show'), ms);
+  if(!b){ _toastBusy = false; return; }
+  b.textContent = item.msg; b.classList.add('show');
+  clearTimeout(b._t);
+  b._t = setTimeout(()=>{
+    b.classList.remove('show');
+    _toastBusy = false;
+    setTimeout(_flushToast, 200);
+  }, item.ms);
+}
+function toast(msg, ms){
+  if(!ms) ms = /保存|已记录|成功/.test(msg) ? 5000 : 3800;
+  _toastQueue.push({msg, ms});
+  _flushToast();
 }
 function notify(msg){
   toast(msg);
@@ -3966,6 +3987,7 @@ async function renderMeds(){
   const el = $('medList'); el.innerHTML = '';
   if(meds.length === 0){
     el.innerHTML = '<div class="card center" style="color:var(--muted);">还没有用药记录，请在上方添加。</div>';
+    if(myRole !== 'family') renderCompliance();
     return;
   }
   const freqLabel = {daily:'每天1次', twice:'每天2次', thrice:'每天3次', once:'仅一次'};
@@ -3983,6 +4005,7 @@ async function renderMeds(){
       '<button class="btn sm line" onclick="delMed(' + m.id + ')">删除</button>';
     el.appendChild(d);
   });
+  if(myRole !== 'family') renderCompliance();
 }
 async function delMed(id){
   await DB.del('meds', id);
@@ -4588,6 +4611,7 @@ function selectElder(code){
   renderBoundList();
   pullCloudEvents(code);
   renderChronicSummary(code);
+  renderElderCompliance(code);
   const idx = familyBinds.indexOf(code);
   toast('正在查看老人 ' + (idx + 1) + ' 的健康动态');
 }
@@ -4834,8 +4858,7 @@ async function renderChronicList(){
     // 已选档案，重绘下方各卡（但不重复触发 selectChronic，避免循环）
     onMetricTypeChange();
     renderMetricHistory();
-    renderChart(currentChronicRange);
-    renderCompliance();
+    setTimeout(()=>renderChart(currentChronicRange), 120);
     renderFollowups();
     renderChronicAlerts();
   }
@@ -4856,20 +4879,19 @@ async function selectChronic(id){
   renderChronicList();
   onMetricTypeChange();
   renderMetricHistory();
-  renderChart(currentChronicRange);
-  renderCompliance();
+  setTimeout(()=>renderChart(currentChronicRange), 120);
   renderFollowups();
   renderChronicAlerts();
 }
 
 function hideChronicCards(){
-  ['chronicMetricCard','chronicChartCard','chronicComplianceCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
+  ['chronicMetricCard','chronicChartCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
     const el = $(id); if(el) el.style.display = 'none';
   });
 }
 
 function showChronicCards(){
-  ['chronicMetricCard','chronicChartCard','chronicComplianceCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
+  ['chronicMetricCard','chronicChartCard','chronicFollowupCard','chronicAlertCard'].forEach(id=>{
     const el = $(id); if(el) el.style.display = 'block';
   });
 }
@@ -4996,6 +5018,25 @@ function checkThreshold(type, v1, v2, chronic){
   }
 }
 
+function assessMetricLevel(m, chronic){
+  if(!chronic) return {level:'normal', label:'正常', color:'#22c55e'};
+  const type = m.metric_type, v1 = Number(m.value1), v2 = Number(m.value2 || 0);
+  const targets = JSON.parse(chronic.target_json || '{}');
+  if(type === 'bp'){
+    if(v1 >= 180 || v2 >= 110) return {level:'critical', label:'超标', color:'#ef4444'};
+    if(v1 >= (targets.systolic_high||140) || v2 >= (targets.diastolic_high||90)) return {level:'warning', label:'需关注', color:'#eab308'};
+  } else if(type === 'fasting'){
+    if(v1 >= 11.1) return {level:'critical', label:'超标', color:'#ef4444'};
+    if(v1 >= (targets.fasting_high||7.0) || v1 < (targets.fasting_low||3.9)) return {level:'warning', label:'需关注', color:'#eab308'};
+  } else if(type === 'postprandial'){
+    if(v1 >= 16.7) return {level:'critical', label:'超标', color:'#ef4444'};
+    if(v1 >= (targets.postprandial_high||11.1)) return {level:'warning', label:'需关注', color:'#eab308'};
+  } else if(type === 'heart_rate'){
+    if(v1 > 120 || v1 < 50) return {level:'warning', label:'异常', color:'#eab308'};
+  }
+  return {level:'normal', label:'正常', color:'#22c55e'};
+}
+
 async function renderMetricHistory(){
   const all = await DB.all('metrics');
   const mine = all.filter(m => m.disease_id === selectedChronicId).sort((a,b) => new Date(b.measured_at) - new Date(a.measured_at)).slice(0, 10);
@@ -5004,13 +5045,18 @@ async function renderMetricHistory(){
     el.innerHTML = '<p class="hint">暂无记录</p>';
     return;
   }
+  const chronic = (await DB.get('chronic', selectedChronicId)) || null;
   el.innerHTML = '<p class="sub" style="margin-bottom:4px;">最近记录</p>'
     + mine.map(m => {
       const label = METRIC_LABELS[m.metric_type] || m.metric_type;
       const val = m.metric_type === 'bp' ? m.value1 + '/' + (m.value2||'-') + ' mmHg'
         : m.value1 + (m.metric_type === 'weight' ? ' kg' : (m.metric_type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
       const time = new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      const a = assessMetricLevel(m, chronic);
       return '<div class="med-item" style="display:flex;align-items:center;gap:8px;">'
+        + '<div style="display:inline-flex;align-items:center;gap:4px;min-width:54px;">'
+        + '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + a.color + ';box-shadow:0 0 0 2px rgba(255,255,255,.3);"></span>'
+        + '<span style="font-size:12px;font-weight:700;color:' + a.color + ';">' + a.label + '</span></div>'
         + '<div style="flex:1;"><b>' + label + '</b> ' + val
         + (m.note ? ' <span class="hint">' + sanitizeInput(m.note, 50) + '</span>' : '')
         + '<div class="hint">' + time + '</div></div>'
@@ -5027,8 +5073,8 @@ async function delMetric(id){
 
 async function renderChart(range){
   if(!window.Chart){ return; }
-  currentChronicRange = range;
-  const days = range === '7d' ? 7 : (range === '90d' ? 90 : 30);
+  currentChronicRange = range || '30d';
+  const days = currentChronicRange === '7d' ? 7 : (currentChronicRange === '90d' ? 90 : 30);
   const now = new Date();
   const since = new Date(now.getTime() - days * 86400000);
   const all = await DB.all('metrics');
@@ -5036,81 +5082,143 @@ async function renderChart(range){
     .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
   const el = $('chronicChart');
   if(!el) return;
-  if(chronicChart){ chronicChart.destroy(); chronicChart = null; }
+  const parent = el.parentElement;
+  if(parent){
+    // 确保容器有实际尺寸
+    parent.style.position = 'relative';
+    parent.style.minHeight = '300px';
+    parent.style.height = '300px';
+  }
+  // 强制给 canvas 尺寸，避免 display:none 时 context 尺寸 0x0 导致空白
+  const cw = parent ? (parent.clientWidth || 600) : 600;
+  el.width = cw;
+  el.height = 300;
+  el.style.width = '100%';
+  el.style.height = '100%';
+  if(chronicChart){ try { chronicChart.destroy(); } catch(e){} chronicChart = null; }
+  const ctx = el.getContext('2d');
+  if(!ctx){
+    $('chartHint').textContent = '图表初始化失败，请刷新页面';
+    return;
+  }
   if(!mine.length){
+    // 空状态：画"暂无数据"文字占位
+    ctx.fillStyle = 'var(--muted, #999)';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    const ph = parseInt(el.height || 300, 10);
+    ctx.fillText('该时段暂无数据', cw / 2, ph / 2);
     $('chartHint').textContent = '该时段暂无数据';
     return;
   }
   $('chartHint').textContent = '';
-  const ctx = el.getContext('2d');
+  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
+  const targets = chronic ? JSON.parse(chronic.target_json || '{}') : {};
   const labels = mine.map(m => new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
-  const d1 = mine.map(m => m.value1);
-  const d2 = mine.map(m => m.value2);
+  const d1 = mine.map(m => Number(m.value1));
+  const d2 = mine.map(m => m.value2 !== null && m.value2 !== undefined ? Number(m.value2) : null);
+  const firstType = mine[0].metric_type;
+  // 每个数据点根据阈值上色
+  const pColors1 = mine.map(m => {
+    const a = assessMetricLevel(m, chronic);
+    return a.color;
+  });
   const datasets = [{
-    label: '收缩压/主值',
+    label: firstType === 'bp' ? '收缩压' : (METRIC_LABELS[firstType] || '主值'),
     data: d1,
     borderColor: '#0f9d8f',
-    backgroundColor: 'rgba(15,157,143,0.1)',
+    backgroundColor: 'rgba(15,157,143,0.12)',
     tension: 0.3,
-    fill: true
+    fill: true,
+    pointRadius: 5,
+    pointHoverRadius: 7,
+    pointBackgroundColor: pColors1,
+    pointBorderColor: '#fff',
+    pointBorderWidth: 2
   }];
-  if(mine.some(m => m.value2 !== null && m.value2 !== undefined)){
+  if(d2.some(v => v !== null)){
     datasets.push({
       label: '舒张压',
       data: d2,
       borderColor: '#f59e0b',
       backgroundColor: 'rgba(245,158,11,0.1)',
       tension: 0.3,
-      fill: false
+      fill: false,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      pointBackgroundColor: pColors1,
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2
     });
   }
-  const chronic = (await DB.all('chronic')).find(c => c.id === selectedChronicId);
-  const targets = chronic ? JSON.parse(chronic.target_json || '{}') : {};
-  const annotations = [];
-  if(targets.systolic_high){
-    annotations.push({ type:'line', yMin: targets.systolic_high, yMax: targets.systolic_high, borderColor:'rgba(239,68,68,0.4)', borderWidth:1, borderDash:[5,5], label:{display:false} });
-  }
+  const care = body.classList.contains('care');
   chronicChart = new Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 400 },
       plugins: {
-        legend: { labels: { font:{ size: body.classList.contains('care') ? 16 : 12 } } },
-        tooltip: { bodyFont:{ size: body.classList.contains('care') ? 16 : 12 }, titleFont:{ size: body.classList.contains('care') ? 16 : 12 } }
+        legend: { labels: { font:{ size: care ? 16 : 12 } } },
+        tooltip: { bodyFont:{ size: care ? 16 : 12 }, titleFont:{ size: care ? 16 : 12 } }
       },
       scales: {
-        x: { ticks: { font:{ size: body.classList.contains('care') ? 14 : 10 }, maxRotation:45 } },
-        y: { ticks: { font:{ size: body.classList.contains('care') ? 14 : 10 } } }
+        x: { ticks: { font:{ size: care ? 14 : 10 }, maxRotation:45 } },
+        y: { ticks: { font:{ size: care ? 14 : 10 } } }
       }
     }
   });
 }
 
-async function renderCompliance(){
-  const meds = await DB.all('meds');
-  if(!meds.length){
-    $('complianceStats').innerHTML = '<p class="hint">暂未添加用药，请先到"用药提醒"添加药品。</p>';
-    $('complianceCalendar').innerHTML = '';
+async function renderCompliance(targetUser, statsId, calId){
+  statsId = statsId || 'complianceStats';
+  calId = calId || 'complianceCalendar';
+  const sEl = $(statsId), cEl = $(calId);
+  if(!sEl || !cEl) return;
+  targetUser = targetUser || (currentUser || 'guest');
+  // 老人端用自己本地 meds+medlog；家属端用云端 medication_logs
+  let myLogs = [];
+  let hasMeds = false;
+  if(targetUser === (currentUser || 'guest')){
+    const meds = await DB.all('meds');
+    hasMeds = meds.length > 0;
+    const now = new Date();
+    const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
+    const logs = await DB.all('medlog');
+    myLogs = logs.filter(l => l.username === targetUser && new Date(l.scheduled_date) >= thirtyAgo);
+  } else if(cloudUsable()){
+    // 家属端：通过云端 medication_logs 查老人记录
+    const res = await sbFetch('medication_logs?username=eq.' + encodeURIComponent(targetUser) + '&order=scheduled_date.desc&limit=500');
+    if(res.ok){
+      const rows = await res.json();
+      const now = new Date();
+      const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
+      myLogs = rows.filter(r => new Date(r.scheduled_date) >= thirtyAgo).map(r => ({
+        scheduled_date: String(r.scheduled_date).slice(0,10),
+        status: r.status
+      }));
+      hasMeds = true;
+    }
+  }
+  if(!hasMeds && !myLogs.length){
+    sEl.innerHTML = '<p class="hint">暂未添加用药，请先到"用药提醒"添加药品。</p>';
+    cEl.innerHTML = '';
     return;
   }
-  const now = new Date();
-  const thirtyAgo = new Date(now.getTime() - 30 * 86400000);
-  const logs = await DB.all('medlog');
-  const myLogs = logs.filter(l => l.username === (currentUser || 'guest') && new Date(l.scheduled_date) >= thirtyAgo);
   const total = myLogs.length || 1;
   const taken = myLogs.filter(l => l.status === 'taken').length;
   const rate = Math.round(taken / total * 100);
-  $('complianceStats').innerHTML = '<div style="display:flex;align-items:center;gap:12px;">'
+  sEl.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">'
     + '<div style="font-size:32px;font-weight:700;color:' + (rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + rate + '%</div>'
     + '<div class="hint">近30天用药依从率<br>已服 ' + taken + ' / 应服 ' + total + ' 次</div>'
     + '</div>';
+  const now = new Date();
   const days = [];
   for(let i = 29; i >= 0; i--){
     const d = new Date(now.getTime() - i * 86400000);
     const ds = d.toISOString().slice(0, 10);
-    const dayLogs = myLogs.filter(l => l.scheduled_date === ds);
+    const dayLogs = myLogs.filter(l => String(l.scheduled_date).slice(0,10) === ds);
     const dayTotal = dayLogs.length;
     const dayTaken = dayLogs.filter(l => l.status === 'taken').length;
     const dayRate = dayTotal > 0 ? dayTaken / dayTotal : null;
@@ -5120,8 +5228,26 @@ async function renderCompliance(){
       + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + (d.getMonth()+1) + '/' + d.getDate() + '</div>'
       + '</div>');
   }
-  $('complianceCalendar').innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + days.join('') + '</div>'
+  cEl.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:2px;">' + days.join('') + '</div>'
     + '<div class="hint" style="margin-top:6px;">绿色=全部服用，黄色=部分服用，红色=未服，灰色=无记录</div>';
+}
+
+async function renderElderCompliance(elderCode){
+  const card = $('cardElderCompliance');
+  if(!card) return;
+  if(myRole !== 'family' || !elderCode){
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  $('elderComplianceStats').innerHTML = '<p class="hint">加载中…</p>';
+  $('elderComplianceCalendar').innerHTML = '';
+  const elderUser = await getElderUsername(elderCode);
+  if(!elderUser){
+    $('elderComplianceStats').innerHTML = '<p class="hint">无法获取老人账号信息</p>';
+    return;
+  }
+  await renderCompliance(elderUser, 'elderComplianceStats', 'elderComplianceCalendar');
 }
 
 async function markMedTaken(medId, date, timeSlot, status){
