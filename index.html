@@ -2406,14 +2406,39 @@ const INTERACTIONS = [
 let currentUser = localStorage.getItem('med_user') || null;
 function lsKey(base){ return currentUser ? base + '_' + encodeURIComponent(currentUser) : base; }
 
+/* ====== 异步渲染"版本号令牌"机制：避免过期异步回调把旧账号数据写进新账号 DOM ======
+ * 典型场景：A 账号发起 `renderMeds()` → 等待 `await allMine('meds')` 期间，
+ * 用户"退出→登录 B 账号→切到用药页→又发起新 renderMeds()"。
+ * 若第一个 renderMeds 的 await 这时才 resolve，会把 A 的 meds 写进 B 正在用的 #medList。
+ * 解法：每发起一次重渲染 → 自增全局 token → 回调写入 DOM 前再校验 token 是否与全局一致。
+ * 同时：任何改变账号登录/登出状态的地方（logout、resetAppState、afterLogin）都 bump 一次
+ *       token，强制作废之前挂起的所有异步回调。*/
+let _nextRenderToken = 1;
+function bumpRenderToken(reason){
+  const t = _nextRenderToken++;
+  if(reason) console.debug(`[renderToken] bump → ${t} (${reason})`);
+  return t;
+}
+
 /* ====== 账号隔离辅助：所有本地 IndexedDB 用户数据统一走这 4 个 API ====== */
-/** 写任何个人数据（meds/chronic/metrics/followups/events/medlog）前强制注入 username */
+/** 写任何个人数据（meds/chronic/metrics/followups/events/medlog）前强制注入 username。
+ *  [隔离-加固] currentUser 如果被意外清空（resetAppState / closeAuth 异步时序 / 标签页恢复 / 页面刷新等），
+ *  自动从 localStorage.med_user 兜底恢复，避免写入到 'guest' 隔离域造成"两账号互看对方数据"。*/
 function withUsername(rec){
+  if(!currentUser){
+    const saved = localStorage.getItem('med_user');
+    if(saved){ currentUser = saved; console.warn('[withUsername] 恢复丢失的 currentUser =', saved); }
+  }
   return Object.assign({}, rec || {}, { username: currentUser || 'guest' });
 }
-/** 取某 store 中当前登录用户的全部记录（guest 也按 guest 隔离，避免串到真实账号） */
+/** 取某 store 中当前登录用户的全部记录（guest 也按 guest 隔离，避免串到真实账号）。
+ *  [隔离-加固] 同样兜底恢复 currentUser。 */
 async function allMine(storeName){
   if(!DB.db) return [];
+  if(!currentUser){
+    const saved = localStorage.getItem('med_user');
+    if(saved){ currentUser = saved; console.warn('[allMine] 恢复丢失的 currentUser =', saved); }
+  }
   const u = currentUser || 'guest';
   const all = await DB.all(storeName);
   return all.filter(r => r && r.username === u);
@@ -2421,6 +2446,10 @@ async function allMine(storeName){
 /** 单条读取并校验归属：不是当前用户的数据返回 null，避免直接用 id 查到别人 */
 async function ensureMine(storeName, id){
   if(!DB.db || id == null) return null;
+  if(!currentUser){
+    const saved = localStorage.getItem('med_user');
+    if(saved){ currentUser = saved; console.warn('[ensureMine] 恢复丢失的 currentUser =', saved); }
+  }
   try{
     const r = await DB.get(storeName, id);
     if(!r) return null;
@@ -3399,7 +3428,7 @@ function closeNavMenu(){
   if(navMenuOpen) toggleNavMenu();
 }
 
-function go(view){
+async function go(view){
   closeNavMenu();
   if(view === 'more') view = 'hospital';
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -3421,8 +3450,9 @@ function go(view){
     renderChronicList();
   }
   // ====== 修复：切换到用药页必须重新渲染列表+依从性，避免首次切页面时依从卡是空的 ======
+  //        另外必须 await 串行化，防止并发 renderMeds 造成"账号 A 数据写进 B"的跨账号串号
   if(view === 'med'){
-    try{ renderMeds(); }catch(e){ console.warn('[go:med] renderMeds fail:', e); }
+    try{ await renderMeds(); await renderCompliance(); }catch(e){ console.warn('[go:med] renderMeds/Compliance fail:', e); }
   }
   // 页面自动播报：老人端全程触发；家属端不自动出声（需点🔊按钮）
   if(myRole === 'elder' && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
@@ -3514,7 +3544,8 @@ function checkPassStrength(val){
   const colors = ['#ef4444','#f97316','#eab308','#22c55e','#10b981'];
   bar.style.background = colors[Math.min(score, colors.length - 1)];
 }
-function resetAppState(){
+async function resetAppState(){
+  bumpRenderToken('resetAppState：清空旧账号渲染');
   selectedSyms.clear();
   flowIndex = 0;
   flowStarted = false;
@@ -3563,9 +3594,10 @@ function resetAppState(){
   try{ if(typeof renderBoundList === 'function') renderBoundList(); }catch(e){}
   renderSyms();
   renderFlow();
-  renderMeds();
+  // ====== [异步串行化+保护] resetAppState 是账号切换的关键节点，务必 await 确保渲染完成后再继续 ======
+  try{ await renderMeds(); }catch(e){ console.warn('[resetAppState] renderMeds fail:', e); }
   // ====== 独立兜底：无论 renderMeds 是否成功走完，都强制刷新依从性卡，防止空标题 ======
-  try{ renderCompliance(); }catch(e){ console.warn('[resetAppState] renderCompliance fail:', e); }
+  try{ await renderCompliance(); }catch(e){ console.warn('[resetAppState] renderCompliance fail:', e); }
   renderBodyParts();
   renderTimeInputs($('medFreq')?.value || 'daily');
   renderChronicList();
@@ -3614,11 +3646,12 @@ async function doRegister(){
   }
   await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, role:pickedRole, created:Date.now()});
   currentUser = u; localStorage.setItem('med_user', u);
-  resetAppState();
+  bumpRenderToken('doRegister：新账号写入 currentUser');
+  await resetAppState();
   myFamilyCode = code;
   setRole(pickedRole);
   toast('注册成功，' + note);
-  closeAuth(); afterLogin();
+  closeAuth(); await afterLogin();
 }
 async function localVerify(rec, p){
   if(!rec) return false;
@@ -3688,8 +3721,9 @@ async function doLogin(){
   }
   currentUser = u; localStorage.setItem('med_user', u);
   myFamilyCode = code || String(Math.floor(100000 + Math.random()*900000));
-  // 重置页面状态
-  resetAppState();
+  bumpRenderToken('doLogin：写入 currentUser=' + u);
+  // 重置页面状态（串行化，保证 #medList / #complianceStats 先清好）
+  await resetAppState();
   // 恢复绑定关系
   if(boundElder && Array.isArray(boundElder) && boundElder.length){
     familyBinds = boundElder.filter(c => c && c.length === 6);
@@ -3717,20 +3751,22 @@ async function doLogin(){
     await DB.put('users', localRec);
   }
   toast('登录成功，欢迎回来');
-  closeAuth(); afterLogin();
+  closeAuth(); await afterLogin();
 }
-function quickUse(){
+async function quickUse(){
   currentUser = null;
   localStorage.removeItem('med_user');
+  bumpRenderToken('quickUse：进入体验模式清账号');
   // 体验模式：清理设备级残留个人缓存，避免下个账号看到
   try{ purgeSharedUserCache(); }catch(e){}
-  resetAppState();
+  await resetAppState();
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   go('home');
   updateUserUI();
   autoSpeak('已进入体验模式，暂不保存您的数据。');
 }
 async function afterLogin(){
+  bumpRenderToken('afterLogin：账号切换完成');
   // 0. 切换账号时先清空旧数据
   familyBinds = [];
   currentViewBind = '';
@@ -4046,6 +4082,18 @@ async function calibrateTime(){
 function nowBeijing(){
   return new Date(Date.now() + _timeOffset);
 }
+/** 返回北京时间的 HH:MM（避免 toISOString() 返回 UTC 时区的 HH:MM，差 8 小时导致 badge 时间错位） */
+function beijingHHMM(date){
+  const d = (date instanceof Date) ? date : nowBeijing();
+  const pad = n => (n < 10 ? '0' : '') + n;
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+/** 返回北京时间 YYYY-MM-DD（用于业务日切：scheduled_date 等字段生成，与 nowBeijing().toISOString().slice 区分） */
+function beijingYMD(date){
+  const d = (date instanceof Date) ? date : nowBeijing();
+  const pad = n => (n < 10 ? '0' : '') + n;
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
 function startBeijingClock(){
   const el = $('beijingTime');
   if(!el) return;
@@ -4111,6 +4159,11 @@ function timePoints(med){
 }
 
 async function addMed(){
+  // ====== [隔离-关键加固] 防止 currentUser 被意外清空（如 resetAppState / closeAuth 时序）导致落到 guest 隔离域 ======
+  if(!currentUser){
+    const saved = localStorage.getItem('med_user');
+    if(saved){ currentUser = saved; console.warn('[addMed] 恢复丢失的 currentUser =', saved); }
+  }
   const name = sanitizeInput($('medName').value, 50);
   const dose = sanitizeInput($('medDose').value, 50);
   const freq = sanitizeInput($('medFreq').value, 20);
@@ -4132,7 +4185,14 @@ async function addMed(){
 }
 async function renderMeds(){
   if(!DB.db){ $('medList').innerHTML = ''; return; }
+  // ====== [异步并发保护] 每次发起渲染 → 拿一个 token；写 DOM 前若 token 过时则作废 ======
+  //        防止"账号 A 发起的异步渲染"在账号 B 登录后才 resolve，把旧数据写进 B 的页面
+  const myToken = bumpRenderToken('renderMeds start');
   const meds = await allMine('meds'); // 只取当前登录用户的用药
+  if(myToken !== _nextRenderToken - 1){
+    console.debug(`[renderMeds] 跳过过期渲染（myToken=${myToken}, latest=${_nextRenderToken-1}）`);
+    return;
+  }
   const el = $('medList'); el.innerHTML = '';
   if(meds.length === 0){
     el.innerHTML = '<div class="card center" style="color:var(--muted);">还没有用药记录，请在上方添加。</div>';
@@ -4140,7 +4200,7 @@ async function renderMeds(){
     return;
   }
   const now = nowBeijing();
-  const todayStr = now.toISOString().slice(0,10);
+  const todayStr = beijingYMD(now); // 北京时间日切（不要用 toISOString().slice → UTC，会导致凌晨 1:30 还算成"昨天"）
   const curMin = now.getHours()*60 + now.getMinutes();
   const allLogs = await allMine('medlog'); // 自己的 medlog 用来判断今日每个时间段状态
   const freqLabel = {daily:'每天1次', twice:'每天2次', thrice:'每天3次', once:'仅一次'};
@@ -4182,12 +4242,24 @@ async function renderMeds(){
       chipCard.style.cssText = 'flex:1 1 calc(33.33% - 10px);min-width:240px;max-width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);transition:border .2s, box-shadow .2s, background .2s;';
       // ====== 用于点击后重新定位高亮：用 dataset 标识 (med_id + date + time_slot) ======
       chipCard.dataset.medChip = String(m.id) + '|' + todayStr + '|' + t;
-      // badge 渲染
+      // badge 渲染 —— 时间显示修复：使用 actual_hhmm（北京时间 HH:MM），老数据兼容从 actual_time 解析
       let badgeHtml = '';
+      function displayHHMM(rec){
+        if(rec && rec.actual_hhmm) return String(rec.actual_hhmm);
+        if(rec && rec.actual_time){
+          try{
+            const d = new Date(rec.actual_time);
+            if(!isNaN(d.getTime())) return beijingHHMM(d);
+          }catch(_){}
+          return String(rec.actual_time).slice(11,16);
+        }
+        return '';
+      }
+      const tmTxt = displayHHMM(log);
       if(status === 'taken'){
-        badgeHtml = '<span class="badge green" style="margin-left:4px;">✅ 已服用' + (log.actual_time ? '（'+String(log.actual_time).slice(11,16)+'）':'') + '</span>';
+        badgeHtml = '<span class="badge green" style="margin-left:4px;">✅ 已服用' + (tmTxt ? '（'+tmTxt+'）':'') + '</span>';
       } else if(status === 'late_taken'){
-        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fb923c;color:#fff;">⚠️ 已补用' + (log.actual_time ? '（'+String(log.actual_time).slice(11,16)+'，晚'+Math.round(log.late_minutes||0)+'分钟）':'') + '</span>';
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fb923c;color:#fff;">⚠️ 已补用' + (tmTxt ? '（'+tmTxt+'，晚'+Math.round((log && log.late_minutes)||0)+'分钟）':'') + '</span>';
       } else if(status === 'skipped'){
         badgeHtml = '<span class="badge" style="margin-left:4px;background:#ef4444;color:#fff;">❌ 今日已跳过（漏服）</span>';
       } else if(diffMin >= 10){
@@ -4501,18 +4573,21 @@ function playDidiAlert(durationSec){
     }
   }catch(e){ console.warn('滴滴警报声播放失败：', e); }
 }
-/** 生成"服药提醒专用"大字 UI Modal（避免重复 toast）：一次只弹一个，点击关闭 */
+/** 生成"服药提醒专用"大字 UI Modal（避免重复 toast）：一次只弹一个，点击关闭。
+ *  修复：不再接受拼 HTML 的 msg（之前会被 escape 成 <b> 原文）。改用结构化参数。*/
 let _medAlertModalOpen = false;
-function showMedAlertUI(msg, onClose){
+function showMedAlertUI(titleMsg, hintMsg, onClose){
   if(_medAlertModalOpen) return;
   _medAlertModalOpen = true;
+  function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   const wrap = document.createElement('div');
   wrap.id = '__medAlertWrap__';
   wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);';
   const box = document.createElement('div');
   box.style.cssText = 'min-width:320px;max-width:92vw;background:#fff;border:2px solid #ef4444;border-radius:18px;padding:22px 24px;box-shadow:0 22px 60px rgba(239,68,68,.35);color:#111;';
   box.innerHTML = '<div style="font-size:20px;font-weight:800;color:#ef4444;margin-bottom:10px;">🔔 用药提醒</div>' +
-    '<div style="font-size:16px;line-height:1.55;">' + String(msg||'').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+    '<div style="font-size:16px;line-height:1.55;font-weight:700;">' + esc(titleMsg||'') + '</div>' +
+    (hintMsg ? ('<div style="margin-top:10px;color:#ef4444;font-weight:700;font-size:15px;line-height:1.55;">' + esc(hintMsg) + '</div>') : '') +
     '<div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;"><button class="btn sm" id="__medAlertClose__">我知道了</button></div>';
   wrap.appendChild(box);
   document.body.appendChild(wrap);
@@ -4524,7 +4599,6 @@ function showMedAlertUI(msg, onClose){
   wrap.addEventListener('click', e=>{ if(e.target === wrap) close(); });
   const btn = document.getElementById('__medAlertClose__');
   if(btn) btn.addEventListener('click', close);
-  // 最多 30 秒自动关，防止页面后台一直挂
   setTimeout(close, 30000);
 }
 /** 字符串 → 32 位 FNV-1a 哈希截断（8 位 hex）：用于脱敏上传 med_id，避免明文上传真实药名/ID */
@@ -4541,7 +4615,7 @@ async function checkMeds(){
   if(!currentUser || !DB.db) return;
   const meds = await allMine('meds'); // 只检查当前登录用户自己的用药（防止其他账号数据串用提醒）
   const now = nowBeijing();
-  const todayStr = now.toISOString().slice(0,10);
+  const todayStr = beijingYMD(now);
   const curMin = now.getHours()*60 + now.getMinutes();
   const allLogs = await allMine('medlog');
   for(const med of meds){
@@ -4574,12 +4648,13 @@ async function checkMeds(){
       notify(baseMsg);
       addEvent('用药提醒', (slotIndex ? '重复提醒#'+(slotIndex+1)+'：':'到点提醒：') + '服药「' + med.name + '」' + tp);
       if(swReg){ try{ const sub = await swReg.pushManager.getSubscription(); if(sub) fetch('https://updates.push.services.mozilla.com/wpush/v2/gcm',{method:'POST'}).catch(()=>{}); }catch(e){} }
-      sendPushPlus('医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+slotIndex+'次）') : ''), baseMsg);
-      // 第一次/重复提醒 都有"滴滴"警报声（持续 10 秒）+ 大字 UI 弹窗
+      sendPushPlus('医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+slotIndex+'次）') : ''), baseMsg + '\n请尽快点「已服用」或「跳过今天」，否则每10分钟重复提醒一次。');
       playDidiAlert(10);
-      showMedAlertUI(baseMsg + '<div style="margin-top:10px;color:#ef4444;font-weight:700;">请尽快点击该时间段下方的<b>「已服用」</b>或<b>「跳过今天」</b>，否则每 10 分钟重复提醒一次。</div>');
+      showMedAlertUI(baseMsg, '请尽快点击该时间段下方的「已服用」或「跳过今天」，否则每 10 分钟重复提醒一次。');
     }
   }
+  // ====== 修复 2：触发提醒后立刻重绘 meds 列表，让「已服用 / 跳过今天」按钮同步出现，不需要等下一次轮询 ======
+  try{ await renderMeds(); }catch(e){ console.warn('[checkMeds] renderMeds fail:', e); }
 }
 /* ==================== 医院资质审查过滤器 ==================== */
 /* 只保留"正规、具备综合资质"的综合医院；
@@ -5500,13 +5575,12 @@ async function saveChronic(){
   const hospCheck = validateHospitalInput(hosp);
   if(!hospCheck.ok){ toast(hospCheck.msg); if(autoSpeak) autoSpeak(hospCheck.msg); return; }
   const targets = collectTargets(type);
-  const rec = {
-    username: currentUser || 'guest',
+  const rec = withUsername({
     disease_type: type,
     diagnose_date: date,
     hospital: hosp,
     target_json: JSON.stringify(targets)
-  };
+  });
   const id = await DB.put('chronic', rec);
   if(currentUser && cloudUsable()){
     sbFetch('chronic_profiles', {
@@ -5636,7 +5710,7 @@ async function delChronic(id){
   await DB.del('chronic', id);
   // 删指标也只删当前账号自己的（即使 disease_id 碰巧重复也不会误删）
   const u = currentUser || 'guest';
-  const allMetrics = await DB.all('metrics');
+  const allMetrics = await allMine('metrics'); // [隔离-加固] 只拿自己的指标
   const mineToDel = allMetrics.filter(m => m.username === u && m.disease_id === id);
   await Promise.all(mineToDel.map(m => DB.del('metrics', m.id)));
   if(currentUser && cloudUsable()){
@@ -5694,16 +5768,15 @@ async function saveMetric(){
   const chronic = await getMyChronic(selectedChronicId);
   if(!chronic){ toast('档案不存在或无权操作'); selectedChronicId = null; renderChronicList(); return; }
   const diseaseType = chronic.disease_type;
-  const rec = {
+  const rec = withUsername({
     disease_id: selectedChronicId,
-    username: currentUser || 'guest',
     disease_type: diseaseType,
     metric_type: type,
     value1: v1,
     value2: v2,
     measured_at: new Date().toISOString(),
     note: note
-  };
+  });
   await DB.put('metrics', rec);
   if(currentUser && cloudUsable()){
     sbFetch('health_metrics', {
@@ -6002,6 +6075,8 @@ async function renderChart(range, attempt){
 }
 
 async function renderCompliance(targetUser, statsId, calId){
+  // ====== [异步并发保护] 同 renderMeds：防止 A 账号发起的依从卡渲染写进 B 账号 DOM ======
+  const myToken = bumpRenderToken('renderCompliance start');
   try{
     statsId = statsId || 'complianceStats';
     calId = calId || 'complianceCalendar';
@@ -6065,6 +6140,11 @@ async function renderCompliance(targetUser, statsId, calId){
         }));
         hasMeds = true;
       }
+    }
+    // ====== [异步并发保护] 挂起期间若发起了新的渲染/账号切换，丢弃本次结果 ======
+    if(myToken !== _nextRenderToken - 1){
+      console.debug(`[renderCompliance] 跳过过期渲染（myToken=${myToken}, latest=${_nextRenderToken-1}, statsId=${statsId}）`);
+      return;
     }
     if(!hasMeds && !myLogs.length){
       sEl.innerHTML =
@@ -6186,13 +6266,16 @@ async function markMedTaken(medId, date, timeSlot, status){
   // reminded_count：med.remindCounts[date+'_'+timeSlot] 该时间段被弹窗/滴滴提醒了多少次
   let remindedCount = 0;
   try{ if(medOwn && medOwn.remindCounts) remindedCount = medOwn.remindCounts[date + '_' + timeSlot] || 0; }catch(e){}
+  const actualTimeISO = now.toISOString(); // 保留 UTC ISO 作为溯源
+  const actualHHMM = beijingHHMM(now); // 北京时间 HH:MM，用于 badge 显示（避免差 8 小时）
   const payload = {
     med_id: medId,
     username: u,
     scheduled_date: date,
     scheduled_time: timeSlot,
     status: status,
-    actual_time: now.toISOString(),
+    actual_time: actualTimeISO,
+    actual_hhmm: actualHHMM,
     late_minutes: lateMin,
     reminded_count: remindedCount
   };
