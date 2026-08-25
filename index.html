@@ -433,7 +433,7 @@
       <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
       <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
       <button class="tile" onclick="speakCurrent()"><span class="ic">🔊</span><span class="nm">语音助手</span><span class="ds">听我说 · 读出内容</span></button>
-      <button class="tile" onclick="go('family')"><span class="ic">👨‍👩‍👧</span><span class="nm">家属端</span><span class="ds">家人实时查看我的情况</span></button>
+      <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc">👨‍👩‍👧</span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
     </div>
   </div>
 
@@ -1446,12 +1446,16 @@ function speakCurrent(){
   const v = document.querySelector('.view.active').id;
   const map = {
     'view-welcome':'欢迎使用医路相伴，老年人智能就医导航。建议开启关怀模式，字体更大更清晰。',
-    'view-home':'这是首页。可以选择症状自查、就医流程、用药提醒、找医院、语音助手或家属端。',
+    'view-home': myRole === 'family'
+      ? '这是首页。可以查看亲属的健康动态，或使用症状自查、药品库等功能。'
+      : '这是首页。可以选择症状自查、就医流程、用药提醒、找医院、语音助手或绑定家人。',
     'view-symptom':'症状自查。请点选症状，或在下方输入症状文字，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
     'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
-    'view-family':'家属端。把屏幕上的邀请码告诉家人，家人就可以在手机上查看您的健康动态。'
+    'view-family': myRole === 'family'
+      ? '查看亲属。输入老人端的邀请码，即可实时查看老人的症状自查、用药情况和前往医院记录。'
+      : '绑定家人。把屏幕上的邀请码告诉家人，家人就可以在手机上查看您的健康动态。'
   };
   speak(map[v] || '');
 }
@@ -1963,10 +1967,16 @@ function updateFamilyView(){
   if(showCode) showCode.style.display = elder ? '' : 'none';
   if(showBind) showBind.style.display = elder ? 'none' : '';
   if(showFeed) showFeed.style.display = elder ? 'none' : '';
-  $('familyTitle').textContent = elder ? '家属端' : '家人健康';
+  $('familyTitle').textContent = elder ? '绑定家人' : '查看亲属';
   $('familyLead').textContent = elder
     ? '把邀请码告诉家人，家人就能在手机上看到您的健康动态。'
     : '绑定老人后，可实时查看老人的症状自查、用药情况和前往医院记录。';
+  const tileNm = $('tileFamilyNm'), tileDs = $('tileFamilyDs'), tileIc = $('tileFamilyIc');
+  if(tileNm) tileNm.textContent = elder ? '绑定家人' : '查看亲属';
+  if(tileDs) tileDs.textContent = elder
+    ? '让家人随时看到我的健康动态'
+    : '查看老人的自查 · 用药 · 就医动态';
+  if(tileIc) tileIc.textContent = elder ? '👨‍👩‍👧' : '📋';
 }
 
 /* ==================== 症状自查 ==================== */
