@@ -927,6 +927,9 @@
   <div class="view" id="view-home">
     <h1 id="homeHi">您好</h1>
     <p class="lead">今天身体感觉怎么样？需要什么帮助？</p>
+    <div class="card" style="margin-bottom:12px;">
+      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+    </div>
     <div class="grid">
       <button class="tile feature" onclick="go('symptom')"><span class="ic">🔍</span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
       <button class="tile" onclick="go('flow')"><span class="ic">🗺️</span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
@@ -941,6 +944,9 @@
   <div class="view" id="view-symptom">
     <h1>症状自查</h1>
     <p class="lead">点选或输入您的症状（可多选），为您判断紧急程度和该挂的科室。</p>
+    <div class="card" style="margin-bottom:12px;">
+      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+    </div>
     <div class="card">
       <h2>① 选择您的症状</h2>
       <div class="sym-list" id="symList"></div>
@@ -978,6 +984,9 @@
   <div class="view" id="view-med">
     <h1>用药提醒</h1>
     <p class="lead">录入医嘱后，到点会用声音和通知提醒您吃药。</p>
+    <div class="card" style="margin-bottom:12px;">
+      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+    </div>
     <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
       <span class="badge" id="timeOffsetBadge" style="background:#e6f4ea;color:#1a7a3a;">时间校准中…</span>
       <span id="beijingTime" style="font-size:20px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums;">--:--:--</span>
@@ -1060,6 +1069,9 @@
   <div class="view" id="view-family">
     <h1 id="familyTitle">家属端</h1>
     <p class="lead" id="familyLead">让家人实时了解您的就医与用药情况。</p>
+    <div class="card" style="margin-bottom:12px;">
+      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+    </div>
     <div class="card" id="cardElderCode">
       <h2>👨‍👩‍👧 我的邀请码</h2>
       <p class="sub">把下面的邀请码告诉家人，家人在「我是家属」身份下输入，即可在手机上查看您的健康动态。</p>
@@ -2146,13 +2158,26 @@ async function updatePPBadge(){
 }
 
 /* ==================== 语音 ==================== */
+let voicesReady = false;
+function loadVoices(){
+  if(!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices();
+  if(vs && vs.length > 0) voicesReady = true;
+}
+if('speechSynthesis' in window){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
 function speak(text, rate){
   try{
-    if(myRole === 'family') return;
     if(!('speechSynthesis' in window)) return;
+    if(!text || !text.trim()) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'zh-CN';
+    const vs = speechSynthesis.getVoices();
+    const zhVoice = vs.find(v => v.lang && v.lang.toLowerCase().startsWith('zh'));
+    if(zhVoice) u.voice = zhVoice;
     u.rate = rate || (document.body.classList.contains('care') ? 0.82 : 1.0);
     u.pitch = 1.0;
     speechSynthesis.speak(u);
