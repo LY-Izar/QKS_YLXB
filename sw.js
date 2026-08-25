@@ -1,6 +1,6 @@
 /* 医路相伴 Service Worker - 处理 PWA 推送通知 */
 
-const CACHE_NAME = 'yilubangban-v3';
+const CACHE_NAME = 'yilubangban-v4';
 const CORE_ASSETS = [
   './',
   './index.html',
