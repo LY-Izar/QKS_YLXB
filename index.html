@@ -4981,10 +4981,12 @@ function drawFamilyChart(attempt){
       label:'舒张压', data: d2,
       borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.1)',
       tension:0.3, fill:false, pointRadius:4, pointHoverRadius:6,
-      pointBackgroundColor: pointColors, pointBorderColor:'#fff', pointBorderWidth:2
+      pointBackgroundColor: pointColors, pointBorderColor: '#fff',
+      pointBorderWidth: 2
     });
   }
-  const care = body.classList.contains('care');
+  // 致命修复：原代码 `body.classList` 里 body 未声明 → ReferenceError，两张趋势图永远初始化失败
+  const care = document.body && document.body.classList.contains('care');
   try{
     _familyChart = new Chart(ctx, {
       type:'line',
@@ -5692,7 +5694,8 @@ async function _renderChartCore(range){
       pointBorderWidth: 2
     });
   }
-  const care = body.classList.contains('care');
+  // 致命修复：原代码 `body.classList` 里 body 未声明 → ReferenceError，趋势图永远初始化失败
+  const care = document.body && document.body.classList.contains('care');
   try{
     chronicChart = new Chart(ctx, {
       type: 'line',
