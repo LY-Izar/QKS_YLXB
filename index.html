@@ -755,6 +755,7 @@
       <button class="tile feature" onclick="go('symptom')"><span class="ic">🔍</span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
       <button class="tile" onclick="go('flow')"><span class="ic">🗺️</span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
       <button class="tile" onclick="go('med')"><span class="ic">💊</span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
+      <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
       <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
       <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc">👨‍👩‍👧</span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
     </div>
@@ -1764,7 +1765,7 @@ function speakCurrent(){
     'view-welcome':'欢迎使用医路相伴，老年人智能就医导航。建议开启关怀模式，字体更大更清晰。',
     'view-home': myRole === 'family'
       ? '这是首页。可以查看亲属的健康动态，或使用症状自查、药品库等功能。'
-      : '这是首页。可以选择症状自查、就医流程、用药提醒、找医院或绑定家人。药品库可从用药提醒页面进入。',
+      : '这是首页。可以选择症状自查、就医流程、用药提醒、药品库、找医院或绑定家人。',
     'view-symptom':'症状自查。请点选症状，或在下方输入症状文字，可以多选。然后查看分析结果，了解紧急程度和该挂的科室。',
     'view-flow':'就医流程引导。从预约挂号到取药，跟着步骤走。',
     'view-med':'用药提醒。添加药品和时间，到点会用声音和通知提醒您吃药。',
