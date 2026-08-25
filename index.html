@@ -1510,7 +1510,8 @@ function bodyPartClick(part){
     + '<div class="sym-list">'
     + syms.map(s => {
       const sel = selectedSyms.has(s.id);
-      return '<button class="sym-chip'+(sel?' selected':'')+'" onclick="toggleBodySym(\''+s.id+'\')">'+s.icon+' '+s.name+'</button>';
+      // 统一用 on class，与 renderSyms(symList) 选中态 CSS .sym-chip.on 完全一致
+      return '<button class="sym-chip'+(sel?' on':'')+'" onclick="toggleBodySym(\''+s.id+'\')">'+(sel?'<span style="margin-right:2px;">✓</span>':'')+s.icon+' '+s.name+'</button>';
     }).join('')
     + '</div>';
   autoSpeak(info.label+'相关症状');
@@ -3814,9 +3815,17 @@ function renderSyms(){
   const el = $('symList'); el.innerHTML = '';
   SYMPTOMS.forEach(s=>{
     const b = document.createElement('button');
-    b.className = 'sym-chip' + (selectedSyms.has(s.id) ? ' on' : '');
-    b.innerHTML = s.icon + ' ' + s.name;
-    b.onclick = () => { selectedSyms.has(s.id) ? selectedSyms.delete(s.id) : selectedSyms.add(s.id); renderSyms(); };
+    const sel = selectedSyms.has(s.id);
+    b.className = 'sym-chip' + (sel ? ' on' : '');
+    // 与 bodyPartClick 的步骤2症状按钮视觉一致：选中时前置 ✓
+    b.innerHTML = (sel ? '<span style="margin-right:2px;">✓</span>' : '') + s.icon + ' ' + s.name;
+    b.onclick = () => {
+      if(selectedSyms.has(s.id)) selectedSyms.delete(s.id);
+      else selectedSyms.add(s.id);
+      renderSyms();
+      // 同步重绘部位-症状区（bodySymArea），保持两处选中态一致
+      if(bodyActivePart) bodyPartClick(bodyActivePart);
+    };
     el.appendChild(b);
   });
 }
@@ -3832,6 +3841,8 @@ function symTextSubmit(){
   if(hits.length){
     hits.forEach(s=>selectedSyms.add(s.id));
     renderSyms();
+    // 同步重绘部位-症状区（bodySymArea）：文字批量加症状后步骤2也要显示对勾高亮
+    if(bodyActivePart) bodyPartClick(bodyActivePart);
     const names = hits.map(s=>s.name).join('、');
     toast('已选中：' + names);
     autoSpeak('已为您选中' + names + '，请点击查看分析结果');
@@ -3878,7 +3889,14 @@ function analyzeSym(){
   html += '<div class="card"><h2>您选择的症状</h2><div class="rows">';
   chosen.forEach(s=>{
     const ul = {red:'🔴 紧急', yellow:'🟡 尽快', green:'🟢 观察'}[s.u];
-    html += '<div><span class="k">' + s.icon + ' ' + s.name + '</span>' + s.d.join(' / ') + '　' + ul + '</div>';
+    // 步骤3高亮样式：和步骤2 chip 的渐变选中态视觉呼应，按紧急度给左侧色条 + 背景色
+    const barColor = {red:'linear-gradient(180deg,#ef4444,#dc2626)', yellow:'linear-gradient(180deg,#f59e0b,#d97706)', green:'linear-gradient(180deg,#10b981,#059669)'}[s.u];
+    const bgColor  = {red:'rgba(239,68,68,0.07)',   yellow:'rgba(245,158,11,0.08)',        green:'rgba(16,185,129,0.07)'}[s.u];
+    const txtColor = {red:'#b91c1c', yellow:'#92400e', green:'#047857'}[s.u];
+    html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:6px 0;border-radius:12px;border:1px solid var(--border);background:'+bgColor+';">'
+      + '<div style="width:5px;border-radius:4px;align-self:stretch;background:'+barColor+';margin-top:2px;"></div>'
+      + '<div style="flex:1;"><div style="font-weight:700;color:'+txtColor+';">✓ ' + s.icon + ' ' + s.name + '　' + ul + '</div>'
+      + '<div class="hint" style="margin-top:2px;">对应科室：' + s.d.join(' / ') + '</div></div></div>';
   });
   html += '</div></div>';
   html += '<div class="gap6" style="margin-top:6px;">' +
