@@ -798,6 +798,28 @@
   @keyframes btnShine{0%,55%{left:-80%;}100%{left:170%;}}
   #view-family .med-item{animation:feedIn .45s ease both;}
   @keyframes feedIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
+
+  /* 慢病管理：档案选择状态条 */
+  .chronic-status{padding:14px 16px;border-radius:16px;margin-bottom:12px;font-weight:600;font-size:15px;line-height:1.5;display:flex;align-items:center;gap:10px;}
+  body.care .chronic-status{font-size:18px;padding:18px 20px;}
+  .chronic-status.prompt{background:linear-gradient(135deg,var(--care-bg),rgba(255,193,7,.18));border:1.5px solid var(--care-color);color:#8f3d00;}
+  .chronic-status.active{background:linear-gradient(135deg,rgba(15,157,143,.14),rgba(15,157,143,.06));border:2px solid var(--primary);color:var(--primary-deep);box-shadow:0 4px 14px rgba(15,157,143,.18);}
+  body.dark .chronic-status.prompt{background:linear-gradient(135deg,rgba(255,193,7,.18),rgba(255,193,7,.08));border-color:rgba(255,193,7,.55);color:#ffd66b;}
+  body.dark .chronic-status.active{background:linear-gradient(135deg,rgba(15,157,143,.22),rgba(15,157,143,.08));border-color:var(--primary);color:#7de4d4;box-shadow:0 6px 22px rgba(15,157,143,.28);}
+  .chronic-status .cs-ic{font-size:22px;}
+  body.care .chronic-status .cs-ic{font-size:26px;}
+  .chronic-status .cs-name{font-size:18px;font-weight:800;}
+  body.care .chronic-status .cs-name{font-size:22px;}
+
+  /* 慢病档案选中项高亮 */
+  .med-item.chronic-sel{border:2.5px solid var(--primary);background:linear-gradient(135deg,rgba(15,157,143,.10),transparent);box-shadow:0 4px 14px rgba(15,157,143,.14);}
+  .med-item.chronic-sel::before{content:'当前';position:absolute;top:-10px;left:14px;background:var(--primary);color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;}
+  #chronicList .med-item{position:relative;}
+
+  /* 家属端：选中老人高亮 */
+  #view-family .med-item.elder-sel{border:2.5px solid #8b5cf6;background:linear-gradient(135deg,rgba(139,92,246,.10),transparent);box-shadow:0 4px 14px rgba(139,92,246,.16);}
+  #view-family .med-item.elder-sel::before{content:'查看中';position:absolute;top:-10px;left:14px;background:#8b5cf6;color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;}
+  body.dark #view-family .med-item.elder-sel{border-color:#a78bfa;background:linear-gradient(135deg,rgba(167,139,250,.18),transparent);}
   body.care #view-family h1{color:var(--ink);}
   body.care #view-family .card{overflow:visible;}
   body.care #view-family .btn:not(.ghost):not(.line)::before{display:none;}
@@ -1073,6 +1095,7 @@
     <!-- 慢病档案 -->
     <div class="card">
       <h2>📋 我的慢病档案</h2>
+      <div id="chronicStatus" class="chronic-status"></div>
       <div id="chronicList"></div>
       <div class="divider"></div>
       <label class="f">疾病类型</label>
@@ -4535,18 +4558,16 @@ function renderBoundList(){
   desc.textContent = '点击老人卡片可查看其健康动态。支持绑定多位老人，可随时添加或解除。';
   familyBinds.forEach((code, idx) => {
     const card = document.createElement('div');
-    card.className = 'med-item';
     const isActive = code === currentViewBind;
-    card.style.cssText = isActive
-      ? 'border:2px solid var(--primary,#6366f1);background:var(--surface-2);'
-      : 'border:1px solid var(--border);';
+    card.className = 'med-item' + (isActive ? ' elder-sel' : '');
+    card.style.position = 'relative';
     card.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
       '<div style="font-size:24px;">👴</div>' +
       '<div style="flex:1;cursor:pointer;" onclick="selectElder(\'' + code + '\')">' +
       '<div style="font-weight:700;font-size:15px;" id="elderName_' + idx + '">加载中...</div>' +
       '<div class="hint">邀请码：<span style="font-family:ui-monospace,monospace;font-weight:700;">' + code + '</span></div>' +
       '</div>' +
-      '<button class="btn sm line" onclick="unbindOne(\'' + code + '\')">解除</button>' +
+      '<button class="btn sm line" onclick="event.stopPropagation();unbindOne(\'' + code + '\')">解除</button>' +
       '</div>';
     list.appendChild(card);
     // 异步获取老人名字
@@ -4774,30 +4795,64 @@ function collectTargets(type){
 async function renderChronicList(){
   const all = await DB.all('chronic');
   const mine = all.filter(c => c.username === (currentUser || 'guest'));
-  const el = $('chronicList');
+  const statusEl = $('chronicStatus');
+  const listEl = $('chronicList');
+  if(!statusEl || !listEl) return;
+
+  let statusHTML = '';
   if(!mine.length){
-    el.innerHTML = '<p class="hint">暂无慢病档案，请在下方选择疾病类型创建。</p>';
+    statusHTML = `<div class="chronic-status prompt"><span class="cs-ic">👆</span><span>请在下方<strong>选择疾病类型</strong>，创建您的第一个慢病档案。</span></div>`;
+    listEl.innerHTML = '<p class="hint">暂无慢病档案。</p>';
     hideChronicCards();
+    statusEl.innerHTML = statusHTML;
     return;
   }
-  el.innerHTML = mine.map(c => {
+
+  const sel = mine.find(c => c.id === selectedChronicId);
+  if(!sel){
+    statusHTML = `<div class="chronic-status prompt"><span class="cs-ic">👆</span><span>请<strong>点击下方档案</strong>选择要管理的慢病，之后才能录入和查看数据。</span></div>`;
+    hideChronicCards();
+  } else {
+    const label = DISEASE_LABELS[sel.disease_type] || sel.disease_type;
+    statusHTML = `<div class="chronic-status active"><span class="cs-ic">✅</span><span>当前管理：<span class="cs-name">${label}</span></span>${sel.diagnose_date ? `<span class="hint">确诊 ${sel.diagnose_date}</span>` : ''}<span class="hint">录入指标、查看趋势都属于这个档案</span></div>`;
+  }
+  statusEl.innerHTML = statusHTML;
+
+  listEl.innerHTML = mine.map(c => {
     const label = DISEASE_LABELS[c.disease_type] || c.disease_type;
-    return '<div class="med-item" style="display:flex;align-items:center;gap:10px;">'
+    const isSel = c.id === selectedChronicId;
+    return '<div class="med-item' + (isSel ? ' chronic-sel' : '') + '">'
       + '<div style="flex:1;cursor:pointer;" onclick="selectChronic(' + c.id + ')">'
-      + '<div style="font-weight:700;font-size:15px;">' + label + (c.id === selectedChronicId ? ' ●' : '') + '</div>'
+      + '<div style="font-weight:700;font-size:15px;">' + label + '</div>'
       + '<div class="hint">' + (c.diagnose_date ? '确诊 ' + c.diagnose_date : '') + (c.hospital ? ' · ' + c.hospital : '') + '</div>'
       + '</div>'
-      + '<button class="btn sm line" onclick="delChronic(' + c.id + ')">删除</button>'
+      + '<button class="btn sm line" onclick="event.stopPropagation();delChronic(' + c.id + ')">删除</button>'
       + '</div>';
   }).join('');
-  if(!selectedChronicId) selectChronic(mine[0].id);
+
+  if(sel){
+    // 已选档案，重绘下方各卡（但不重复触发 selectChronic，避免循环）
+    onMetricTypeChange();
+    renderMetricHistory();
+    renderChart(currentChronicRange);
+    renderCompliance();
+    renderFollowups();
+    renderChronicAlerts();
+  }
 }
 
 let selectedChronicId = null;
 
-function selectChronic(id){
+async function selectChronic(id){
   selectedChronicId = id;
   showChronicCards();
+  try{
+    const chronic = await DB.get('chronic', id);
+    if(chronic){
+      const label = DISEASE_LABELS[chronic.disease_type] || chronic.disease_type;
+      autoSpeak('已选择' + label + '档案，现在可以录入指标和查看趋势');
+    }
+  }catch(e){}
   renderChronicList();
   onMetricTypeChange();
   renderMetricHistory();
