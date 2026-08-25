@@ -844,6 +844,37 @@
   @media (hover:hover){ .voice-fab:hover{filter:brightness(1.06);} }
   .voice-fab.listening{background:linear-gradient(135deg,var(--danger),#9b2c2c);animation:pulse 1s infinite;}
   @keyframes pulse{50%{box-shadow:0 0 0 12px color-mix(in srgb, var(--danger) 22%, transparent);}}
+  /* ===== 用药按钮 成功反馈动画：按钮点击脉冲 + 卡片成功绿色边框闪烁 ===== */
+  @keyframes btnSuccessPulse{
+    0%{transform:scale(1);}
+    30%{transform:scale(1.08);box-shadow:0 0 0 6px rgba(34,197,94,.35);}
+    100%{transform:scale(.98);opacity:.3;}
+  }
+  @keyframes chipSuccessFlash{
+    0%{border:3px solid #22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.55);}
+    35%{border:3px solid #22c55e;box-shadow:0 0 0 10px rgba(34,197,94,.18);background:color-mix(in srgb,#22c55e 10%,var(--surface-2));}
+    70%{border:2.5px solid #16a34a;box-shadow:0 0 0 4px rgba(34,197,94,.28);}
+    100%{border:1px solid var(--border);box-shadow:none;background:var(--surface-2);}
+  }
+  @keyframes chipSkipFlash{
+    0%{border:3px solid #ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.55);}
+    35%{border:3px solid #ef4444;box-shadow:0 0 0 10px rgba(239,68,68,.18);background:color-mix(in srgb,#ef4444 10%,var(--surface-2));}
+    100%{border:1px solid var(--border);box-shadow:none;background:var(--surface-2);}
+  }
+  .chip-success-flash{animation:chipSuccessFlash 1.1s ease both;}
+  .chip-skip-flash{animation:chipSkipFlash 1.1s ease both;}
+  .btn-success-disappear{animation:btnSuccessPulse .38s ease forwards;pointer-events:none;}
+  /* 卡片内本地确认提示（顶部 toast 易被滚出视野） */
+  .med-inline-toast{
+    margin-top:8px;padding:8px 12px;border-radius:10px;
+    background:linear-gradient(135deg,rgba(34,197,94,.14),rgba(34,197,94,.05));
+    border:1px solid rgba(34,197,94,.35);color:var(--ink);font-weight:600;
+    animation:pop .25s ease both;
+  }
+  .med-inline-toast.skip{
+    background:linear-gradient(135deg,rgba(239,68,68,.14),rgba(239,68,68,.05));
+    border-color:rgba(239,68,68,.35);
+  }
 
   /* 安全区域适配（iOS刘海屏） */
   @supports (padding:env(safe-area-inset-bottom)){
@@ -3389,6 +3420,10 @@ function go(view){
   if(view === 'chronic'){
     renderChronicList();
   }
+  // ====== 修复：切换到用药页必须重新渲染列表+依从性，避免首次切页面时依从卡是空的 ======
+  if(view === 'med'){
+    try{ renderMeds(); }catch(e){ console.warn('[go:med] renderMeds fail:', e); }
+  }
   // 页面自动播报：老人端全程触发；家属端不自动出声（需点🔊按钮）
   if(myRole === 'elder' && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
 }
@@ -3529,6 +3564,8 @@ function resetAppState(){
   renderSyms();
   renderFlow();
   renderMeds();
+  // ====== 独立兜底：无论 renderMeds 是否成功走完，都强制刷新依从性卡，防止空标题 ======
+  try{ renderCompliance(); }catch(e){ console.warn('[resetAppState] renderCompliance fail:', e); }
   renderBodyParts();
   renderTimeInputs($('medFreq')?.value || 'daily');
   renderChronicList();
@@ -4142,7 +4179,9 @@ async function renderMeds(){
       const diffMin = curMin - tm; // 正数=已过提醒点
       // ===== 每个时间点用"小卡片"包裹：pill + 条件按钮（都在自己小卡片里，不溢出挤压外面布局）=====
       const chipCard = document.createElement('div');
-      chipCard.style.cssText = 'flex:1 1 calc(33.33% - 10px);min-width:240px;max-width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);';
+      chipCard.style.cssText = 'flex:1 1 calc(33.33% - 10px);min-width:240px;max-width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);transition:border .2s, box-shadow .2s, background .2s;';
+      // ====== 用于点击后重新定位高亮：用 dataset 标识 (med_id + date + time_slot) ======
+      chipCard.dataset.medChip = String(m.id) + '|' + todayStr + '|' + t;
       // badge 渲染
       let badgeHtml = '';
       if(status === 'taken'){
@@ -4225,24 +4264,42 @@ function registerMedActionDelegation(){
       if(!medId || !date || !timeSlot || !/^taken|late_taken|skipped$/.test(action)){
         toast('按钮参数异常，请刷新页面重试'); return;
       }
-      btn.disabled = true;
-      const originalText = btn.textContent;
+      // ====== 强反馈 #1：点击瞬间 — 禁用 + 脉冲动画 + 文字变"处理中"加深色背景，让老人立刻知道点到了 ======
+      const chipCard = btn.closest('[data-med-chip]');
+      const btnRowEl = btn.parentElement; // the flex row containing btnTake + btnSkip
+      const allBtnsInRow = btnRowEl ? btnRowEl.querySelectorAll('button') : [btn];
+      allBtnsInRow.forEach(b => { b.disabled = true; b.classList.add('btn-success-disappear'); });
+      const originalBtnText = btn.textContent;
       try{
-        btn.textContent = '处理中…';
-        await markMedTaken(medId, date, timeSlot, action);
-      }catch(err){
-        console.error('[med-action] markMedTaken 失败:', err, {action, medId, date, timeSlot});
-        toast('操作失败：' + String(err && err.message || err) + '，请重试');
+        btn.style.background = (action === 'skipped') ? '#991b1b' : '#15803d';
+        btn.textContent = '…';
+      }catch(err){ /* ignore */ }
+
+      // 执行核心逻辑（含 await renderMeds/renderCompliance，以及 DOM 稳定后的 chip 闪烁 + inline toast —— 在 markMedTaken 内部统一处理更可靠）
+      await markMedTaken(medId, date, timeSlot, action);
+
+      // ====== 强反馈 #4：语音播报 —— 老人端全程自动出声（遵循项目约束：家属端不自动出声，仅用视觉）======
+      if(myRole === 'elder'){
         try{
-          btn.disabled = false;
-          btn.textContent = originalText;
-        }catch(e){}
+          let spoken;
+          if(action === 'taken') spoken = '已记录服药，好样的。';
+          else if(action === 'late_taken') spoken = '已记录补服，下次记得准时吃药哦。';
+          else spoken = '已记录跳过，下次别忘了吃药。';
+          autoSpeak(spoken);
+        }catch(_){}
       }
-    }catch(rootErr){
-      console.error('[med-action] 委托异常:', rootErr);
-      try{ toast('按钮点击异常：' + String(rootErr && rootErr.message || rootErr)); }catch(e){}
+    }catch(err){
+      console.error('[med-action] markMedTaken 失败:', err, {action, medId, date, timeSlot});
+      toast('操作失败：' + String(err && err.message || err) + '，请重试');
+      // 失败时恢复按钮
+      try{
+        document.querySelectorAll('button[data-med-action]').forEach(b=>{
+          b.classList.remove('btn-success-disappear');
+          b.disabled = false;
+        });
+      }catch(e){}
     }
-  });
+  }, { passive: false });
 }
 /* ===== AI 用药建议引擎 ===== */
 function matchDrug(text){
@@ -5948,7 +6005,18 @@ async function renderCompliance(targetUser, statsId, calId){
   try{
     statsId = statsId || 'complianceStats';
     calId = calId || 'complianceCalendar';
-    // ====== 防御：找不到 DOM 元素时尝试在父卡片内动态补建，避免仅渲染空标题 ======
+    // ====== 防御 0：强制让依从卡容器可见（防止其他逻辑误设 display:none 造成"空卡"观感）======
+    const parentId0 = (statsId === 'complianceStats') ? 'medComplianceCard' :
+                      (statsId === 'elderComplianceStats') ? 'cardElderCompliance' : null;
+    if(parentId0){
+      const card = document.getElementById(parentId0);
+      if(card){
+        try{ card.style.display = 'block'; }catch(_){}
+        try{ card.style.visibility = 'visible'; }catch(_){}
+        try{ card.style.opacity = card.style.opacity === '0' ? '1' : card.style.opacity; }catch(_){}
+      }
+    }
+    // ====== 防御 1：找不到 DOM 元素时尝试在父卡片内动态补建，避免仅渲染空标题 ======
     let sEl = document.getElementById(statsId), cEl = document.getElementById(calId);
     if(!sEl || !cEl){
       const parentId = (statsId === 'complianceStats') ? 'medComplianceCard' :
@@ -5959,7 +6027,6 @@ async function renderCompliance(targetUser, statsId, calId){
           sEl = document.createElement('div');
           sEl.id = statsId;
           sEl.style.marginBottom = '12px';
-          // 插入到 h2 之后 / 第一个子元素之后
           const firstChildAfterTitle = p.querySelectorAll('h2')[0];
           if(firstChildAfterTitle && firstChildAfterTitle.nextSibling){
             p.insertBefore(sEl, firstChildAfterTitle.nextSibling);
@@ -6000,8 +6067,12 @@ async function renderCompliance(targetUser, statsId, calId){
       }
     }
     if(!hasMeds && !myLogs.length){
-      sEl.innerHTML = '<p class="hint">暂未添加用药，请先到"用药提醒"添加药品并点"已服用"记录，稍后会自动生成依从性数据。</p>';
-      cEl.innerHTML = '';
+      sEl.innerHTML =
+        '<div style="padding:14px;border:2px dashed var(--border);border-radius:12px;background:var(--surface-2);">' +
+          '<div style="font-size:18px;font-weight:700;margin-bottom:6px;">📊 用药依从性 0%</div>' +
+          '<p class="hint" style="margin:0;">暂未添加用药，请先在"用药提醒"添加药品，到点后点击「✅ 已服用」即可开始统计近 30 天依从率、补服/漏服情况与日历热力图。</p>' +
+        '</div>';
+      cEl.innerHTML = '<p class="hint" style="margin-top:8px;">（日历暂无数据，服药后将自动显示每日颜色）</p>';
       return;
     }
     myLogs = myLogs.map(l => ({ ...l, status: String(l.status || 'taken').trim() }));
@@ -6163,8 +6234,30 @@ async function markMedTaken(medId, date, timeSlot, status){
     toast('❌ 已记录今日跳过（计入漏服）');
     addEvent('用药依从性', '跳过（漏服）：时间段 ' + date + ' ' + timeSlot);
   }
-  renderMeds();
-  renderCompliance();
+  // ====== 核心修复：必须 AWAIT renderMeds/renderCompliance，确保委托端 await markMedTaken 后 DOM 已经稳定 ======
+  await renderMeds();
+  await renderCompliance();
+  // ====== DOM 稳定后自己触发 chip 边框闪烁 + 卡片内本地 inline toast（避免委托端查到"旧 DOM"后立刻被 renderMeds 重建冲掉）======
+  try{
+    const chipKey = String(medId) + '|' + date + '|' + timeSlot;
+    // 定位新 chipCard（renderMeds 刚重建完，DOM 是最新的）
+    const targetChip = document.querySelector(`[data-med-chip="${chipKey}"]`);
+    if(targetChip){
+      // 1.1 秒边框脉冲（绿/橙/红分 action）
+      targetChip.classList.remove('chip-success-flash','chip-skip-flash');
+      void targetChip.offsetWidth;
+      targetChip.classList.add((status === 'skipped') ? 'chip-skip-flash' : 'chip-success-flash');
+      // 卡片内本地 toast（插入到 chipCard，防止顶部 toast 被滚出视野）
+      targetChip.querySelectorAll('.med-inline-toast').forEach(n => n.remove());
+      const localToast = document.createElement('div');
+      localToast.className = 'med-inline-toast' + (status === 'skipped' ? ' skip' : '');
+      if(status === 'taken') localToast.textContent = '✅ 已记录按时服药，依从率会同步更新';
+      else if(status === 'late_taken') localToast.textContent = '⚠️ 已记录补服，稍后请按医嘱时间准时服药';
+      else localToast.textContent = '❌ 已记录今日跳过（漏服），下次请记得服药';
+      targetChip.appendChild(localToast);
+      setTimeout(()=>{ try{ localToast.style.transition='opacity .4s'; localToast.style.opacity='0'; setTimeout(()=>{ try{ localToast.remove(); }catch(_){} }, 450); }catch(_){} }, 4200);
+    }
+  }catch(_){}
 }
 
 async function saveFollowup(){
@@ -6281,6 +6374,8 @@ async function init(){
     await DB.open();
   }catch(e){ console.warn('IndexedDB open failed:', e); }
   renderMeds();
+  // ====== 初始化阶段依从性兜底（即使 renderMeds 未走完，也保证卡不空）======
+  try{ renderCompliance(); }catch(e){ console.warn('[init] renderCompliance fail:', e); }
   renderTimeInputs('daily');
   renderChronicList();
   renderBodyParts();
