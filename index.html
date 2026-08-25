@@ -2259,7 +2259,6 @@ function applyTheme(){
   document.body.classList.toggle('dark', dark);
   const btn = $('btnTheme');
   if(btn) btn.textContent = themeDark ? '☀️' : '🌙';
-  updateLightRays();
 }
 function toggleTheme(){
   themeDark = !themeDark;
