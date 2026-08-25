@@ -2113,7 +2113,7 @@ function toast(msg, ms=4000){
 }
 function notify(msg){
   toast(msg);
-  speak(msg);
+  autoSpeak(msg);
   if('Notification' in window && Notification.permission === 'granted'){
     new Notification('医路相伴 · 提醒', {body: msg});
   }
@@ -2432,6 +2432,11 @@ function speak(text, rate){
   }
 }
 function stopSpeak(){ try{ speechSynthesis.cancel(); }catch(e){} }
+/* 自动播报门控：仅老人端自动触发语音；家属端只有点击🔊朗读按钮才出声 */
+function autoSpeak(text, rate){
+  if(myRole !== 'elder') return;
+  speak(text, rate);
+}
 function speakCurrent(){
   const activeView = document.querySelector('.view.active');
   if(!activeView){ toast('未找到当前页面'); return; }
@@ -2498,7 +2503,7 @@ function confirmVoice(allow){
   if(!allow){
     voicePending = null;
     toast('已取消语音输入');
-    speak('好的，请手动输入');
+    autoSpeak('好的，请手动输入');
     return;
   }
   if($('voiceRemember') && $('voiceRemember').checked) localStorage.setItem('med_voice_allow', 'yes');
@@ -2666,7 +2671,7 @@ function scheduleAutoStop(){
 }
 function failVoice(msg){
   toast(msg);
-  speak('语音输入不可用，请手动输入');
+  autoSpeak('语音输入不可用，请手动输入');
   stopListen();
 }
 function finishListen(){
@@ -2736,7 +2741,7 @@ function voiceInput(){
       const el = $('symInput');
       if(el && txt){ el.value = txt; }
       toast('未识别到症状，已打开自查页，可在文字框中补充描述');
-      speak('没有听清具体症状，已为您打开自查页，可在文字框中补充，或直接前往内科就诊。');
+      autoSpeak('没有听清具体症状，已为您打开自查页，可在文字框中补充，或直接前往内科就诊。');
     }
   }, symptomsGrammar());
 }
@@ -2746,7 +2751,7 @@ function voiceToInput(targetId){
     const el = $(targetId);
     if(el){ el.value = clean; el.focus(); }
     toast('已输入：' + clean);
-    speak('已输入' + clean);
+    autoSpeak('已输入' + clean);
     if(targetId === 'medName'){ showDrugAdvice(matchDrug(clean)); }
   });
 }
@@ -2833,13 +2838,13 @@ function toggleMode(){
   localStorage.setItem('med_mode', care ? 'normal' : 'care');
   applyMode();
   const nowCare = document.body.classList.contains('care');
-  speak(nowCare ? '已开启关怀模式，字体更大更清晰' : '已切换为标准模式');
+  autoSpeak(nowCare ? '已开启关怀模式，字体更大更清晰' : '已切换为标准模式');
   toast(nowCare ? '已开启关怀模式' : '已切换为标准模式');
 }
 function enableCare(){
   localStorage.setItem('med_mode', 'care');
   applyMode();
-  speak('已为您开启关怀模式。这里字体更大、按钮更醒目，我会用语音为您播报。');
+  autoSpeak('已为您开启关怀模式。这里字体更大、按钮更醒目，我会用语音为您播报。');
   go('home');
 }
 
@@ -2895,7 +2900,8 @@ function go(view){
     updatePWABadge();
     updatePPBadge();
   }
-  if(document.body.classList.contains('care') && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
+  // 页面自动播报：老人端全程触发；家属端不自动出声（需点🔊按钮）
+  if(myRole === 'elder' && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
 }
 
 /* ==================== 云端账户同步（Supabase） ==================== */
@@ -3113,8 +3119,8 @@ async function doLogin(){
     }
   }
   if(!code){
-    if(netFail && cloudUsable()){ toast('云端连接失败，本机也没有该账号'); speak('登录失败，请检查网络'); }
-    else { toast('账号或密码错误'); speak('账号或密码错误'); }
+    if(netFail && cloudUsable()){ toast('云端连接失败，本机也没有该账号'); autoSpeak('登录失败，请检查网络'); }
+    else { toast('账号或密码错误'); autoSpeak('账号或密码错误'); }
     return;
   }
   currentUser = u; localStorage.setItem('med_user', u);
@@ -3157,7 +3163,7 @@ function quickUse(){
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   go('home');
   updateUserUI();
-  speak('已进入体验模式，暂不保存您的数据。');
+  autoSpeak('已进入体验模式，暂不保存您的数据。');
 }
 async function afterLogin(){
   // 0. 切换账号时先清空旧数据
@@ -3294,22 +3300,22 @@ function matchSymptoms(txt){
 function symTextSubmit(){
   const el = $('symInput');
   const raw = el ? sanitizeInput(el.value, 200) : '';
-  if(!raw){ toast('请先输入症状文字，如：发烧、头痛'); speak('请先输入症状文字'); return; }
+  if(!raw){ toast('请先输入症状文字，如：发烧、头痛'); autoSpeak('请先输入症状文字'); return; }
   const hits = matchSymptoms(raw);
   if(hits.length){
     hits.forEach(s=>selectedSyms.add(s.id));
     renderSyms();
     const names = hits.map(s=>s.name).join('、');
     toast('已选中：' + names);
-    speak('已为您选中' + names + '，请点击查看分析结果');
+    autoSpeak('已为您选中' + names + '，请点击查看分析结果');
     el.value = '';
   } else {
     toast('未能识别「' + raw + '」，请从上方点选症状，或直接前往内科就诊');
-    speak('未能识别该症状，建议前往内科就诊');
+    autoSpeak('未能识别该症状，建议前往内科就诊');
   }
 }
 function analyzeSym(){
-  if(selectedSyms.size === 0){ toast('请先选择或输入至少一个症状'); speak('请先选择或输入您的症状'); return; }
+  if(selectedSyms.size === 0){ toast('请先选择或输入至少一个症状'); autoSpeak('请先选择或输入您的症状'); return; }
   const chosen = SYMPTOMS.filter(s=>selectedSyms.has(s.id));
   const order = {red:0, yellow:1, green:2};
   const weight = {red:4, yellow:2, green:1};
@@ -3355,7 +3361,7 @@ function analyzeSym(){
   // 记录事件
   addEvent('自查', '自查了症状「' + chosen.map(s=>s.name).join('、') + '」，判断：' + uLabel[maxU] + '，建议科室：' + mainDept);
   // 语音
-  speak('根据您的症状，整体判断为' + uLabel[maxU] + '。建议前往' + mainDept + '就诊。' + URGENT_TIP[maxU].replace(/🆘|⏰|😊/g,''));
+  autoSpeak('根据您的症状，整体判断为' + uLabel[maxU] + '。建议前往' + mainDept + '就诊。' + URGENT_TIP[maxU].replace(/🆘|⏰|😊/g,''));
   $('symResult').scrollIntoView({behavior:'smooth'});
 }
 
@@ -3535,7 +3541,7 @@ async function addMed(){
   renderTimeInputs(freq);
   renderMeds();
   toast('已保存用药：' + name);
-  speak('已保存用药' + name + '，到点会提醒您。');
+  autoSpeak('已保存用药' + name + '，到点会提醒您。');
   addEvent('用药', '添加了用药「' + name + '」，' + (dose||'') + '，提醒时间 ' + times.join('、'));
   if('Notification' in window && Notification.permission !== 'granted'){
     Notification.requestPermission();
@@ -3592,7 +3598,7 @@ function showDrugAdvice(drug){
     '<div>⚠️ <b>注意事项：</b>' + drug.caution + '</div>' +
     '<div>🚫 <b>相互作用：</b>' + drug.inter + '</div>' +
     '<div class="hint" style="margin-top:6px;">数据来源：' + DRUG_META.source + '。仅供参考。</div></div>';
-  speak('检测到' + drug.name + '。' + drug.advice + ' ' + drug.caution);
+  autoSpeak('检测到' + drug.name + '。' + drug.advice + ' ' + drug.caution);
 }
 async function showAllAdvice(){
   const meds = await DB.all('meds');
@@ -3633,7 +3639,7 @@ async function showAllAdvice(){
   }
   $('adviceContent').innerHTML = html;
   $('adviceMask').classList.add('show');
-  if(unique.length) speak('已生成用药建议，' + (tips.length?('检测到' + tips.length + '条相互作用提醒。'):'请查看屏幕。'));
+  if(unique.length) autoSpeak('已生成用药建议，' + (tips.length?('检测到' + tips.length + '条相互作用提醒。'):'请查看屏幕。'));
 }
 /* ===== 药品库浏览 ===== */
 let drugCat = '全部';
@@ -3683,7 +3689,7 @@ function voiceDrugSearch(){
     if(el){ el.value = clean; }
     renderDrugLib();
     toast('已输入：' + clean);
-    speak('正在查询' + clean);
+    autoSpeak('正在查询' + clean);
   }, drugsGrammar());
 }
 /* ===== 拍照识别（Tesseract.js OCR） ===== */
@@ -3700,7 +3706,7 @@ async function scanMed(){
       return;
     }
     toast('正在识别图片中的药品，请稍候…');
-    speak('正在识别图片中的药品，请稍候');
+    autoSpeak('正在识别图片中的药品，请稍候');
     try{
       const { data } = await Tesseract.recognize(file, 'chi_sim+eng');
       const text = data.text || '';
@@ -3709,7 +3715,7 @@ async function scanMed(){
         $('medName').value = drug.name;
         showDrugAdvice(drug);
         toast('识别到：' + drug.name);
-        speak('识别到药品' + drug.name + '。' + drug.advice);
+        autoSpeak('识别到药品' + drug.name + '。' + drug.advice);
         addEvent('用药', '拍照识别到药品「' + drug.name + '」');
       } else {
         const lines = text.split('\n')
@@ -3718,10 +3724,10 @@ async function scanMed(){
         if(lines.length){
           $('medName').value = lines[0];
           toast('已识别，请核对药名');
-          speak('识别到文字' + lines[0] + '，请核对药名是否正确');
+          autoSpeak('识别到文字' + lines[0] + '，请核对药名是否正确');
         } else {
           toast('未能识别出药名，请手动输入');
-          speak('未能识别出药名，请手动输入');
+          autoSpeak('未能识别出药名，请手动输入');
         }
       }
     }catch(err){
@@ -3805,7 +3811,7 @@ function initAmapMap(){
     userLoc = {lat:e.lnglat.getLat(), lng:e.lnglat.getLng()};
     renderHospitals();
     toast('已设置位置，重新计算附近医院');
-    speak('已设置位置');
+    autoSpeak('已设置位置');
   });
   renderHospitals();
 }
@@ -3817,16 +3823,16 @@ function autoLocate(){
 function locate(){
   if(amapReady && window.AMap){
     toast('正在通过高德获取位置…');
-    speak('正在获取您的位置，请稍候。');
+    autoSpeak('正在获取您的位置，请稍候。');
     const geo = new AMap.Geolocation({enableHighAccuracy:true, timeout:10000});
     geo.getCurrentPosition((status, result)=>{
       if(status === 'complete' && result && result.position){
         userLoc = {lat:result.position.lat, lng:result.position.lng};
         renderHospitals();
-        speak('已定位成功，为您推荐最近的医院。');
+        autoSpeak('已定位成功，为您推荐最近的医院。');
       } else {
         toast('自动定位失败，可在地图上点选位置');
-        speak('自动定位失败，请在地图上点选您的位置。');
+        autoSpeak('自动定位失败，请在地图上点选您的位置。');
         renderHospitals();
       }
     });
@@ -3834,14 +3840,14 @@ function locate(){
   }
   if(!navigator.geolocation){ toast('当前浏览器不支持定位'); return; }
   toast('正在获取位置…');
-  speak('正在获取您的位置，请稍候。');
+  autoSpeak('正在获取您的位置，请稍候。');
   navigator.geolocation.getCurrentPosition(pos=>{
     userLoc = {lat:pos.coords.latitude, lng:pos.coords.longitude};
     renderHospitals();
-    speak('已定位成功，为您推荐最近的医院。');
+    autoSpeak('已定位成功，为您推荐最近的医院。');
   }, err=>{
     toast('自动定位失败，可在地图上点选位置');
-    speak('自动定位失败，请在地图上点选您的位置。');
+    autoSpeak('自动定位失败，请在地图上点选您的位置。');
     renderHospitals();
   }, {enableHighAccuracy:true, timeout:10000});
 }
@@ -3850,7 +3856,7 @@ function searchPlace(){
   const kw = el ? sanitizeInput(el.value, 100) : '';
   if(!kw){
     toast('请先输入地点，如小区、街道或地标名');
-    speak('请先输入地点名称');
+    autoSpeak('请先输入地点名称');
     return;
   }
   if(amapReady && window.AMap){
@@ -3861,13 +3867,13 @@ function searchPlace(){
       if(pois.length === 0){
         $('mapHint').textContent = '未找到「' + kw + '」，请换个说法，或在地图上点选位置。';
         toast('未找到该地点，请换个说法试试');
-        speak('未找到该地点，请换个说法试试');
+        autoSpeak('未找到该地点，请换个说法试试');
         return;
       }
       const p = pois[0];
       userLoc = {lat:p.location.lat, lng:p.location.lng};
       toast('已定位到「' + p.name + '」');
-      speak('已定位到' + p.name + '，为您推荐附近医院');
+      autoSpeak('已定位到' + p.name + '，为您推荐附近医院');
       renderHospitals();
     });
     return;
@@ -3887,7 +3893,7 @@ function searchPlace(){
       }
       userLoc = {lat:parseFloat(list[0].lat), lng:parseFloat(list[0].lng)};
       toast('已定位，为您重新推荐医院');
-      speak('已定位，为您推荐附近医院');
+      autoSpeak('已定位，为您推荐附近医院');
       renderHospitals();
     })
     .catch(()=>{
@@ -3910,7 +3916,7 @@ function initLeafletMap(){
     userLoc = {lat: e.latlng.lat, lng: e.latlng.lng};
     renderHospitals();
     toast('已设置位置，重新计算附近医院');
-    speak('已设置位置');
+    autoSpeak('已设置位置');
   });
 }
 function renderHospitals(){
@@ -4018,7 +4024,7 @@ function renderHospitalsAMap(){
   });
 }
 function goHospital(name){
-  speak('已选择' + name + '。您可以使用手机地图软件进行导航。');
+  autoSpeak('已选择' + name + '。您可以使用手机地图软件进行导航。');
   toast('正在打开 ' + name);
   addEvent('医院', '准备前往「' + name + '」就诊');
   const h = amapHospitals.find(x=>x.name===name) || HOSPITALS.find(x=>x.name===name);
