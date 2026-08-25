@@ -1939,27 +1939,47 @@ const INTERACTIONS = [
 
 /* ==================== 全局状态 ==================== */
 let currentUser = localStorage.getItem('med_user') || null;
+function lsKey(base){ return currentUser ? base + '_' + encodeURIComponent(currentUser) : base; }
 let selectedSyms = new Set();
 let flowIndex = 0;
 let flowStarted = false;
 let recentDepts = [];
 let myFamilyCode = '';
 let familyBinds = [];
-try{
-  const raw = localStorage.getItem('med_binds');
-  if(raw) familyBinds = JSON.parse(raw) || [];
-  else{
-    const old = localStorage.getItem('med_bind');
-    if(old) familyBinds = [old];
+function loadFamilyBinds(){
+  familyBinds = [];
+  try{
+    const raw = localStorage.getItem(lsKey('med_binds'));
+    if(raw){
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length) familyBinds = arr.filter(c => c && c.length === 6);
+    }
+  }catch(e){}
+  // 旧版单格式兜底
+  if(familyBinds.length === 0){
+    const old = localStorage.getItem(lsKey('med_bind'));
+    if(old && old.length === 6) familyBinds = [old];
+    // 迁移设备级旧数据到账号级
+    if(familyBinds.length === 0 && currentUser){
+      const oldShared = localStorage.getItem('med_bind');
+      if(oldShared && oldShared.length === 6){
+        familyBinds = [oldShared];
+        saveFamilyBinds();
+      }
+    }
   }
-}catch(e){}
-let currentViewBind = '';
+  if(familyBinds.length) currentViewBind = familyBinds[0];
+  else currentViewBind = '';
+}
+loadFamilyBinds();
+let currentViewBind = familyBinds[0] || '';
 let userLoc = null;
 let autoLocated = false;
 let map = null, mapMarkers = [];
 let listening = false;
 function saveFamilyBinds(){
-  localStorage.setItem('med_binds', JSON.stringify(familyBinds));
+  localStorage.setItem(lsKey('med_binds'), JSON.stringify(familyBinds));
+  localStorage.setItem(lsKey('med_bind'), familyBinds[0] || '');
   if(currentUser && DB.db){
     DB.get('users', currentUser).then(rec=>{
       if(rec){ rec.boundElderCodes = familyBinds; DB.put('users', rec); }
@@ -2169,14 +2189,14 @@ async function savePushPlusToken(token){
   const rec = await DB.get('users', currentUser) || {id: currentUser};
   rec.pushplus_token = token;
   await DB.put('users', rec);
-  localStorage.setItem('med_pushplus_token', token);
+  localStorage.setItem(lsKey('med_pushplus_token'), token);
   return {ok:true, msg:'微信推送已绑定'};
 }
 
 async function getPushPlusToken(){
-  if(!currentUser) return localStorage.getItem('med_pushplus_token') || '';
+  if(!currentUser) return '';
   const rec = await DB.get('users', currentUser);
-  return rec?.pushplus_token || localStorage.getItem('med_pushplus_token') || '';
+  return rec?.pushplus_token || localStorage.getItem(lsKey('med_pushplus_token')) || '';
 }
 
 async function sendPushPlus(title, content){
@@ -2249,7 +2269,7 @@ async function clearPushPlus(){
     const rec = await DB.get('users', currentUser);
     if(rec){ delete rec.pushplus_token; await DB.put('users', rec); }
   }
-  localStorage.removeItem('med_pushplus_token');
+  localStorage.removeItem(lsKey('med_pushplus_token'));
   $('pushplusMask').classList.remove('show');
   updatePPBadge();
   toast('已解除绑定');
@@ -3011,33 +3031,44 @@ function quickUse(){
   speak('已进入体验模式，暂不保存您的数据。');
 }
 async function afterLogin(){
+  // 0. 切换账号时先清空旧数据
+  familyBinds = [];
+  currentViewBind = '';
   // 1. 从 IndexedDB 读取本地缓存
   try{
     const r = await DB.get('users', currentUser);
     if(r){
       myFamilyCode = r.familyCode;
       if(r.boundElderCodes && Array.isArray(r.boundElderCodes) && r.boundElderCodes.length){
-        familyBinds = r.boundElderCodes.slice();
+        familyBinds = r.boundElderCodes.filter(c => c && c.length === 6);
       } else if(r.boundElderCode && r.boundElderCode.length === 6){
         familyBinds = [r.boundElderCode];
       }
     }
   }catch(e){}
-  // 1b. 从 localStorage 读取作为兜底（跨会话保持）
+  // 1b. 从账号隔离的 localStorage 读取作为兜底
   if(familyBinds.length === 0){
     try{
-      const raw = localStorage.getItem('med_binds');
+      const raw = localStorage.getItem(lsKey('med_binds'));
       if(raw){
         const arr = JSON.parse(raw);
         if(Array.isArray(arr) && arr.length) familyBinds = arr.filter(c => c && c.length === 6);
       }
     }catch(e){}
     if(familyBinds.length === 0){
-      const old = localStorage.getItem('med_bind');
+      const old = localStorage.getItem(lsKey('med_bind'));
       if(old && old.length === 6) familyBinds = [old];
     }
   }
-  if(familyBinds.length) currentViewBind = familyBinds[0];
+  // 1c. 迁移旧版设备级数据到账号隔离
+  if(familyBinds.length === 0){
+    const oldShared = localStorage.getItem('med_bind');
+    if(oldShared && oldShared.length === 6){
+      familyBinds = [oldShared];
+      saveFamilyBinds();
+    }
+  }
+  if(familyBinds.length){ currentViewBind = familyBinds[0]; saveFamilyBinds(); }
   // 2. 按身份切换界面模式
   localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
   if(myRole === 'family'){
@@ -4085,21 +4116,29 @@ async function init(){
         familyBinds = [rec.boundElderCode];
       }
     }
-    // 从 localStorage 读取作为兜底
+    // 从 localStorage 读取作为兜底（账号隔离）
     if(familyBinds.length === 0){
       try{
-        const raw = localStorage.getItem('med_binds');
+        const raw = localStorage.getItem(lsKey('med_binds'));
         if(raw){
           const arr = JSON.parse(raw);
           if(Array.isArray(arr) && arr.length) familyBinds = arr.filter(c => c && c.length === 6);
         }
       }catch(e){}
       if(familyBinds.length === 0){
-        const old = localStorage.getItem('med_bind');
+        const old = localStorage.getItem(lsKey('med_bind'));
         if(old && old.length === 6) familyBinds = [old];
       }
     }
-    if(familyBinds.length) currentViewBind = currentViewBind || familyBinds[0];
+    // 迁移旧版设备级数据
+    if(familyBinds.length === 0){
+      const oldShared = localStorage.getItem('med_bind');
+      if(oldShared && oldShared.length === 6){
+        familyBinds = [oldShared];
+        saveFamilyBinds();
+      }
+    }
+    if(familyBinds.length){ currentViewBind = currentViewBind || familyBinds[0]; }
     // 从云端同步绑定关系（覆盖本机过期数据）
     if(myRole === 'family' && cloudUsable()){
       try{
