@@ -1245,8 +1245,25 @@
       <div id="familyFeed"></div>
     </div>
     <div class="card" id="cardChronicSummary" style="display:none;">
-      <h2>📊 慢病摘要</h2>
+      <h2>📊 慢病摘要 & 趋势</h2>
       <div id="chronicSummaryContent"></div>
+      <div class="divider"></div>
+      <h2>📈 近30天趋势</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <select class="inp sm" id="familyChartType" style="width:auto;" onchange="drawFamilyChart()">
+          <option value="bp">血压</option>
+          <option value="fasting">空腹血糖</option>
+          <option value="postprandial">餐后血糖</option>
+          <option value="heart_rate">心率</option>
+          <option value="weight">体重</option>
+        </select>
+      </div>
+      <div style="position:relative;height:280px;width:100%;min-width:0;">
+        <canvas id="familyChart"></canvas>
+      </div>
+      <div class="divider"></div>
+      <h2>📋 全部指标记录（近90天）</h2>
+      <div id="familyMetricList" style="margin-top:8px;"></div>
     </div>
     <div class="card" id="cardElderCompliance" style="display:none;">
       <h2>✅ 老人用药依从性</h2>
@@ -4616,6 +4633,98 @@ function selectElder(code){
   toast('正在查看老人 ' + (idx + 1) + ' 的健康动态');
 }
 
+// 家属端查看时的通用紧急级别判定（用公共默认阈值）
+function familyAssessLevel(type, v1, v2){
+  v1 = Number(v1); v2 = Number(v2 || 0);
+  const t = DEFAULT_TARGETS;
+  if(type === 'bp'){
+    if(v1 >= 180 || v2 >= 110) return {level:'critical', label:'超标', color:'#ef4444'};
+    if(v1 >= 140 || v2 >= 90) return {level:'warning', label:'需关注', color:'#eab308'};
+  } else if(type === 'fasting'){
+    if(v1 >= 11.1) return {level:'critical', label:'超标', color:'#ef4444'};
+    if(v1 >= 7.0 || v1 < 3.9) return {level:'warning', label:'需关注', color:'#eab308'};
+  } else if(type === 'postprandial'){
+    if(v1 >= 16.7) return {level:'critical', label:'超标', color:'#ef4444'};
+    if(v1 >= 11.1) return {level:'warning', label:'需关注', color:'#eab308'};
+  } else if(type === 'heart_rate'){
+    if(v1 > 120 || v1 < 50) return {level:'warning', label:'异常', color:'#eab308'};
+  }
+  return {level:'normal', label:'正常', color:'#22c55e'};
+}
+
+let _familyChart = null;
+let _familyChartCache = null; // 缓存最近指标 rows，供切换下拉重绘
+
+function destroyFamilyChart(){
+  if(_familyChart){ try { _familyChart.destroy(); } catch(e){} _familyChart = null; }
+}
+
+function drawFamilyChart(){
+  if(!window.Chart || !_familyChartCache) return;
+  const typeSel = $('familyChartType');
+  if(!typeSel) return;
+  const targetType = typeSel.value;
+  const canvas = $('familyChart');
+  if(!canvas) return;
+  const parent = canvas.parentElement;
+  if(parent){
+    parent.style.position = 'relative';
+    parent.style.minHeight = '280px';
+    parent.style.height = '280px';
+  }
+  const cw = parent ? (parent.clientWidth || 600) : 600;
+  canvas.width = cw; canvas.height = 280;
+  canvas.style.width = '100%'; canvas.style.height = '100%';
+  destroyFamilyChart();
+  const ctx = canvas.getContext('2d');
+  if(!ctx) return;
+  const rows = _familyChartCache.filter(r => r.metric_type === targetType)
+    .sort((a,b) => new Date(a.measured_at) - new Date(b.measured_at));
+  if(!rows.length){
+    ctx.fillStyle = 'var(--muted, #999)';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('该指标暂无数据', cw/2, 140);
+    return;
+  }
+  const labels = rows.map(r => new Date(r.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }));
+  const d1 = rows.map(r => Number(r.value1));
+  const d2 = rows.map(r => (r.value2 !== null && r.value2 !== undefined) ? Number(r.value2) : null);
+  const pointColors = rows.map(r => familyAssessLevel(r.metric_type, r.value1, r.value2).color);
+  const datasets = [{
+    label: targetType === 'bp' ? '收缩压' : (METRIC_LABELS[targetType] || '主值'),
+    data: d1,
+    borderColor: '#0f9d8f',
+    backgroundColor: 'rgba(15,157,143,0.12)',
+    tension: 0.3, fill: true, pointRadius: 5, pointHoverRadius: 7,
+    pointBackgroundColor: pointColors, pointBorderColor:'#fff', pointBorderWidth: 2
+  }];
+  if(targetType === 'bp' && d2.some(v => v !== null)){
+    datasets.push({
+      label:'舒张压', data: d2,
+      borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.1)',
+      tension:0.3, fill:false, pointRadius:4, pointHoverRadius:6,
+      pointBackgroundColor: pointColors, pointBorderColor:'#fff', pointBorderWidth:2
+    });
+  }
+  const care = body.classList.contains('care');
+  _familyChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:400},
+      plugins:{
+        legend:{ labels:{ font:{ size: care?16:12 } } },
+        tooltip:{ bodyFont:{ size: care?16:12 }, titleFont:{ size: care?16:12 } }
+      },
+      scales:{
+        x:{ ticks:{ font:{ size: care?14:10 }, maxRotation:45 } },
+        y:{ ticks:{ font:{ size: care?14:10 } } }
+      }
+    }
+  });
+}
+
 async function renderChronicSummary(elderCode){
   const card = $('cardChronicSummary');
   const el = $('chronicSummaryContent');
@@ -4626,47 +4735,102 @@ async function renderChronicSummary(elderCode){
   }
   card.style.display = 'block';
   el.innerHTML = '<p class="hint">加载中…</p>';
+  destroyFamilyChart();
+  _familyChartCache = null;
+  if($('familyMetricList')) $('familyMetricList').innerHTML = '<p class="hint">加载中…</p>';
   try{
     const elderUser = await getElderUsername(elderCode);
     if(!elderUser){
       el.innerHTML = '<p class="hint">无法获取老人账号信息</p>';
       return;
     }
+    // 查近90天全部指标
+    const since = new Date(Date.now() - 90 * 86400000).toISOString();
+    const [metricRes, alertRes, profRes] = await Promise.all([
+      sbFetch('health_metrics?username=eq.' + encodeURIComponent(elderUser) + '&measured_at=gte.' + since + '&order=measured_at.desc&limit=500'),
+      sbFetch('chronic_alerts?username=eq.' + encodeURIComponent(elderUser) + '&is_read=eq.false&order=created_at.desc&limit=10'),
+      sbFetch('chronic_profiles?username=eq.' + encodeURIComponent(elderUser) + '&select=disease_type,diagnose_date,hospital')
+    ]);
     let html = '';
-    const res = await sbFetch('health_metrics?username=eq.' + encodeURIComponent(elderUser) + '&order=measured_at.desc&limit=20');
-    if(res.ok){
-      const rows = await res.json();
-      const byType = {};
-      rows.forEach(r => {
-        if(!byType[r.metric_type]) byType[r.metric_type] = r;
-      });
-      if(Object.keys(byType).length){
-        html += '<div class="gap6">';
-        for(const [type, m] of Object.entries(byType)){
-          const label = METRIC_LABELS[type] || type;
-          const val = type === 'bp' ? m.value1 + '/' + (m.value2||'-') + ' mmHg'
-            : m.value1 + (type === 'weight' ? ' kg' : (type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
-          const time = new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
-          html += '<div class="med-item"><div style="flex:1;"><b>' + label + '</b> <span style="font-size:18px;font-weight:700;color:var(--primary);">' + val + '</span><div class="hint">' + time + '</div></div></div>';
-        }
-        html += '</div>';
-      } else {
-        html += '<p class="hint">老人暂未录入指标</p>';
+    // 慢病档案清单
+    if(profRes && profRes.ok){
+      const profs = await profRes.json();
+      if(profs && profs.length){
+        html += '<p class="sub" style="margin-bottom:6px;">老人慢病档案</p><div class="gap6" style="margin-bottom:8px;">';
+        profs.forEach(p => {
+          html += '<div class="med-item" style="padding:10px 14px;"><div style="flex:1;">'
+            + '<b style="font-size:16px;color:var(--primary-deep);">' + (DISEASE_LABELS[p.disease_type] || p.disease_type) + '</b>'
+            + ((p.diagnose_date || p.hospital) ? ('<div class="hint">' + (p.diagnose_date ? ('确诊 '+p.diagnose_date) : '') + (p.hospital ? (' · '+p.hospital) : '') + '</div>') : '')
+            + '</div></div>';
+        });
+        html += '</div><div class="divider"></div>';
       }
     }
-    const alertRes = await sbFetch('chronic_alerts?username=eq.' + encodeURIComponent(elderUser) + '&is_read=eq.false&order=created_at.desc&limit=5');
-    if(alertRes.ok){
+    let rows = [];
+    if(metricRes && metricRes.ok){ rows = await metricRes.json(); }
+    _familyChartCache = rows;
+    // 最近值摘要：按类型取最新一条
+    const byType = {};
+    rows.forEach(r => { if(!byType[r.metric_type]) byType[r.metric_type] = r; });
+    if(Object.keys(byType).length){
+      html += '<p class="sub" style="margin-bottom:6px;">最近各指标值</p><div class="gap6">';
+      for(const [type, m] of Object.entries(byType)){
+        const label = METRIC_LABELS[type] || type;
+        const val = type === 'bp' ? (m.value1 + '/' + (m.value2 || '-') + ' mmHg')
+          : m.value1 + (type === 'weight' ? ' kg' : (type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
+        const time = new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        const a = familyAssessLevel(type, m.value1, m.value2);
+        html += '<div class="med-item"><div style="flex:1;">'
+          + '<div style="display:inline-flex;align-items:center;gap:6px;margin-bottom:4px;">'
+          + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + a.color + ';"></span>'
+          + '<span style="font-size:12px;font-weight:700;color:' + a.color + ';">' + a.label + '</span></div>'
+          + '<div><b>' + label + '</b> <span style="font-size:18px;font-weight:700;color:var(--primary);">' + val + '</span></div>'
+          + '<div class="hint">' + time + '</div></div></div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<p class="hint">老人近90天暂未录入指标</p>';
+    }
+    // 未读预警
+    if(alertRes && alertRes.ok){
       const alerts = await alertRes.json();
-      if(alerts.length){
+      if(alerts && alerts.length){
         html += '<div class="divider"></div><p class="sub" style="margin-bottom:4px;">未读预警（' + alerts.length + '）</p>';
         alerts.forEach(a => {
           const color = a.alert_level === 'critical' ? '#ef4444' : (a.alert_level === 'warning' ? '#eab308' : '#3b82f6');
-          html += '<div class="med-item" style="border-left:3px solid ' + color + ';"><div style="font-weight:700;color:' + color + ';">' + (a.title||'预警') + '</div><div>' + (a.message||'') + '</div></div>';
+          html += '<div class="med-item" style="border-left:3px solid ' + color + ';"><div style="font-weight:700;color:' + color + ';">' + (a.title || '预警') + '</div><div>' + (a.message || '') + '</div>'
+            + '<div class="hint">' + new Date(a.created_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) + '</div></div>';
         });
       }
     }
     el.innerHTML = html || '<p class="hint">暂无慢病数据</p>';
+    // 完整记录列表（近90天，按时间倒序）
+    const listEl = $('familyMetricList');
+    if(listEl){
+      if(!rows.length){
+        listEl.innerHTML = '<p class="hint">老人近90天暂无指标记录</p>';
+      } else {
+        listEl.innerHTML = rows.map(m => {
+          const label = METRIC_LABELS[m.metric_type] || m.metric_type;
+          const val = m.metric_type === 'bp' ? (m.value1 + '/' + (m.value2 || '-') + ' mmHg')
+            : m.value1 + (m.metric_type === 'weight' ? ' kg' : (m.metric_type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
+          const time = new Date(m.measured_at).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+          const a = familyAssessLevel(m.metric_type, m.value1, m.value2);
+          return '<div class="med-item" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+            + '<div style="display:inline-flex;align-items:center;gap:4px;min-width:54px;">'
+            + '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + a.color + ';box-shadow:0 0 0 2px rgba(255,255,255,.3);"></span>'
+            + '<span style="font-size:12px;font-weight:700;color:' + a.color + ';">' + a.label + '</span></div>'
+            + '<div style="flex:1;"><b>' + label + '</b> ' + val
+            + (m.note ? ' <span class="hint">' + sanitizeInput(String(m.note), 50) + '</span>' : '')
+            + '<div class="hint">' + time + '</div></div>'
+            + '</div>';
+        }).join('');
+      }
+    }
+    // 趋势图：延迟到下一帧绘制，确保容器尺寸
+    setTimeout(() => drawFamilyChart(), 150);
   }catch(e){
+    console.warn(e);
     el.innerHTML = '<p class="hint">数据加载失败，请稍后重试</p>';
   }
 }
