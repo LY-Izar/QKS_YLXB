@@ -1178,6 +1178,18 @@
       <div class="card" style="margin-top:12px;">
         <h2><svg class="icn"><use href="#ic-users"/></svg> 用户管理</h2>
         <p class="sub" id="adminUserSummary" style="margin-bottom:8px;">共 0 个账号</p>
+        <div id="adminEmailCovBadge" class="email-cov-badge" role="status" aria-live="polite"
+             style="display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-radius:14px;margin-bottom:10px;border:1px solid var(--border);background:var(--surface-2);">
+          <svg class="icn" style="color:var(--ink-2);" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></g></svg>
+          <div style="flex:1 1 200px;font-size:14px;line-height:1.6;">
+            <div style="font-weight:800;color:var(--ink);">邮箱绑定覆盖率</div>
+            <div class="email-cov-stat" style="color:var(--ink-2);font-size:13px;">加载中…</div>
+            <div class="email-cov-bar" style="height:6px;border-radius:999px;background:#e7eef5;margin-top:6px;overflow:hidden;">
+              <div class="email-cov-fill" style="width:0%;height:100%;background:var(--ok);transition:width .4s ease;"></div>
+            </div>
+          </div>
+          <span class="email-cov-rate" style="font-weight:900;font-size:20px;padding:6px 12px;border-radius:12px;background:#fff;color:var(--ok);border:1px solid #cfdcce;min-width:72px;text-align:center;">—</span>
+        </div>
         <div class="inputrow" style="margin-bottom:8px;">
           <input class="inp" id="adminUserSearch" placeholder="搜索账号名…（可留空显示全部）" maxlength="50" onkeydown="if(event.key==='Enter')adminSearchUsers()">
           <button class="btn line" onclick="adminSearchUsers()"><svg class="icn"><use href="#ic-search"/></svg> 搜索</button>
@@ -1212,9 +1224,10 @@
 
       <div class="card" style="margin-top:12px;">
         <h2><svg class="icn"><use href="#ic-ann"/></svg> 系统公告</h2>
-        <p class="sub" style="margin-bottom:10px;">公告保存在浏览器本地（所有访问者进入网站时顶部会显示滚动条）。可置顶、可修改、可删除。</p>
+        <p class="sub" style="margin-bottom:10px;">公告已升级：<b>所有管理员共享云端</b>（保存在数据库 announcements 表）。任何管理员发布 / 删除 / 编辑后，其他管理员、登录用户、未登录访客在顶部公告条和首访弹窗中<b>多端同步</b>看到最新内容。</p>
         <div class="gap6" style="margin-bottom:10px;">
           <button class="btn line sm" onclick="adminNewAnnouncement()"><svg class="icn"><use href="#ic-plus"/></svg> 新建公告</button>
+          <button class="btn line sm ghost" onclick="adminUploadLegacyLocalOnce()"><svg class="icn"><use href="#ic-upload"/></svg> 迁本地旧公告到云端（仅此一次）</button>
           <button class="btn line sm ghost" onclick="adminPreviewAnnouncements()"><svg class="icn"><use href="#ic-eye"/></svg> 预览顶部公告条</button>
         </div>
         <div id="adminAnnList"></div>
@@ -3806,15 +3819,24 @@ async function hashPass(p){
 }
 async function sbFetch(path, opts){
   opts = opts || {};
-  return fetch(SB_URL + '/rest/v1/' + path, {
-    method: opts.method || 'GET',
-    headers: Object.assign({
-      apikey: SB_KEY,
-      Authorization: 'Bearer ' + SB_KEY,
-      'Content-Type': 'application/json'
-    }, opts.headers || {}),
-    body: opts.body || null
-  });
+  const timeout_ms = Number.isFinite(opts.timeout) ? opts.timeout : 20000;
+  const ctl = (opts.signal && opts.signal instanceof AbortController) ? null : new AbortController();
+  const tm = ctl ? setTimeout(()=>ctl.abort(), timeout_ms) : null;
+  const signal = opts.signal || (ctl && ctl.signal) || null;
+  try{
+    return await fetch(SB_URL + '/rest/v1/' + path, {
+      method: opts.method || 'GET',
+      headers: Object.assign({
+        apikey: SB_KEY,
+        Authorization: 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json'
+      }, opts.headers || {}),
+      body: opts.body || null,
+      signal
+    });
+  }finally{
+    if(tm) clearTimeout(tm);
+  }
 }
 
 /* ==================== 登录 / 注册 ==================== */
@@ -7179,6 +7201,7 @@ async function updateAdminUI(){
   // 渲染用户管理 + 系统公告区
   if(currentUser && isAdmin){
     try{ adminLoadUsers(); }catch(e){}
+    try{ adminLoadEmailCoverage(); }catch(e){}
     try{ adminRenderAnnouncements(); }catch(e){}
   }
 }
@@ -7235,25 +7258,36 @@ const ADM_STATE = {
   filter: 'all', keyword: '', offset: 0, limit: 20, total: 0,
   resetTarget: '', annEditId: null
 };
-async function adminRPC(name, body){
+async function adminRPC(name, body, _opts){
   if(!cloudUsable()) throw new Error('当前浏览器不支持云端接口');
   const url = SB_URL + '/rest/v1/rpc/' + name;
   const payload = Object.assign({caller: currentUser || ''}, body || {});
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      apikey: SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
-      'Content-Type': 'application/json', 'Accept': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
-  if(!res.ok){
-    const txt = await res.text();
-    const m = /"message":"([^"]+)"/.exec(txt);
-    const msg = m ? m[1] : ('HTTP ' + res.status + ' ' + res.statusText);
-    throw new Error(msg);
+  const timeout_ms = (_opts && Number.isFinite(_opts.timeout)) ? _opts.timeout : 15000;
+  const ctl = new AbortController();
+  const tm = setTimeout(()=>ctl.abort(), timeout_ms);
+  try{
+    const res = await fetch(url, {
+      method: 'POST',
+      signal: ctl.signal,
+      headers: {
+        apikey: SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json', 'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const txt = await res.text();
+      const m = /"message":"([^"]+)"/.exec(txt);
+      const msg = m ? m[1] : ('HTTP ' + res.status + ' ' + res.statusText);
+      throw new Error(msg);
+    }
+    return res.json();
+  }catch(e){
+    if(e && e.name === 'AbortError') throw new Error('RPC 超时');
+    throw e;
+  }finally{
+    clearTimeout(tm);
   }
-  return res.json();
 }
 
 async function adminLoadUsers(){
@@ -7412,25 +7446,321 @@ async function adminDeleteUser(id){
     if(r && r.ok){
       toast('✓ 已删除 ' + (r.deleted_users||0) + ' 个账号');
       updateAdminUI();
+      adminLoadEmailCoverage();
       adminLoadUsers();
     } else toast('删除失败');
   }catch(e){ toast('删除失败：' + (e.message || '未知错误')); }
 }
 
-/* ============== 管理端：系统公告（localStorage 全局 v2，升级：level/popup/时段/邮件发送） ============== */
-const ADM_ANN_KEY = 'adm_announcements_v2';
-const ADM_ANN_SEEN = 'adm_ann_popup_seen_v2';        // 已关闭「每人一次」的公告 id 集合
-const ADM_ANN_SESS_SEEN = 'adm_ann_popup_sess_v2';   // 本会话内已弹窗
+/* ===== 邮箱绑定覆盖率：调用 admin_count_emails RPC 并渲染徽章（RPC 缺失则兜底：直接 GET users 本地计数） ===== */
+async function adminLoadEmailCoverage(){
+  const host = $('adminEmailCovBadge'); if(!host) return;
+  const stat = host.querySelector('.email-cov-stat');
+  const rate = host.querySelector('.email-cov-rate');
+  const fill = host.querySelector('.email-cov-fill');
+  host.style.display = 'flex';
+  if(stat) stat.textContent = '加载中…';
+  if(rate) rate.textContent = '—';
+  if(fill) fill.style.width = '0%';
+  if(!cloudUsable()){
+    if(stat) stat.textContent = '当前浏览器不支持云端接口';
+    host.style.borderColor = 'var(--border)'; host.style.background = 'var(--surface-2)';
+    return;
+  }
+  let tot=0, withE=0, withOut=0, bind_rate=0;
+  let fallback=false, errMsg=null;
+  try{
+    const data = await adminRPC('admin_count_emails', {}, {timeout: 8000});
+    tot     = data && typeof data.total_users   === 'number' ? data.total_users   : 0;
+    withE   = data && typeof data.with_email    === 'number' ? data.with_email    : 0;
+    withOut = data && typeof data.without_email === 'number' ? data.without_email : Math.max(0, tot - withE);
+    bind_rate = typeof data.bind_rate === 'number' ? data.bind_rate : (tot === 0 ? 0 : +(100 * withE / tot).toFixed(2));
+  }catch(e){
+    // RPC 未部署或失败 → 兜底：直接拉 users 表（只要 RLS 允许管理员读就能工作）
+    fallback = true;
+    errMsg = (e && e.message) ? e.message : null;
+    try{
+      const r = await sbFetch('users?select=id,email&limit=1000', {timeout: 5000});
+      if(r.ok){
+        const rows = await r.json();
+        const arr = Array.isArray(rows) ? rows : [];
+        tot = arr.length;
+        withE = arr.filter(x => x && typeof x.email === 'string' && x.email.trim() !== '').length;
+        withOut = Math.max(0, tot - withE);
+        bind_rate = tot === 0 ? 0 : +(100 * withE / tot).toFixed(2);
+        errMsg = null; // 兜底成功，清掉错误
+      } else {
+        // 兜底也失败：保留错误信息给下面红色提示
+      }
+    }catch(_){
+      // 兜底连接失败，errMsg 保持
+    }
+  }
+  if(errMsg){
+    if(stat) stat.textContent = '加载失败：' + errMsg;
+    host.style.background = 'var(--surface-danger)';
+    host.style.borderColor = 'var(--danger-15)';
+    return;
+  }
+  if(stat){
+    const suffix = fallback ? ' <span class="sub" style="color:var(--muted);font-size:12px;">（数据来自云端 users 表，部署 admin_rpc3.sql 后将更精准）</span>' : '';
+    stat.innerHTML = `已绑定邮箱 <b style="color:var(--ink);">${withE}</b> · 未绑定 <b style="color:var(--ink);">${withOut}</b> · 总账号 <b style="color:var(--ink);">${tot}</b>${suffix}`;
+  }
+  if(rate){ rate.textContent = (bind_rate===0&&tot===0 ? '0.0%' : bind_rate.toFixed(1) + '%'); }
+  if(fill){ fill.style.width = (tot? Math.min(100, bind_rate) : 0) + '%'; }
+
+  // 阈值着色：>=60% 绿 / 30~59% 黄 / <30% 红（绑定率为 0 但 tot=0 时用灰）
+  let color='var(--ok)';
+  let bg = 'rgba(26,122,58,.1)';
+  let border = 'rgba(26,122,58,.3)';
+  if(tot === 0){ color = 'var(--muted)'; bg='var(--surface-2)'; border='var(--border)'; }
+  else if(bind_rate < 30){ color = 'var(--danger)'; bg='var(--surface-danger)'; border='var(--danger-15)'; }
+  else if(bind_rate < 60){ color = '#8d6e00'; bg='#fff6d6'; border='#e0c36b'; }
+  host.style.borderColor = border; host.style.background = bg;
+  if(fill){ fill.style.background = color; }
+  if(rate){ rate.style.color = color; rate.style.borderColor = border; rate.style.background='#fff'; }
+}
+
+/* ============== 管理端：系统公告（已升级：Supabase announcements 表为唯一真源，localStorage 只做离线缓存） ============== */
+const ADM_ANN_KEY       = 'adm_announcements_v2';        // 离线缓存键（非权威，云端永远优先）
+const ADM_ANN_CACHE_TS  = 'adm_announcements_v2_ts';     // 上次从云端拉取的时间戳（ms）
+const ADM_ANN_CACHE_MAX = 60 * 1000;                     // 60s 内不再重复拉（避免首页打开过于频繁打接口）
+const ADM_ANN_SEEN      = 'adm_ann_popup_seen_v2';       // 每人一次：已关闭的公告 id 集合
+const ADM_ANN_SESS_SEEN = 'adm_ann_popup_sess_v2';       // 本会话内已弹窗
+
+/* ----- 公告数据访问层：annDataLayer.read() / writeRec() / togglePin(id) / softDelete(id) ----- */
+const annDataLayer = (() => {
+  // 把数据库行 映射到前端一致的「公告对象」
+  function _normRow(r){
+    if(!r || typeof r !== 'object') return null;
+    // 数据库：active_from/active_to 是 ISO timestamptz；前端已全部按 ISO 字符串消费，原样即可
+    const af = r.active_from ? (typeof r.active_from === 'string' ? r.active_from : new Date(r.active_from).toISOString()) : null;
+    const at = r.active_to   ? (typeof r.active_to   === 'string' ? r.active_to   : new Date(r.active_to  ).toISOString()) : null;
+    return {
+      id:             String(r.id || ''),
+      title:          r.title || '',
+      body:           r.body  || '',
+      level:          ['normal','important','urgent'].includes(r.level) ? r.level : 'normal',
+      popup:          ['never','once','session','always'].includes(r.popup) ? r.popup : 'never',
+      pin:            !!r.pin,
+      active_from:    af,
+      active_to:      at,
+      email_sent:     !!r.email_sent,
+      email_sent_ts:  (typeof r.email_sent_ts === 'number') ? r.email_sent_ts
+                      : (r.email_sent_ts ? +new Date(r.email_sent_ts) : null),
+      email_count:    Number(r.email_count||0)|0,
+      email_fail:     Number(r.email_fail ||0)|0,
+      created_by:     r.created_by || null,
+      updated_by:     r.updated_by || null,
+      ts:             (typeof r.ts === 'number') ? r.ts
+                      : (r.updated_at ? +new Date(r.updated_at) : (r.created_at ? +new Date(r.created_at) : Date.now())),
+    };
+  }
+
+  // 读 localStorage 离线缓存
+  function _cacheRead(){
+    try{
+      const raw = localStorage.getItem(ADM_ANN_KEY);
+      if(!raw) return { arr:[], ts:0 };
+      const arr = JSON.parse(raw);
+      return { arr: Array.isArray(arr) ? arr : [], ts: +localStorage.getItem(ADM_ANN_CACHE_TS) || 0 };
+    }catch(e){ return { arr:[], ts:0 }; }
+  }
+  // 写 localStorage 离线缓存
+  function _cacheWrite(arr){
+    try{
+      localStorage.setItem(ADM_ANN_KEY, JSON.stringify(Array.isArray(arr)?arr:[]));
+      localStorage.setItem(ADM_ANN_CACHE_TS, String(Date.now()));
+    }catch(e){}
+  }
+
+  // ===== 从云端拉（SELECT * FROM announcements WHERE deleted=FALSE，orderBy pin+level+ts） =====
+  async function cloudFetch({force=false}={}){
+    if(!cloudUsable()){ return _cacheRead().arr; }
+    const cached = _cacheRead();
+    if(!force && cached.arr.length && (Date.now() - cached.ts) < ADM_ANN_CACHE_MAX){
+      return cached.arr;
+    }
+    try{
+      const params = [
+        'deleted=eq.false',
+        'select=id,title,body,level,popup,pin,active_from,active_to,email_sent,email_sent_ts,email_count,email_fail,created_by,updated_by,created_at,updated_at,ts',
+        'order=pin.desc,level.desc,ts.desc',
+        'limit=200'
+      ];
+      const r = await sbFetch('announcements?' + params.join('&'));
+      if(!r.ok){
+        const t = await r.text().catch(()=>'');
+        // 表尚未迁移 / 权限问题：退回本地缓存
+        console.warn('[ann] cloudFetch HTTP', r.status, t.slice(0,200));
+        return cached.arr;
+      }
+      const rows = await r.json().catch(()=>[]);
+      const arr = (Array.isArray(rows)?rows:[]).map(_normRow).filter(Boolean);
+      _cacheWrite(arr);
+      return arr;
+    }catch(e){
+      console.warn('[ann] cloudFetch 异常：', e);
+      return cached.arr;
+    }
+  }
+
+  // ===== 保存 / 更新（写穿：先 RPC 写库，再回写缓存；RPC 未部署则退化到本地 localStorage 写，方便开发） =====
+  async function saveAnn(rec){
+    if(!rec || typeof rec !== 'object') throw new Error('saveAnn: rec 非法');
+    const _fallback = () => {
+      const list = _cacheRead().arr.slice();
+      const patch = Object.assign({
+        email_sent:false, email_sent_ts:null, email_count:0, email_fail:0,
+      }, rec, { ts: Date.now() });
+      if(patch.id){
+        const i = list.findIndex(x => x.id === patch.id);
+        if(i>=0) list[i] = Object.assign({}, list[i], patch); else list.push(patch);
+      }else{
+        patch.id = 'a' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+        list.push(patch);
+      }
+      _cacheWrite(list);
+      return patch;
+    };
+    // 非管理员或云端不可用：退化到 localStorage
+    if(!currentUser || !isAdmin || !cloudUsable()){
+      return _fallback();
+    }
+    // 管理员：优先走 admin_ann_save RPC（失败且属于"RPC 不存在"类错误，就退化到本地）
+    try{
+      const saved = await adminRPC('admin_ann_save', { rec }, {timeout: 10000});
+      const out = _normRow(saved) || Object.assign({id:rec.id||('a'+Date.now())}, rec);
+      const list = (await cloudFetch({force:true})).slice();
+      const i = list.findIndex(x => x.id === out.id);
+      if(i>=0) list[i] = out; else list.unshift(out);
+      _cacheWrite(list);
+      return out;
+    }catch(e){
+      const msg = (e && e.message) ? String(e.message) : '';
+      // RPC 不存在 / HTTP 404 / schema cache 找不到：安全退化到 localStorage 写，便于 SQL 未应用时也能工作
+      if(/schema cache|Could not find|RPC 超时|HTTP 404|function public/i.test(msg)){
+        console.warn('[ann] saveAnn RPC 不可用，退化到本地 localStorage：', msg);
+        const out = _fallback();
+        await cloudFetch({force:true}).catch(()=>{}); // 尽力触发一次拉取（若表未建则忽略）
+        return out;
+      }
+      throw e;
+    }
+  }
+
+  async function togglePinAnn(id){
+    if(!id) throw new Error('缺少 id');
+    const _fb = () => {
+      const list = _cacheRead().arr.slice();
+      const i = list.findIndex(x => x.id === id); if(i<0) return null;
+      list[i].pin = !list[i].pin; list[i].ts = Date.now();
+      _cacheWrite(list); return list[i];
+    };
+    if(!isAdmin || !cloudUsable()){ return _fb(); }
+    try{
+      const r = await adminRPC('admin_ann_toggle_pin', { ann_id: id }, {timeout: 8000});
+      const list = (await cloudFetch({force:true})).slice();
+      const i = list.findIndex(x => x.id === id);
+      if(i>=0 && r && typeof r === 'object') list[i] = Object.assign({}, list[i], { pin: !!r.pin, ts: Number(r.ts)||Date.now() });
+      _cacheWrite(list);
+      return i>=0 ? list[i] : null;
+    }catch(e){
+      const msg = (e && e.message) ? String(e.message) : '';
+      if(/schema cache|Could not find|RPC 超时|HTTP 404|function public/i.test(msg)) return _fb();
+      throw e;
+    }
+  }
+
+  async function deleteAnn(id){
+    if(!id) throw new Error('缺少 id');
+    const _fb = () => {
+      const list = _cacheRead().arr.filter(x => x.id !== id);
+      _cacheWrite(list); return {ok:true, id};
+    };
+    if(!isAdmin || !cloudUsable()){ return _fb(); }
+    try{
+      await adminRPC('admin_ann_delete', { ann_id: id }, {timeout: 8000});
+      _cacheWrite((await cloudFetch({force:true})));
+      return {ok:true, id};
+    }catch(e){
+      const msg = (e && e.message) ? String(e.message) : '';
+      if(/schema cache|Could not find|RPC 超时|HTTP 404|function public/i.test(msg)) return _fb();
+      throw e;
+    }
+  }
+
+  // ===== 一次性：旧 localStorage v1/v2 里有的公告迁到云端（幂等：同 id 存在则 RPC update） =====
+  async function uploadLocalStorageToCloudOnce(){
+    if(!isAdmin || !cloudUsable()){ toast('仅管理员，且云端可用时可迁'); return 0; }
+    const legacy = [];
+    try{
+      const v2 = JSON.parse(localStorage.getItem(ADM_ANN_KEY) || '[]');
+      if(Array.isArray(v2)) legacy.push(...v2);
+      const v1 = JSON.parse(localStorage.getItem('adm_announcements_v1') || '[]');
+      if(Array.isArray(v1)){
+        v1.forEach(a => {
+          if(!a || !a.id) return;
+          if(legacy.find(x => x.id === a.id)) return;
+          legacy.push(Object.assign({
+            level: a.pin ? 'important' : 'normal', popup: 'never',
+            active_from:null, active_to:null, email_sent:false,
+            email_sent_ts:null, email_count:0, email_fail:0,
+          }, a));
+        });
+      }
+    }catch(e){}
+    if(!legacy.length){ toast('本地暂无旧公告可迁'); return 0; }
+    let done = 0;
+    for(const a of legacy){
+      try{ await saveAnn(a); done++; }catch(e){ console.warn(e); }
+    }
+    try{
+      localStorage.removeItem('adm_announcements_v1');
+      // v2 不清：cloudFetch 之后会用新云端内容覆盖
+    }catch(e){}
+    toast(`已迁 ${done} 条公告到云端共享`);
+    return done;
+  }
+
+  return { cloudFetch, saveAnn, togglePinAnn, deleteAnn, uploadLocalStorageToCloudOnce, _normRow };
+})();
+
+// 向后兼容：外部函数仍然使用 annGetAll/annSaveAll 这两个名（annSaveAll 内部变成 RPC 写穿式）
+function annGetAll(){ return annDataLayer.cloudFetch ? [] : []; } // placeholder，下一段 override
+// 实际覆盖：下面立即重写 annGetAll（使用 cloudFetch 返回的 Promise 转同步读取有点难；因此我们把 cloudFetch 结果暂存到 window._ANN_CACHE 并在 render 前 await 一次）
+window._ANN_CACHE = [];
+window._ANN_CACHE_TS = 0;
+
+// 对外统一异步入口（所有读都走这里：UI 层 await annRefresh() 后，再用 annGetAllSync() 同步拿数组）
+async function annRefresh({force=false}={}){
+  const arr = await annDataLayer.cloudFetch({force});
+  window._ANN_CACHE = Array.isArray(arr) ? arr : [];
+  window._ANN_CACHE_TS = Date.now();
+  return window._ANN_CACHE;
+}
 function annGetAll(){
+  // 兼容旧同步用法：未 refresh 过就先拿缓存里的兜底
+  if(Array.isArray(window._ANN_CACHE) && window._ANN_CACHE.length) return window._ANN_CACHE;
   try{
     const raw = localStorage.getItem(ADM_ANN_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
-  }catch(e){ return []; }
+    if(raw){ const arr = JSON.parse(raw); if(Array.isArray(arr)) return arr; }
+  }catch(e){}
+  return [];
 }
 function annSaveAll(arr){
-  localStorage.setItem(ADM_ANN_KEY, JSON.stringify(Array.isArray(arr)?arr:[]));
+  // 保留：给老代码兜底（只写本地；管理员发布/编辑用 saveAnn 写穿）
+  try{ localStorage.setItem(ADM_ANN_KEY, JSON.stringify(Array.isArray(arr)?arr:[])); }catch(e){}
 }
+async function adminUploadLegacyLocalOnce(){
+  if(!confirm('将本机 localStorage 里保存过的旧公告上传到云端共享？\n（同 id 的云端公告会被覆盖，建议只执行一次）')) return;
+  const n = await annDataLayer.uploadLocalStorageToCloudOnce();
+  await annRefresh({force:true});
+  adminRenderAnnouncements();
+  renderSiteAnnBar();
+  toast(n ? `迁移完成：${n} 条` : '没有可迁移的数据');
+}
+
 function annLevelTag(v){
   if(v === 'urgent') return {label:'紧急', cls:'tag-pin'};
   if(v === 'important') return {label:'重要', cls:'tag-important'};
@@ -7470,9 +7800,11 @@ function _fmtDTLocal(iso){
   const pad = n => String(n).padStart(2,'0');
   return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
-function adminRenderAnnouncements(){
+async function adminRenderAnnouncements(){
   const root = $('adminAnnList');
   if(!root) return;
+  // 管理员进入后保证云端最新（force=true）
+  try{ await annRefresh({force: true}); }catch(e){ console.warn(e); }
   const list = annSort(annGetAll());
   if(list.length === 0){
     root.innerHTML = '<div class="sub" style="color:var(--muted);padding:16px;border-radius:var(--radius-lg);background:var(--surface-2);">暂无公告。点击「新建公告」发布第一条 →</div>';
@@ -7496,6 +7828,7 @@ function adminRenderAnnouncements(){
       ? `<div class="sub" style="color:#1a7a3a;font-size:12px;margin-top:4px;">✓ 已发邮件：${new Date(a.email_sent_ts).toLocaleString('zh-CN')}，成功 ${a.email_count||0} / 失败 ${a.email_fail||0}</div>`
       : '<div class="sub" style="color:var(--muted);font-size:12px;margin-top:4px;">📧 未发送邮件</div>';
     const date = a.ts ? new Date(a.ts).toLocaleString('zh-CN') : '';
+    const esc = s => String(s).replace(/'/g, "\\'");
     return '<div class="ann-card' + (a.pin?' pin':'') + '">'
       + '<div class="ann-head"><svg class="icn"><use href="#ic-ann"/></svg> '
       + (a.title || '(无标题)')
@@ -7505,17 +7838,25 @@ function adminRenderAnnouncements(){
       + emailStat
       + '<div class="ann-foot"><span class="ann-date">' + date + '</span>'
       + '<div class="gap6">'
-      + (a.pin ? '<button class="btn line sm" onclick="adminTogglePinAnn(\''+id+'\')">取消置顶</button>'
-              : '<button class="btn line sm" onclick="adminTogglePinAnn(\''+id+'\')">置顶</button>')
-      + '<button class="btn line sm" onclick="adminAnnEmailFromList(\''+id+'\')" title="用 Edge Function 向所有注册邮箱推送本公告"><svg class="icn"><use href="#ic-mail"/></svg> 发邮件</button>'
-      + '<button class="btn line sm" onclick="adminEditAnn(\''+id+'\')"><svg class="icn"><use href="#ic-gear"/></svg> 编辑</button>'
-      + '<button class="btn warn sm" style="background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteAnn(\''+id+'\')"><svg class="icn"><use href="#ic-trash"/></svg> 删除</button>'
+      + (a.pin ? `<button class="btn line sm" onclick="adminTogglePinAnn('${esc(id)}')">取消置顶</button>`
+              : `<button class="btn line sm" onclick="adminTogglePinAnn('${esc(id)}')">置顶</button>`)
+      + `<button class="btn line sm" onclick="adminAnnEmailFromList('${esc(id)}')" title="用 Edge Function 向所有注册邮箱推送本公告"><svg class="icn"><use href="#ic-mail"/></svg> 发邮件</button>`
+      + `<button class="btn line sm" onclick="adminEditAnn('${esc(id)}')"><svg class="icn"><use href="#ic-gear"/></svg> 编辑</button>`
+      + `<button class="btn warn sm" style="background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteAnn('${esc(id)}')"><svg class="icn"><use href="#ic-trash"/></svg> 删除</button>`
       + '</div></div></div>';
   }).join('');
 }
 function adminNewAnnouncement(){ ADM_STATE.annEditId = null; adminOpenAnnEditor(null); }
-function adminEditAnn(id){ ADM_STATE.annEditId = id; adminOpenAnnEditor(id); }
-function adminAnnEmailFromList(id){ ADM_STATE.annEditId = id; adminOpenAnnEditor(id); }
+async function adminEditAnn(id){
+  ADM_STATE.annEditId = id;
+  try{ await annRefresh(); }catch(e){}
+  adminOpenAnnEditor(id);
+}
+async function adminAnnEmailFromList(id){
+  ADM_STATE.annEditId = id;
+  try{ await annRefresh(); }catch(e){}
+  adminOpenAnnEditor(id);
+}
 function _refreshAnnEmailBox(a){
   const stat = $('admAnnEmailStat'), meta = $('admAnnEmailMeta');
   if(!a || !stat) return;
@@ -7565,7 +7906,7 @@ function adminCloseAnn(){
   if(m){ m.classList.add('hidden'); m.style.display='none'; }
   ADM_STATE.annEditId = null;
 }
-function adminSubmitAnn(){
+async function adminSubmitAnn(){
   const h = ($('admAnnHead')||{}).value || '';
   const b = ($('admAnnBody')||{}).value || '';
   const p = ($('admAnnPin')||{}).checked;
@@ -7583,49 +7924,71 @@ function adminSubmitAnn(){
     active_to:   to ? new Date(to).toISOString() : null,
     ts: now,
   };
+  // 读当前列表，保留邮件字段
   const list = annGetAll();
-  if(ADM_STATE.annEditId){
-    const idx = list.findIndex(x => x.id === ADM_STATE.annEditId);
-    if(idx >= 0){ list[idx] = Object.assign({}, list[idx], patch); }
-  } else {
-    list.push(Object.assign({ id: 'a' + now + '_' + Math.random().toString(36).slice(2,6) }, patch, { email_sent:false, email_sent_ts:null, email_count:0, email_fail:0 }));
+  let saved;
+  try{
+    if(ADM_STATE.annEditId){
+      const old = list.find(x => x.id === ADM_STATE.annEditId);
+      const full = Object.assign({
+        email_sent:false, email_sent_ts:null, email_count:0, email_fail:0
+      }, old, patch, { id: ADM_STATE.annEditId });
+      saved = await annDataLayer.saveAnn(full);
+      ADM_STATE.annEditId = saved && saved.id ? saved.id : ADM_STATE.annEditId;
+    }else{
+      saved = await annDataLayer.saveAnn(Object.assign({
+        email_sent:false, email_sent_ts:null, email_count:0, email_fail:0
+      }, patch));
+      ADM_STATE.annEditId = saved && saved.id ? saved.id : null;
+    }
+  }catch(e){
+    toast('保存失败：' + (e && e.message ? e.message : '未知错误'));
+    return;
   }
-  annSaveAll(list);
+  await annRefresh({force:true});
   adminCloseAnn();
+  await adminRenderAnnouncements();
+  renderSiteAnnBar();
+  toast('✓ 已保存到云端共享');
+}
+async function adminTogglePinAnn(id){
+  try{
+    await annDataLayer.togglePinAnn(id);
+    await annRefresh({force:true});
+  }catch(e){ toast('置顶切换失败：' + (e.message || '未知错误')); return; }
   adminRenderAnnouncements();
   renderSiteAnnBar();
-  toast('✓ 已保存');
 }
-function adminTogglePinAnn(id){
-  const list = annGetAll();
-  const idx = list.findIndex(x => x.id === id);
-  if(idx >= 0){ list[idx].pin = !list[idx].pin; list[idx].ts = Date.now(); annSaveAll(list); }
+async function adminDeleteAnn(id){
+  if(!confirm('确认删除这条公告？（已发邮件无法撤销）\n（删除=软删，所有端立即同步消失）')) return;
+  try{
+    await annDataLayer.deleteAnn(id);
+    await annRefresh({force:true});
+  }catch(e){ toast('删除失败：' + (e.message || '未知错误')); return; }
   adminRenderAnnouncements();
   renderSiteAnnBar();
+  toast('已删除（多端同步）');
 }
-function adminDeleteAnn(id){
-  if(!confirm('确认删除这条公告？（已发邮件无法撤销）')) return;
-  annSaveAll(annGetAll().filter(x => x.id !== id));
-  adminRenderAnnouncements();
-  renderSiteAnnBar();
-  toast('已删除');
-}
-function adminPreviewAnnouncements(){
+async function adminPreviewAnnouncements(){
+  try{ await annRefresh({force:true}); }catch(e){}
   renderSiteAnnBar(true);
   toast('已刷新顶部公告条（仅显示当前时段内生效的公告）');
 }
-// 发邮件：调用 Edge Function broadcast_announcement
+// 发邮件：调用 Edge Function broadcast_announcement，然后把发邮件结果回写到 announcements 记录（通过 admin_ann_save）
 const EDGE_FN_BROADCAST = (window.SUPABASE_URL || 'https://hjryfgujkxuaxovftlai.supabase.co') + '/functions/v1/broadcast_announcement';
 async function adminAnnSendEmail(){
   if(!isAdmin){ toast('仅管理员可发送全站邮件'); return; }
   if(!ADM_STATE.annEditId){ toast('请先保存公告再发送邮件'); return; }
+  try{ await annRefresh({force:true}); }catch(e){}
   const list = annGetAll();
   const idx = list.findIndex(x => x.id === ADM_STATE.annEditId);
   if(idx < 0){ toast('未找到对应公告'); return; }
   const a = list[idx];
   if(!(a.title||'').trim() && !(a.body||'').trim()){ toast('公告标题或正文不能为空'); return; }
   const btn = $('admAnnEmailBtn');
-  if(btn){ btn.disabled = true; const old=btn.textContent; btn.textContent='发送中…'; try{
+  if(!btn) return;
+  btn.disabled = true; const old=btn.textContent; btn.textContent='发送中…';
+  try{
     const payload = {
       announcement_id: a.id,
       title: a.title || '医路相伴·公告',
@@ -7645,25 +8008,30 @@ async function adminAnnSendEmail(){
       resp = { ok:false };
     }
     if(!resp || !resp.ok){
-      // 兜底：若 Edge Function 未部署/返回失败，通过 admin_get_email_list 本地直连不可行，明确提示
       let hint = '';
       try{ const t = resp ? await resp.text().catch(()=>'') : ''; hint = t && t.length<300 ? ('；响应：'+t) : ''; }catch(e){}
       toast('❌ 发送失败：请先部署 Edge Function `broadcast_announcement`' + hint, 5000);
       return;
     }
     const data = await resp.json().catch(()=>({}));
-    list[idx] = Object.assign({}, a, {
+    const succ_count = (data.ok_count || data.sent || data.successCount || 0);
+    const fail_count = (data.fail_count || data.failed || data.errorCount || 0);
+    // 把邮件结果通过 RPC 写回 announcements 表（admin_ann_save 会 UPDATE）
+    await annDataLayer.saveAnn(Object.assign({}, a, {
       email_sent: true,
       email_sent_ts: Date.now(),
-      email_count: (data.ok_count || data.sent || data.successCount || 0),
-      email_fail: (data.fail_count || data.failed || data.errorCount || 0),
-    });
-    annSaveAll(list);
-    _refreshAnnEmailBox(list[idx]);
+      email_count: succ_count,
+      email_fail:  fail_count,
+    }));
+    await annRefresh({force:true});
+    const newList = annGetAll();
+    const newIdx = newList.findIndex(x => x.id === a.id);
+    const fresh = newIdx>=0 ? newList[newIdx] : Object.assign({}, a, { email_sent:true, email_sent_ts:Date.now(), email_count:succ_count, email_fail:fail_count });
+    _refreshAnnEmailBox(fresh);
     adminRenderAnnouncements();
-    toast(`✓ 邮件已发起：成功 ${list[idx].email_count}，失败 ${list[idx].email_fail}`);
-  }catch(e){ toast('❌ 发送失败：' + (e && e.message ? e.message : e)); } finally { if(btn){ btn.disabled = false; btn.textContent = '📧 发送邮件'; } } }
-  else { try{ await _adminAnnSendEmailInner(a, list, idx); }catch(e){ toast('❌ '+e.message); } }
+    toast(`✓ 邮件已发起：成功 ${succ_count}，失败 ${fail_count}`);
+  }catch(e){ toast('❌ 发送失败：' + (e && e.message ? e.message : e)); }
+  finally { btn.disabled = false; btn.textContent = '📧 发送邮件'; }
 }
 // 用户端：弹窗队列（首访时弹出 urgent 级 或 设了 popup!=never 的当前生效公告，按优先级依次）
 let _ANN_QUEUE = [];
@@ -7933,6 +8301,20 @@ async function init(){
   checkMeds();
   // 首访/刷新时：触发紧急或弹窗公告
   try{ enqueueAnnPopups(); }catch(e){}
+  // 在 init 末尾：后台静默拉云端公告，拉到新内容就刷新顶部条 + 弹窗队（避免首屏白等）
+  if(cloudUsable()){
+    setTimeout(async ()=>{
+      try{
+        const beforeArr = (window._ANN_CACHE || []).map(x => x.id).join('|');
+        await annRefresh({force:false});
+        const afterArr = window._ANN_CACHE || [];
+        if(beforeArr !== afterArr.map(x => x.id).join('|')){
+          try{ renderSiteAnnBar(); }catch(_){}
+          try{ enqueueAnnPopups(); }catch(_){}
+        }
+      }catch(e){ console.warn('[init] 云端公告预取失败（不影响）：', e); }
+    }, 1500);
+  }
 }
 document.addEventListener('DOMContentLoaded', init);
 </script>
