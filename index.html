@@ -1209,11 +1209,11 @@
         <div id="adminUserTableWrap" style="overflow-x:auto;">
           <table class="admin-tbl" id="adminUserTable">
             <thead><tr>
-              <th>账号</th><th>角色</th><th>邀请码</th><th>绑定</th>
+              <th>账号</th><th>老人</th><th>家属</th><th>邀请码</th><th>绑定</th>
               <th>管理员</th><th>邮箱</th><th>注册时间</th><th style="width:240px;">操作</th>
             </tr></thead>
             <tbody id="adminUserTbody">
-              <tr><td colspan="8" class="td-empty">加载中…</td></tr>
+              <tr><td colspan="9" class="td-empty">加载中…</td></tr>
             </tbody>
           </table>
         </div>
@@ -1697,7 +1697,7 @@
 <!-- 登录/注册弹层 -->
 <div class="mask" id="authMask">
   <div class="sheet">
-    <h3 id="authTitle">登录 / 注册</h3>
+    <h3 id="authTitle">登录</h3>
     <label class="f">手机号 / 账号
       <input class="inp" id="authUser" placeholder="请输入手机号或账号 (3-30位)" maxlength="30" autocomplete="off">
     </label>
@@ -1713,25 +1713,19 @@
     <label class="f" id="emailLabel" style="display:none;">邮箱（可选，用于用药提醒）
       <input class="inp" id="authEmail" type="email" placeholder="选填，如 example@mail.com" maxlength="254" autocomplete="email">
     </label>
-    <div style="font-size:13px;display:flex;gap:6px;margin-bottom:4px;">
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-        <input type="radio" name="authMode" value="login" checked onchange="switchAuthMode()"> 登录
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
-        <input type="radio" name="authMode" value="register" onchange="switchAuthMode()"> 注册
-      </label>
-    </div>
     <label class="f" id="rolePick">我的身份
       <div class="gap6">
         <button class="btn block" id="roleElder" onclick="pickRole('elder')"><svg class="icn"><use href="#ic-user"/></svg> 我是老人</button>
         <button class="btn block ghost" id="roleFamily" onclick="pickRole('family')"><svg class="icn"><use href="#ic-users"/></svg> 我是家属</button>
       </div>
     </label>
-    <div class="gap6">
-      <button class="btn block" id="authSubmitBtn" onclick="doLogin()">登录</button>
-      <button class="btn block ghost" id="authRegisterBtn" style="display:none;" onclick="doRegister()">确认注册</button>
+    <!-- 底部双按钮：左=次按钮切换界面；右=主按钮提交当前表单 -->
+    <div class="gap6" style="margin-top:8px;">
+      <button class="btn block ghost" id="authSwitchBtn" onclick="switchAuthMode(false)">去注册</button>
+      <button class="btn block" id="authSubmitBtn" onclick="onAuthSubmit()">登录</button>
     </div>
     <p class="hint" id="authHint">首次使用请先注册。账号保存在云端，换设备也能登录。</p>
+    <p class="hint" id="authNotice" style="display:none;margin-top:4px;color:var(--warn);"></p>
   </div>
 </div>
 
@@ -3860,39 +3854,114 @@ function setRole(r){
   pickedRole = myRole;
   updateFamilyView();
 }
+// 全局变量：当前 auth 弹窗处于登录还是注册模式
+let _authMode = 'login'; // 'login' | 'register'
 function openAuth(){
   $('authMask').classList.add('show');
-  $('authTitle').textContent = currentUser ? '切换账号' : '登录 / 注册';
+  $('authNotice').style.display = 'none';
+  $('authNotice').textContent = '';
+  $('authUser').value = '';
+  $('authPass').value = '';
+  if($('authPass2')) $('authPass2').value = '';
+  if($('authEmail')) $('authEmail').value = '';
+  // 默认进入登录模式
+  _authMode = 'login';
   pickRole(myRole);
-  switchAuthMode();
+  switchAuthMode(true);
 }
 function closeAuth(){ $('authMask').classList.remove('show'); }
-function switchAuthMode(){
-  const mode = document.querySelector('input[name="authMode"]:checked')?.value || 'login';
-  const isReg = mode === 'register';
+/**
+ * 切换 auth 弹窗模式。
+ * @param {boolean} silent - true=只渲染不切换（由 openAuth 初始化时调用）
+ *                           false/undefined=用户点了切换按钮
+ */
+function switchAuthMode(silent){
+  if(silent !== true){
+    // 用户主动切换
+    _authMode = (_authMode === 'login') ? 'register' : 'login';
+    $('authNotice').style.display = 'none';
+  }
+  const isReg = _authMode === 'register';
   const confirmLabel = $('confirmPassLabel');
   const submitBtn = $('authSubmitBtn');
-  const regBtn = $('authRegisterBtn');
+  const switchBtn = $('authSwitchBtn');
   const hint = $('authHint');
   const title = $('authTitle');
   const strength = $('passStrength');
   if(isReg){
-    title.textContent = '注册新账号';
+    title.textContent = currentUser ? '切换账号 · 注册新号' : '注册新账号';
     confirmLabel.style.display = '';
     $('emailLabel').style.display = '';
-    submitBtn.style.display = 'none';
-    regBtn.style.display = '';
+    submitBtn.textContent = '确认注册';
+    switchBtn.textContent = '← 返回登录';
     strength.style.display = '';
     hint.textContent = '密码至少6位，需两次输入一致。账号保存在云端。';
   } else {
     title.textContent = currentUser ? '切换账号' : '登录';
     confirmLabel.style.display = 'none';
     $('emailLabel').style.display = 'none';
-    submitBtn.style.display = '';
-    regBtn.style.display = 'none';
+    submitBtn.textContent = '登录';
+    switchBtn.textContent = '去注册';
     strength.style.display = 'none';
     hint.textContent = '首次使用请先注册。账号保存在云端，换设备也能登录。';
   }
+}
+/**
+ * 主提交按钮触发：根据 _authMode 分派
+ * - 登录模式：先执行 doLogin；若云端+本地均无此账号，自动切到注册（保留账号，密码清空），并提示
+ * - 注册模式：直接 doRegister
+ */
+async function onAuthSubmit(){
+  if(_authMode === 'register'){
+    await doRegister();
+    return;
+  }
+  // =============== 登录模式：检测账号不存在则自动跳注册 ===============
+  const u = sanitizeUsername($('authUser').value);
+  const uv = isValidUsername(u);
+  if(!uv.ok){ toast(uv.msg); return; }
+  const p = sanitizePass($('authPass').value);
+  const pv = isValidPassword(p);
+  if(!pv.ok){ toast(pv.msg); return; }
+
+  // 1) 先检查本地有没有此账号
+  let localExists = false;
+  try{
+    const rec = await DB.get('users', u);
+    localExists = !!rec && !!rec.id;
+  }catch(e){ localExists = false; }
+
+  // 2) 云端检查（auth_check_user_exists RPC）
+  let cloudExists = false, cloudUnknown = true;
+  if(cloudUsable()){
+    try{
+      const body = JSON.stringify({username: u});
+      const res = await fetch(SB_URL + '/rest/v1/rpc/auth_check_user_exists', {
+        method:'POST',
+        headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'}
+      });
+      if(res.ok){
+        const r = await res.json();
+        cloudExists = !!(r && r.exists);
+        cloudUnknown = false;
+      }
+    }catch(e){ cloudUnknown = true; }
+  }
+
+  // 3) 账号肯定不存在 → 自动切到注册界面（保留账号、密码清空、提示）
+  if(!localExists && cloudUnknown === false && !cloudExists){
+    $('authPass').value = '';
+    if($('authPass2')) $('authPass2').value = '';
+    const notice = $('authNotice');
+    notice.textContent = '提示：该账号尚未注册，已切到注册界面，请重新设置密码并补填信息完成注册。';
+    notice.style.display = '';
+    _authMode = 'register';
+    switchAuthMode(true);
+    return;
+  }
+
+  // 4) 账号存在（或不确定） → 走标准 doLogin
+  await doLogin();
 }
 function checkPassStrength(val){
   const bar = $('passStrengthBar');
@@ -3971,6 +4040,70 @@ async function resetAppState(){
   // 清理旧版设备级个人缓存，避免下个账号看到
   try{ purgeSharedUserCache(); }catch(e){}
 }
+/**
+ * 切换账号/登出/进入体验模式时，彻底清除所有用户输入记录，避免数据串号。
+ *  - 所有 <input> / <textarea> / <select> 表单残留值清空（不含登录弹窗的 authUser/authPass 等，因为切换前可能还在展示）
+ *  - 账号隔离 localStorage 全部清空（包括 med_binds / med_bind / meds / events / chronic 等所有 lsKey 前缀数据）
+ *  - 设备级（无账号前缀）的个人敏感缓存：地址、PP token、邮箱草稿、搜索词等
+ * 注：登录态（med_user / med_is_admin / med_role）由调用方自己清，不在这里动。
+ *     IndexedDB 的业务数据不在这里动（resetAppState + 账号隔离已保证数据隔离）。
+ */
+function purgeAllUserInputs(){
+  // 1) 清空输入框 / 文本域 / 下拉选择
+  const allInputs = document.querySelectorAll('input, textarea, select');
+  allInputs.forEach(el => {
+    const tag = (el.tagName || '').toLowerCase();
+    const type = (el.getAttribute && el.getAttribute('type')) || '';
+    const id = el.id || '';
+    // 保留登录弹窗里 auth 系列输入框（弹窗关闭/打开时单独清）
+    if(id && id.startsWith('auth')) return;
+    // 保留 hidden / radio / checkbox 的默认状态（这些多是功能开关，不是用户隐私）
+    if(type === 'hidden' || type === 'radio' || type === 'checkbox') return;
+    if(tag === 'select'){ el.selectedIndex = 0; return; }
+    try{
+      if(tag === 'input'){
+        el.value = '';
+      } else if(tag === 'textarea'){
+        el.value = '';
+      }
+    }catch(e){}
+  });
+
+  // 2) 账号隔离的 localStorage：扫出所有前缀为用户相关（lsKey 模式）的 key，全部删
+  if(currentUser){
+    const suffix = '_' + encodeURIComponent(currentUser);
+    const keysToRemove = [];
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k) continue;
+      if(k.endsWith(suffix)){ keysToRemove.push(k); }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  }
+
+  // 3) 设备级个人敏感数据（旧版未做隔离时写入的）
+  [
+    // 显式用户输入类
+    'med_user_inputs', 'med_bind', 'med_addr', 'med_pp_token', 'med_email_draft',
+    'symSearchHistory', 'drugSearchHistory', 'hospSearchHistory', 'addrLast',
+    // 经验中存在的历史键
+    'med_binds', 'med_family_code_last', 'med_last_elder_input', 'med_last_bind_input',
+    'last_sym_query', 'last_hospital_query', 'last_dept',
+  ].forEach(k => localStorage.removeItem(k));
+
+  // 4) 兜底：清理所有非系统关键字的 key（以 med_ 开头、不是 med_user/is_admin/role 的全删）
+  const systemKeys = new Set(['med_user','med_is_admin','med_role','med_onboarded','med_font','med_mode','med_seen_anns','med_version','med_auth_token_stamp']);
+  const otherRemovals = [];
+  for(let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(!k) continue;
+    if(k.startsWith('med_') && !systemKeys.has(k) && !k.includes('_') && k !== 'med_user' && k !== 'med_is_admin' && k !== 'med_role'){
+      // 顶层 med_xxx（非带后缀）里除系统 key 外全清
+      if(!systemKeys.has(k)) otherRemovals.push(k);
+    }
+  }
+  otherRemovals.forEach(k => localStorage.removeItem(k));
+}
 async function doRegister(){
   const u = sanitizeUsername($('authUser').value);
   const p = sanitizePass($('authPass').value);
@@ -3984,6 +4117,32 @@ async function doRegister(){
   if(!p2){ toast('请再次输入密码'); return; }
   if(p !== p2){ toast('两次密码输入不一致'); return; }
   if(email){ const ev = isValidEmail(email); if(!ev.ok){ toast(ev.msg); return; } }
+
+  // [bugfix] 先做云端占用预检（auth_check_user_exists RPC），避免本地没数据就说"没注册过"，实际云端有
+  if(cloudUsable()){
+    try{
+      const chk = await fetch(SB_URL + '/rest/v1/rpc/auth_check_user_exists', {
+        method:'POST',
+        headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify({username: u})
+      });
+      if(chk.ok){
+        const cr = await chk.json();
+        if(cr && cr.exists){
+          // 通知用户已占用，并给一次自动切回登录
+          toast('该账号在云端已存在，请直接登录（若忘记密码可联系管理员重置）');
+          const notice = $('authNotice');
+          notice.textContent = '提示：该账号已在云端注册过，已切到登录界面，请使用该账号密码登录。';
+          notice.style.display = '';
+          $('authPass').value = '';
+          _authMode = 'login';
+          switchAuthMode(true);
+          return;
+        }
+      }
+    }catch(e){ /* 云端不可用时降级：只靠本地检查 */ }
+  }
+
   if(await DB.get('users', u)){ toast('该账号已存在，请直接登录'); return; }
   const code = String(Math.floor(100000 + Math.random()*900000));
   let h = null, note = '已保存本机';
@@ -4008,7 +4167,17 @@ async function doRegister(){
         note = '账号已存云端，任意设备可登录';
       } else {
         const errText = await res.text();
-        if(res.status === 409 || errText.includes('23505')){ toast('该账号已被注册，请直接登录'); return; }
+        if(res.status === 409 || errText.includes('23505')){
+          toast('该账号已被注册，请直接登录（若忘记密码可联系管理员重置）');
+          const notice = $('authNotice');
+          notice.textContent = '提示：该账号已在云端注册过，已切到登录界面，请使用该账号密码登录。';
+          notice.style.display = '';
+          $('authPass').value = '';
+          if($('authPass2')) $('authPass2').value = '';
+          _authMode = 'login';
+          switchAuthMode(true);
+          return;
+        }
         if(res.status === 404){ note = '已保存本机（云端数据表未创建）'; }
         else { note = '已保存本机（云端暂不可用）'; }
       }
@@ -4136,8 +4305,9 @@ async function quickUse(){
   localStorage.removeItem('med_user');
   isAdmin = false; localStorage.removeItem('med_is_admin');
   bumpRenderToken('quickUse：进入体验模式清账号');
-  // 体验模式：清理设备级残留个人缓存，避免下个账号看到
+  // 彻底清理所有输入和账号隔离缓存
   try{ purgeSharedUserCache(); }catch(e){}
+  try{ purgeAllUserInputs(); }catch(e){}
   await resetAppState();
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   go('home');
@@ -4151,6 +4321,8 @@ async function afterLogin(){
   currentViewBind = '';
   // 0b. 同步管理员权限到内存 + localStorage
   localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
+  // 0c. 心跳：登录/切换账号后，上报当前账号×当前身份的在线状态
+  heartbeatTouch();
   // 1. 从 IndexedDB 读取本地缓存
   try{
     const r = await DB.get('users', currentUser);
@@ -4234,12 +4406,14 @@ async function afterLogin(){
 }
 async function doLogout(){
   if(!currentUser){ toast('您还未登录'); return; }
+  bumpRenderToken('doLogout：登出清账号');
+  // 登出时先清输入和账号隔离缓存（此时 currentUser 仍有效，可以正确找到账号隔离的 localStorage 后缀）
+  try{ purgeSharedUserCache(); }catch(e){}
+  try{ purgeAllUserInputs(); }catch(e){}
   currentUser = null;
   localStorage.removeItem('med_user');
   localStorage.removeItem('med_is_admin');
   isAdmin = false;
-  bumpRenderToken('doLogout：登出清账号');
-  try{ purgeSharedUserCache(); }catch(e){}
   await resetAppState();
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   setRole('elder');
@@ -7305,7 +7479,7 @@ async function adminLoadUsers(){
   const tb = $('adminUserTbody');
   if(!tb) return;
   const sum = $('adminUserSummary'), pageEl = $('adminUserPage');
-  tb.innerHTML = '<tr><td colspan="8" class="td-empty">加载中…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="9" class="td-empty">加载中…</td></tr>';
   try{
     const kw = ADM_STATE.filter === 'test' ? 'test_' : ADM_STATE.keyword;
     const data = await adminRPC('admin_list_users', {
@@ -7315,8 +7489,10 @@ async function adminLoadUsers(){
     const total = data && typeof data.total === 'number' ? data.total : rows.length;
     ADM_STATE.total = total;
     if(ADM_STATE.filter === 'admin')  rows = rows.filter(r => !!r.is_admin);
-    if(ADM_STATE.filter === 'elder')  rows = rows.filter(r => r.role === 'elder');
-    if(ADM_STATE.filter === 'family') rows = rows.filter(r => r.role === 'family');
+    // 注意：由于所有账号同时拥有老人+家属身份（B 方案升级），
+    // 历史数据的 r.role（登录时选中的身份）只作为辅助筛选保留，不决定角色列显示
+    if(ADM_STATE.filter === 'elder')  rows = rows.filter(r => (r.role || 'elder') === 'elder');
+    if(ADM_STATE.filter === 'family') rows = rows.filter(r => (r.role || 'elder') === 'family');
     if(ADM_STATE.filter === 'test')   rows = rows.filter(r => /^test_/.test(r.id));
 
     if(sum){ sum.textContent = '共 ' + total + ' 个账号（当前显示 ' + rows.length + '）'; }
@@ -7326,10 +7502,19 @@ async function adminLoadUsers(){
       pageEl.textContent = '第 ' + cur + '/' + pages + ' 页';
     }
     if(rows.length === 0){
-      tb.innerHTML = '<tr><td colspan="8" class="td-empty">没有符合条件的账号</td></tr>';
+      tb.innerHTML = '<tr><td colspan="9" class="td-empty">没有符合条件的账号</td></tr>';
       return;
     }
-    const roleLabel = {elder:'老人',family:'家属'};
+    // 双角色列 + 在线灯
+    //   has_elder / has_family: 所有账号按 B 方案升级统一为 true（同时有两个身份）
+    //   online_elder / online_family: 近 10 分钟心跳 = 绿色实心圆；否则空心灰圆
+    const roleDot = (has, online, roleLabel) => {
+      if(!has){ return '<span style="color:var(--muted);font-size:12px;">无</span>'; }
+      const dot = online
+        ? '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10b981;margin-right:6px;box-shadow:0 0 0 2px rgba(16,185,129,.2);"></span>'
+        : '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:transparent;border:2px solid var(--muted);margin-right:6px;"></span>';
+      return '<div style="display:flex;align-items:center;">' + dot + '<span>' + roleLabel + '</span></div>';
+    };
     tb.innerHTML = rows.map(r => {
       const rid = (r.id || '').toString();
       const isSelf = rid === currentUser;
@@ -7339,8 +7524,14 @@ async function adminLoadUsers(){
       const date = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : '—';
       const isAdmTd = r.is_admin ? '<span class="adm-badge admin">管理员</span>' : '<span style="color:var(--muted)">否</span>';
       const testBadge = isTest ? ' <span class="adm-badge test">测试</span>' : '';
-      const roleCls = r.role === 'elder' ? 'role-elder' : r.role === 'family' ? 'role-family' : '';
-      const roleText = roleLabel[r.role] || r.role || '—';
+      // 角色列：B 方案升级，所有账号两侧都有身份
+      const hasElder = typeof r.has_elder === 'boolean' ? r.has_elder : true;
+      const hasFamily = typeof r.has_family === 'boolean' ? r.has_family : true;
+      const onlineElder = !!r.online_elder;
+      const onlineFamily = !!r.online_family;
+      const elderTd = roleDot(hasElder, onlineElder, '老人');
+      const familyTd = roleDot(hasFamily, onlineFamily, '家属');
+
       const ops = [
         '<button class="btn line" onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>',
       ];
@@ -7356,7 +7547,8 @@ async function adminLoadUsers(){
       }
       return '<tr>'
         + '<td><b>' + rid + '</b>' + testBadge + '</td>'
-        + '<td class="' + roleCls + '">' + roleText + '</td>'
+        + '<td>' + elderTd + '</td>'
+        + '<td>' + familyTd + '</td>'
         + '<td>' + (r.family_code || '<span style="color:var(--muted)">—</span>') + '</td>'
         + '<td>' + bindCount + ' 位</td>'
         + '<td>' + isAdmTd + '</td>'
@@ -7367,7 +7559,7 @@ async function adminLoadUsers(){
     }).join('');
   }catch(e){
     console.warn('adminLoadUsers 失败:', e);
-    tb.innerHTML = '<tr><td colspan="8" class="td-empty" style="color:var(--danger);">加载失败：' + (e && e.message ? e.message : '未知错误') + '</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="td-empty" style="color:var(--danger);">加载失败：' + (e && e.message ? e.message : '未知错误') + '</td></tr>';
     toast('用户列表加载失败');
   }
 }
@@ -8211,6 +8403,26 @@ function renderSiteAnnBar(forceShow){
   _syncAnnBarLayout();
 }
 
+/* ==================== 心跳上报（在线状态） ==================== */
+/**
+ * 上报当前账号×当前身份的心跳。
+ * 触发时机：afterLogin 成功 / init 完成（如果已登录）/ visibilitychange 从后台切回前台（且已登录）。
+ * RPC 不可用时静默失败（心跳只影响管理台在线灯，不影响核心功能）。
+ */
+function heartbeatTouch(){
+  if(!currentUser) return;
+  if(!cloudUsable()) return;
+  const r = (myRole === 'family' || myRole === 'elder') ? myRole : 'elder';
+  try{
+    const body = JSON.stringify({caller: currentUser, h_role: r});
+    fetch(SB_URL + '/rest/v1/rpc/heartbeat_touch', {
+      method:'POST',
+      headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'},
+      body
+    }).catch(e=>{ /* ignore */ });
+  }catch(e){ /* ignore */ }
+}
+
 /* ==================== 初始化 ==================== */
 async function init(){
   applyMode();
@@ -8392,8 +8604,17 @@ async function init(){
       }catch(e){ console.warn('[init] 云端公告预取失败（不影响）：', e); }
     }, 1500);
   }
+  // 心跳：页面初始化时若已登录就上报一次
+  heartbeatTouch();
 }
 document.addEventListener('DOMContentLoaded', init);
+
+// 心跳：页面从后台切回前台时若已登录就上报
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    heartbeatTouch();
+  }
+});
 </script>
 </body>
 </html>
