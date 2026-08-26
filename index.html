@@ -10369,28 +10369,44 @@ async function adminMMToggle(enable){
   const mv = validateText((msgEl||{}).value || '', {label:'维护通知正文', required:true, max:220});
   if(!mv.ok){ toast(mv.msg || '请填写维护通知正文'); return; }
   const schedEl = $('admMMSchedule'), startEl = $('admMMStart'), endEl = $('admMMEnd');
-  const scheduled = !!(schedEl && schedEl.checked);
+  const _schedChecked = !!(schedEl && schedEl.checked);
   const startStr = (startEl || {}).value || '';
   const endStr   = (endEl || {}).value || '';
 
-  const next = {
-    enabled: scheduled ? false : !!enable, // 定时开启 → enabled=false（交给 pg_cron 到时转正）
-    scheduled: scheduled,
-    start_at: startStr ? new Date(startStr).toISOString() : null,
-    end_at:   endStr   ? new Date(endStr).toISOString()   : null,
-    message:  mv.value
-  };
-  if(scheduled && !next.start_at && !enable){
-    toast('选择了定时开启，请至少填写开始时间（或取消"定时"改为立即开启）'); return;
+  // —— 规则修正（防止"勾了定时但没填时间 + 点立即开启"的假成功）——
+  // 1) 任何情况下：end 填写了但 start 没填 → 报错（必须有开始才能有结束）
+  if(endStr && !startStr){
+    toast('填了结束时间就必须填写开始时间'); return;
   }
-  if(next.start_at && next.end_at && new Date(next.start_at) >= new Date(next.end_at)){
+  // 2) 勾了定时，但开始/结束都没填 → 当作立即模式处理（用户可能只是误勾选）
+  let scheduled = _schedChecked;
+  if(_schedChecked && !startStr && !endStr){
+    scheduled = false; // 没时间段 → 退化为立即模式
+  }
+  // 3) 勾了定时 + 填了开始时间 + 是"关闭"按钮（enable=false）→ 允许（"保存定时配置但不立即开启"是合法场景）
+  //    勾了定时 + 开始时间为空 + enable=false  → 提示（没任何时间段还勾定时没意义）
+  if(_schedChecked && !startStr && !enable){
+    toast('选择了定时，请至少填写开始时间（或取消"定时"勾选改为立即）'); return;
+  }
+
+  const startISO = startStr ? new Date(startStr).toISOString() : null;
+  const endISO   = endStr   ? new Date(endStr).toISOString()   : null;
+  if(startISO && endISO && new Date(startISO) >= new Date(endISO)){
     toast('定时结束时间必须晚于开始时间'); return;
   }
+
+  const next = {
+    enabled: scheduled ? false : !!enable, // 定时模式 → enabled=false（交给 pg_cron 在 start_at 转正）
+    scheduled: scheduled,
+    start_at: startISO,
+    end_at:   endISO,
+    message:  mv.value
+  };
   // requirePerm('mmode')：sub 无长期 → 按次申请
   const ok = await requirePerm('mmode', {
     action: 'admin.mm.' + (enable ? 'on' : 'off'),
     actionDesc: (enable ? '开启维护模式' : '关闭维护模式') + (scheduled ? '（定时）' : '（立即）'),
-    payload: {enabled: !!enable, scheduled: scheduled, start_at: next.start_at, end_at: next.end_at, message: mv.value}
+    payload: {enabled: next.enabled, scheduled: scheduled, start_at: next.start_at, end_at: next.end_at, message: mv.value}
   });
   if(!ok) return;
   audit('admin.mm.toggle', Object.assign({enable: !!enable}, next));
@@ -10423,7 +10439,18 @@ async function adminMMToggle(enable){
       await _GLOBAL_REALTIME_CHANNEL.send({type:'broadcast', event:'maintenance_update', payload: next});
     }catch(_){ /* REST 广播兜底交给 Edge Function / pg_cron */ }
   }
-  toast(enable ? '✓ 已开启维护模式（多端同步生效）' : '✓ 已关闭维护模式，用户登录恢复正常。');
+  // —— 成功 toast 按实际生效状态精确描述（避免"scheduled 退化"但 toast 仍说"已开启"的假匹配）
+  let tip;
+  if(enable){
+    if(next.scheduled) tip = next.start_at
+      ? ('⏱️ 已保存定时维护：从 '+_fmtBJ(next.start_at)+(next.end_at ? ' 到 '+_fmtBJ(next.end_at) : '')+'，到点自动生效')
+      : '⚠️ 选择了定时但未填时段，已按立即开启处理';
+    else tip = '✓ 已开启维护模式（多端同步生效）';
+  } else {
+    if(next.scheduled && next.start_at) tip = '✓ 已关闭即时维护，定时时段保留（到点仍会自动开启）';
+    else tip = '✓ 已关闭维护模式，用户登录恢复正常。';
+  }
+  toast(tip, scheduled ? 3000 : 1500);
 }
 
 // ---- 登录拦截：维护模式下，普通账号登录返回维护提示 + 不清输入（让用户重试） ----
