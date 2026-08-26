@@ -1034,6 +1034,7 @@
     <li><a class="nav-link" data-v="med" onclick="go('med')"><span class="nm-s">用药</span><span class="nm-f">用药提醒</span></a></li>
     <li><a class="nav-link" data-v="chronic" onclick="go('chronic')"><span class="nm-s">慢病</span><span class="nm-f">慢性病管理</span></a></li>
     <li><a class="nav-link" data-v="more" onclick="go('hospital')"><span class="nm-s">医院</span><span class="nm-f">找医院</span></a></li>
+    <li><a class="nav-link" data-v="family" id="navFamilyBtn" style="display:none;" onclick="go('family')"><span class="nm-s">家属</span><span class="nm-f">家人动态</span></a></li>
     <li><a class="nav-link" data-v="account" onclick="go('account')">账户</a></li>
     <li><a class="nav-link" data-v="admin" id="navAdminBtn" style="display:none;" onclick="go('admin')">管理</a></li>
   </ul>
@@ -3760,6 +3761,20 @@ async function go(view){
   if(view === 'family'){
     updatePWABadge();
     updatePPBadge();
+    // 进入家属视图：如果当前有绑定并已选中老人，立即重拉事件/慢病/依从性（保证切换导航进来时第一时间刷新），并启动 15s 轮询
+    if(myRole === 'family'){
+      if(currentViewBind){
+        try{
+          pullCloudEvents(currentViewBind);
+          renderChronicSummary(currentViewBind);
+          renderElderCompliance(currentViewBind);
+        }catch(e){}
+      }
+      startFamilyPoll();
+    }
+  } else {
+    // 切出家属视图就关掉轮询，省电
+    stopFamilyPoll();
   }
   if(view === 'account'){
     updateUserUI();
@@ -4226,6 +4241,11 @@ function updateUserUI(){
   // 导航栏「管理」：仅管理员可见
   var navBtn = $('navAdminBtn');
   if(navBtn) navBtn.style.display = (currentUser && isAdmin) ? '' : 'none';
+  // 导航栏「家属」：当前登录账号 + 身份=家属 时才显示（老人端不显示）
+  var famBtn = $('navFamilyBtn');
+  if(famBtn){
+    famBtn.style.display = (currentUser && myRole === 'family') ? '' : 'none';
+  }
   renderAccountSection();
 }
 function updateFamilyView(){
@@ -4728,7 +4748,7 @@ async function addMed(){
   renderMeds();
   toast('已保存用药：' + name);
   autoSpeak('已保存用药' + name + '，到点会提醒您。');
-  addEvent('用药', '添加了用药「' + name + '」，' + (dose||'') + '，提醒时间 ' + times.join('、'));
+  addEvent('用药', '添加了用药「' + (name.slice(0,1) + '***') + '」，提醒时间 ' + times.length + ' 个时段');
   if('Notification' in window && Notification.permission !== 'granted'){
     Notification.requestPermission();
   }
@@ -4895,7 +4915,9 @@ async function delMed(id){
   // 只能删除自己的用药记录，防止 id 碰巧相同时删到其他账号
   const own = await ensureMine('meds', id);
   if(!own){ toast('无权删除该记录'); return; }
+  const hint = (own && own.name) ? ('「' + String(own.name).slice(0,1) + '***」') : '';
   await DB.del('meds', id);
+  addEvent('用药', '删除了用药' + hint);
   renderMeds();
   toast('已删除');
 }
@@ -6720,20 +6742,41 @@ async function renderCompliance(targetUser, statsId, calId){
         return s >= thirtyAgoStr;
       });
     } else if(cloudUsable()){
-      const res = await sbFetch('medication_logs?username=eq.' + encodeURIComponent(targetUser) + '&order=scheduled_date.desc&limit=500');
+      const res = await sbFetch('medication_logs?username=eq.' + encodeURIComponent(targetUser)
+        + '&order=scheduled_date.desc&order=scheduled_time.desc&limit=500');
       if(res.ok){
         const rows = await res.json();
+        // 兼容：老数据无 med_ref 也允许读；新格式优先（同一 (date+time+med_ref) 按 created_at 取最新去重）
+        const dedup = new Map();
+        rows.forEach(r => {
+          const schedDate = String(r.scheduled_date || '').slice(0,10);
+          if(!schedDate) return;
+          const schedTime = String(r.scheduled_time || '').slice(0,5);
+          const key = schedDate + '|' + schedTime + '|' + String(r.med_ref || ('row_' + (r.id||Math.random())));
+          const existing = dedup.get(key);
+          if(!existing){
+            dedup.set(key, r);
+            return;
+          }
+          // 只在 created_at / actual_time 有更新时覆盖（保证重按按钮家属端拿到最新 status）
+          const aT = existing.actual_time || existing.created_at;
+          const bT = r.actual_time || r.created_at;
+          if(bT && aT && new Date(bT) > new Date(aT)) dedup.set(key, r);
+        });
+        const dedupRows = Array.from(dedup.values());
         // 云端同样按 北京日期字符串过滤（与 renderMeds/markMedTaken 存的格式一致：YYYY-MM-DD 北京）
         const nowBJ = nowBeijing();
         const thirtyAgoStr = beijingYMD(new Date(nowBJ.getTime() - 30 * 86400000));
-        myLogs = rows.filter(r => {
+        myLogs = dedupRows.filter(r => {
           const s = String(r.scheduled_date || '').slice(0,10);
           return s >= thirtyAgoStr;
         }).map(r => ({
           scheduled_date: String(r.scheduled_date).slice(0,10),
-          status: r.status
+          status: r.status,
+          scheduled_time: String(r.scheduled_time || '').slice(0,5)
         }));
-        hasMeds = true;
+        // hasMeds=true 不再用"有无 meds 行"判空——老人 meds 不上传云端，家属端拿不到，改成以 medication_logs 是否有非空行判定。
+        hasMeds = myLogs.length > 0 || rows.length > 0;
       }
     }
     // ====== [异步并发保护] 挂起期间若发起了新的渲染/账号切换，丢弃本次结果 ======
@@ -6834,14 +6877,42 @@ async function renderElderCompliance(elderCode){
     return;
   }
   card.style.display = 'block';
-  $('elderComplianceStats').innerHTML = '<p class="hint">加载中…</p>';
-  $('elderComplianceCalendar').innerHTML = '';
+  const statEl = $('elderComplianceStats'), calEl = $('elderComplianceCalendar');
+  if(statEl) statEl.innerHTML = '<p class="hint">加载中…（老人端按过「已服用/补用/跳过」后，这里会 15 秒内自动更新）</p>';
+  if(calEl) calEl.innerHTML = '';
   const elderUser = await getElderUsername(elderCode);
   if(!elderUser){
-    $('elderComplianceStats').innerHTML = '<p class="hint">无法获取老人账号信息</p>';
+    if(statEl) statEl.innerHTML = '<p class="hint">无法获取老人账号信息（请确认老人账号已登录并同步过 family_code）</p>';
     return;
   }
   await renderCompliance(elderUser, 'elderComplianceStats', 'elderComplianceCalendar');
+}
+// 家属端：每 15 秒刷新当前选中老人的动态 / 依从性（仅 view-family 打开时工作，切页面清理定时器）
+let _famPollTimer = null;
+function startFamilyPoll(){
+  stopFamilyPoll();
+  _famPollTimer = setInterval(()=>{
+    try{
+      const curView = (document.querySelector('.view.active') && document.querySelector('.view.active').id) || '';
+      if(curView !== 'view-family') return; // 只在家属视图页面打开时才轮询，省电
+      if(myRole !== 'family' || !currentViewBind) return;
+      pullCloudEvents(currentViewBind);
+      // 15 秒一次；依从性卡后台静默刷新（不写"加载中"避免闪烁）
+      const card = $('cardElderCompliance');
+      if(!card || card.style.display === 'none') return;
+      (async ()=>{
+        const elderUser = await getElderUsername(currentViewBind);
+        if(!elderUser) return;
+        // 刷新时不破坏用户正在看的"加载中..."以外的 DOM，只在拿到新数据后替换
+        const token = bumpRenderToken('family-poll-compliance');
+        await renderCompliance(elderUser, 'elderComplianceStats', 'elderComplianceCalendar');
+        void token;
+      })().catch(()=>{});
+    }catch(e){}
+  }, 15000);
+}
+function stopFamilyPoll(){
+  if(_famPollTimer){ clearInterval(_famPollTimer); _famPollTimer = null; }
 }
 
 async function markMedTaken(medId, date, timeSlot, status){
@@ -6889,22 +6960,37 @@ async function markMedTaken(medId, date, timeSlot, status){
   if(currentUser && cloudUsable()){
     // 脱敏字段：med_ref = hash(username + ':' + medId + ':' + salt)，8 位 hex，可追溯（本地复现）但不可逆推个人药名
     const medRef = _hash8(currentUser + ':' + String(medId) + ':med_ref_v1');
+    // med_name：仅做一个"脱敏展示名"给 Supabase SQL Console 排错用（不写入药名本身），为空时用 "药*"
+    const medDisplay = (medOwn && medOwn.name) ? (String(medOwn.name).trim().slice(0,1) + '****') : '药*';
     // 仅上传：username(按 RLS 隔离) + med_ref(脱敏) + 计划日期/时间 + 状态 + 补服分钟 + 提醒次数
     // （真实药名、剂量、用法等 PHI 敏感信息只保存在本地 IndexedDB，绝不离开用户设备）
     const cloudRec = {
       username: currentUser,
       med_ref: medRef,
+      med_name: medDisplay,
       scheduled_date: date,
       scheduled_time: timeSlot,
       status: status,
+      actual_time: actualTimeISO,
+      actual_hhmm: actualHHMM,
       late_minutes: lateMin,
       reminded_count: remindedCount
     };
-    sbFetch('medication_logs', {
+    // 唯一键 (username, med_ref, scheduled_date, scheduled_time)：幂等写入（第一次 UPSERT 覆盖，重复按"已服/补服/跳过"切换也覆盖）
+    sbFetch('medication_logs?on_conflict=username,med_ref,scheduled_date,scheduled_time', {
       method:'POST',
-      headers:{'Prefer':'return=minimal'},
+      headers:{'Prefer':'return=minimal','Resolution':'merge-duplicates'},
       body: JSON.stringify(cloudRec)
-    }).catch(()=>{});
+    }).catch(err => {
+      // 如果因为老数据库还没跑 family_sync.sql（没有唯一键）导致报错，退化为一次裸 POST
+      try{
+        sbFetch('medication_logs', {
+          method:'POST',
+          headers:{'Prefer':'return=minimal'},
+          body: JSON.stringify(cloudRec)
+        }).catch(()=>{});
+      }catch(_){}
+    });
   }
   // --- 操作反馈 toast + 重绘界面（按钮状态立刻更新 + 依从性重新计算） ---
   if(status === 'taken'){
