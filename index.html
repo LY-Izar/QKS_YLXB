@@ -4322,6 +4322,11 @@ function closeAuth(){ $('authMask').classList.remove('show'); }
  *                           false/undefined=用户点了切换按钮
  */
 function switchAuthMode(silent){
+  // === [MM01] 维护模式下，用户点任何切换到注册的操作一律拦截（弹维护提示、不切界面）===
+  if(silent !== true && MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+    alert('🔴 网站正在维护，请等待通知。');
+    return;
+  }
   if(silent !== true){
     // 用户主动切换
     _authMode = (_authMode === 'login') ? 'register' : 'login';
@@ -4384,7 +4389,8 @@ async function onAuthSubmit(){
       const body = JSON.stringify({username: u});
       const res = await fetch(SB_URL + '/rest/v1/rpc/auth_check_user_exists', {
         method:'POST',
-        headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'}
+        headers:{apikey:SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Accept':'application/json'},
+        body
       });
       if(res.ok){
         const r = await res.json();
@@ -4396,6 +4402,16 @@ async function onAuthSubmit(){
 
   // 3) 账号肯定不存在 → 自动切到注册界面（保留账号、密码清空、提示）
   if(!localExists && cloudUnknown === false && !cloudExists){
+    // === [MM01] 维护模式下：跳注册前一律拦截（不切界面、弹维护提示）===
+    if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+      const msg = _maintAlertText();
+      alert('🔴 ' + msg);
+      // 拦截后清空输入并停留在登录界面
+      $('authUser').value = '';
+      $('authPass').value = '';
+      if($('authPass2')) $('authPass2').value = '';
+      return;
+    }
     $('authPass').value = '';
     if($('authPass2')) $('authPass2').value = '';
     const notice = $('authNotice');
@@ -4554,6 +4570,19 @@ function purgeAllUserInputs(){
   otherRemovals.forEach(k => localStorage.removeItem(k));
 }
 async function doRegister(){
+  // === [MM01] 维护模式兜底：任何方式触发 doRegister 一律拦截（哪怕 somehow 到了注册界面）===
+  if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+    const msg = _maintAlertText();
+    alert('🔴 ' + msg);
+    $('authUser').value = '';
+    $('authPass').value = '';
+    if($('authPass2')) $('authPass2').value = '';
+    if($('authEmail')) $('authEmail').value = '';
+    // 关闭弹窗、切回 welcome、清输入（与用户要求："弹窗关闭后返回welcome界面且清空内容"对齐）
+    closeAuth();
+    go('welcome');
+    return;
+  }
   const u = sanitizeUsername($('authUser').value);
   const p = sanitizePass($('authPass').value);
   const p2 = sanitizePass($('authPass2')?.value || '');
@@ -4663,8 +4692,21 @@ async function doLogin(){
   if(!uv.ok){ toast(uv.msg); return; }
   const pv = isValidPassword(p);
   if(!pv.ok){ toast(pv.msg); return; }
-  let code = null, role = null, boundElder = null, wrongPass = false, netFail = false;
   isAdmin = false; // 切换账号时先重置管理员状态，防止上一个会话残留
+
+  // === [MM01] 维护模式下：登录前先查云端 admin_level，非管理员一律拦截（根本不验密码）===
+  if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+    const lvl = await _maintAdminLevelPreCheck(u);
+    const allowedAdmin = (lvl === 'super' || lvl === 'sub');
+    // unknown = 网络查不到（降级/离线） → 继续密码校验（若真管理员密码正确可正常进，真普通用户密码即使正确后续靠 isAdminDuringMaintenance 再挡一次）
+    if(!allowedAdmin && lvl !== 'unknown'){
+      // 拦截：弹维护提示 + 清输入 + 关弹窗 + 回 welcome
+      _maintBlockAndBackToWelcome();
+      return;
+    }
+  }
+
+  let code = null, role = null, boundElder = null, wrongPass = false, netFail = false;
   if(cloudUsable()){
     try{
       const h = await hashPass(p);
@@ -5656,8 +5698,73 @@ async function openEditMed(id){
   }catch(e){ console.warn('[openEditMed]', e); toast('打开编辑失败'); }
 }
 
+// ============== [MM01-ME1] 用药到点按钮：setTimeout 精准触发（Map 管理防泄漏）==============
+if(typeof window._MED_BTN_TIMEOUTS === 'undefined'){
+  window._MED_BTN_TIMEOUTS = new Map(); // key = `${medId}|${todayStr}|${HH:MM_slot}` → timeoutHandle
+}
+/** 清理所有待触发的用药按钮 setTimeout（全量重渲前调用，防泄漏 + 避免旧 timer 操作已删除的 DOM）。 */
+function clearMedBtnTimeouts(){
+  const m = window._MED_BTN_TIMEOUTS;
+  if(!m) return;
+  for(const h of m.values()){ try{ clearTimeout(h); }catch(_){} }
+  m.clear();
+}
+/**
+ * 往指定 chipCard 注入到点后的操作按钮（已服用/跳过/单次过期补记）。
+ * 幂等：若已有 [data-med-action] 按钮则不再重复注入，避免 setTimeout 与全量重渲冲突。
+ */
+function _injectMedButtons(params){
+  const {chipCard, med, todayStr, tStr, skipReason, diffMin, status} = params;
+  if(!chipCard || status) return;
+  if(chipCard.querySelector('[data-med-action]')) return; // 幂等：已注入过
+  if(skipReason === 'expired-single'){
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
+    const btnTake = document.createElement('button');
+    btnTake.className = 'btn sm';
+    btnTake.style.cssText = 'background:#64748b;color:#fff;border:none;';
+    btnTake.textContent = '我已服用（补记）';
+    btnTake.dataset.medAction = 'expired_makeup';
+    btnTake.dataset.medId = String(med.id);
+    btnTake.dataset.date = todayStr;
+    btnTake.dataset.time = encodeURIComponent(tStr);
+    btnRow.appendChild(btnTake);
+    chipCard.appendChild(btnRow);
+    return;
+  }
+  if(diffMin >= 0){
+    const isLate = diffMin >= 10;
+    const takeLabel = isLate ? '已补用' : '已服用';
+    const takeBg = isLate ? 'background:#fb923c;' : 'background:#22c55e;';
+    const takeStatus = isLate ? 'late_taken' : 'taken';
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
+    const btnTake = document.createElement('button');
+    btnTake.className = 'btn sm';
+    btnTake.style.cssText = takeBg + 'color:#fff;border:none;';
+    btnTake.textContent = takeLabel;
+    btnTake.dataset.medAction = takeStatus;
+    btnTake.dataset.medId = String(med.id);
+    btnTake.dataset.date = todayStr;
+    btnTake.dataset.time = encodeURIComponent(tStr);
+    const btnSkip = document.createElement('button');
+    btnSkip.className = 'btn sm line';
+    btnSkip.style.cssText = 'border-color:#ef4444;color:#ef4444;';
+    btnSkip.textContent = '跳过今天';
+    btnSkip.dataset.medAction = 'skipped';
+    btnSkip.dataset.medId = String(med.id);
+    btnSkip.dataset.date = todayStr;
+    btnSkip.dataset.time = encodeURIComponent(tStr);
+    btnRow.appendChild(btnTake);
+    btnRow.appendChild(btnSkip);
+    chipCard.appendChild(btnRow);
+  }
+}
+
 async function renderMeds(){
   if(!DB.db){ $('medList').innerHTML = ''; return; }
+  // === [MM01-ME1] 重渲前：清理所有未到点的旧 setTimeout（防泄漏 + 防操作过期 DOM）===
+  clearMedBtnTimeouts();
   // 刷新通知方式状态（邮箱状态徽章 / 绑定邮箱链接文字）
   try{
     const sb = $('emailStateBadge'), stxt = $('emailNotifyText'), scut = $('emailBindShortcut'), tg = $('emailRemindToggle');
@@ -5719,6 +5826,7 @@ async function renderMeds(){
     const slots = Array.isArray(m.times) ? m.times.slice() : timePoints(m).map(tt => ({ time: String(tt), skippedReason: null }));
     const d = document.createElement('div');
     d.className = 'med-item';
+    d.setAttribute('data-med-id', String(m.id)); // [MM01-ME1] 方便定位卡片 DOM（测试 / 精准注入用）
     d.style.flexDirection = 'column';
     d.style.alignItems = 'stretch';
     // 第一行：左 .t（药名/频率/AI建议 + 起始日期 + 编辑入口） + 右 删除
@@ -5753,6 +5861,7 @@ async function renderMeds(){
     // 第二行：时间 chips 卡片容器
     const chipsWrap = document.createElement('div');
     chipsWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;width:100%;margin-top:2px;';
+    chipsWrap.setAttribute('data-med-slots', ''); // [MM01-ME1] 容器标记，便于精准到点后找按钮挂载点
     slots.forEach(slot => {
       if(slot.skippedReason === '__merged_taken'){
         // 编辑改时间后保留的已服成绩，不渲染新的 chip，只在依从率算分子
@@ -5823,48 +5932,49 @@ async function renderMeds(){
       pillLine.innerHTML = '<span class="pill">' + tStr + badgeHtml + '</span>';
       chipCard.appendChild(pillLine);
 
-      // 已服/已跳（含 expired-single 已被用户改成已服的）=> 不画操作按钮
+      // ============== [MM01-ME1] 按钮渲染：到点的立即画；未到点的 setTimeout 精准画 ==============
       if(!status){
-        // 规则6B：单次过期 — 只给"我已服用（补记）"按钮，不给跳过今天
-        if(skipReason === 'expired-single'){
-          const btnRow = document.createElement('div');
-          btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
-          const btnTake = document.createElement('button');
-          btnTake.className = 'btn sm';
-          btnTake.style.cssText = 'background:#64748b;color:#fff;border:none;';
-          btnTake.textContent = '我已服用（补记）';
-          btnTake.dataset.medAction = 'expired_makeup';
-          btnTake.dataset.medId = String(m.id);
-          btnTake.dataset.date = todayStr;
-          btnTake.dataset.time = encodeURIComponent(tStr);
-          btnRow.appendChild(btnTake);
-          chipCard.appendChild(btnRow);
-        } else if(diffMin >= 0){
-          const isLate = diffMin >= 10;
-          const takeLabel = isLate ? '已补用' : '已服用';
-          const takeBg = isLate ? 'background:#fb923c;' : 'background:#22c55e;';
-          const takeStatus = isLate ? 'late_taken' : 'taken';
-          const btnRow = document.createElement('div');
-          btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
-          const btnTake = document.createElement('button');
-          btnTake.className = 'btn sm';
-          btnTake.style.cssText = takeBg + 'color:#fff;border:none;';
-          btnTake.textContent = takeLabel;
-          btnTake.dataset.medAction = takeStatus;
-          btnTake.dataset.medId = String(m.id);
-          btnTake.dataset.date = todayStr;
-          btnTake.dataset.time = encodeURIComponent(tStr);
-          const btnSkip = document.createElement('button');
-          btnSkip.className = 'btn sm line';
-          btnSkip.style.cssText = 'border-color:#ef4444;color:#ef4444;';
-          btnSkip.textContent = '跳过今天';
-          btnSkip.dataset.medAction = 'skipped';
-          btnSkip.dataset.medId = String(m.id);
-          btnSkip.dataset.date = todayStr;
-          btnSkip.dataset.time = encodeURIComponent(tStr);
-          btnRow.appendChild(btnTake);
-          btnRow.appendChild(btnSkip);
-          chipCard.appendChild(btnRow);
+        if(!skipReason && diffMin < 0){
+          // —— 还未到点（未来时间点）：注册独立 setTimeout，到点那一刻精准注入按钮（无需用户刷新）——
+          const _key = `${m.id}|${todayStr}|${tStr}`;
+          const _bjNow = nowBeijing();
+          // 精确 delay：扣掉当前秒和毫秒，尽量对齐整分触发（最多加 1 秒余量保证 >= 0）
+          const _delayMs = Math.max(500,
+            (-diffMin - 1) * 60 * 1000
+            + (60 - _bjNow.getSeconds()) * 1000
+            - Math.min(990, _bjNow.getMilliseconds())
+          );
+          const _chip = chipCard;
+          const _med = m;
+          const _slotObj = slot;
+          const _handle = setTimeout(async () => {
+            try{
+              // 到点后：重新查日志（用户可能在别的端已记录），再注入按钮
+              const curLogs = await allMine('medlog');
+              const curNow = nowBeijing();
+              const curDiff = curNow.getHours()*60 + curNow.getMinutes() - timeToMin(tStr);
+              const curSr = getSkippedForSlot(_med, todayStr, _slotObj);
+              const curLog = curLogs.find(l =>
+                String(l.med_id) === String(_med.id)
+                && String(l.scheduled_date || '').slice(0,10) === todayStr
+                && String(l.scheduled_time || '').slice(0,5) === tStr
+              );
+              _injectMedButtons({
+                chipCard: _chip,
+                med: _med,
+                todayStr,
+                tStr,
+                skipReason: curSr,
+                diffMin: curDiff,
+                status: curLog ? curLog.status : null
+              });
+            }catch(e){ console.warn('[med-btn-timeout] fail:', e); }
+            try{ window._MED_BTN_TIMEOUTS && window._MED_BTN_TIMEOUTS.delete(_key); }catch(_){}
+          }, _delayMs);
+          window._MED_BTN_TIMEOUTS.set(_key, _handle);
+        } else {
+          // —— 已到点 / 已跳过 / 单次过期：直接调用统一按钮渲染函数（幂等）——
+          _injectMedButtons({chipCard, med:m, todayStr, tStr, skipReason, diffMin, status});
         }
       }
       chipsWrap.appendChild(chipCard);
@@ -9260,6 +9370,9 @@ function annGetAll(){ return annDataLayer.cloudFetch ? [] : []; } // placeholder
 // 实际覆盖：下面立即重写 annGetAll（使用 cloudFetch 返回的 Promise 转同步读取有点难；因此我们把 cloudFetch 结果暂存到 window._ANN_CACHE 并在 render 前 await 一次）
 window._ANN_CACHE = [];
 window._ANN_CACHE_TS = 0;
+window._ANN_PINNED_HIDDEN = new Set(); // 已被用户手动"×"关闭的置顶公告 id（本次会话内不再显示）
+window._ANN_CAROUSEL_TIMER = null;    // 轮播自动切换 setTimeout handle
+window._ANN_CAROUSEL_PAUSED = false;   // 是否因鼠标悬停而暂停
 
 // 对外统一异步入口（所有读都走这里：UI 层 await annRefresh() 后，再用 annGetAllSync() 同步拿数组）
 async function annRefresh({force=false}={}){
@@ -9771,41 +9884,200 @@ function _syncAnnBarLayout(){
   if(nb)  nb.style.top = (18 + h) + 'px';
   if(main) main.style.paddingTop = (76 + h) + 'px';
 }
-function renderSiteAnnBar(forceShow){
-  const bar = $('siteAnnBar'), track = $('siteAnnTrack');
-  if(!bar || !track) return;
-  const list = annGetActive();
-  if(list.length === 0){ bar.style.display = 'none'; track.innerHTML = ''; _syncAnnBarLayout(); return; }
-  const todayKey = beijingYMD(new Date());
-  const hiddenKey = (()=>{ try{ return localStorage.getItem(ADM_ANN_HIDE) || ''; }catch(e){ return ''; }})();
-  const hasForce = list.some(x => x.level==='urgent' || x.pin);
-  if(!forceShow && !hasForce && hiddenKey === todayKey){ bar.style.display = 'none'; _syncAnnBarLayout(); return; }
-  const parts = list.map(a => {
-    const lv = a.level === 'urgent' ? '【紧急】' : (a.level === 'important' ? '【重要】' : '');
-    const t = (a.title || '公告').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
-    const b = (a.body || '').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
-    const full = lv + t + (b ? '：' + b.replace(/\s+/g,' ') : '');
-    return '<span class="site-ann-item' + (a.pin?' pin':'') + (a.level==='urgent'?' urgent':'') + '">'
-      + (a.pin?'【置顶】':'') + full + '</span>';
-  });
-  const one = parts.join('');
-  track.innerHTML = '<span class="site-ann-placeholder">' + one + one + '</span>';
-  bar.style.display = '';
-  if(hasForce && list[0].level === 'urgent'){
-    bar.style.background = 'linear-gradient(90deg,#b71c1c,#e53935,#b71c1c)';
-    bar.style.color = '#fff';
-    bar.classList.add('urgent-bar');
-    bar.classList.remove('important-bar');
-  } else if (hasForce && list[0].level === 'important') {
-    bar.style.background = 'linear-gradient(90deg,#8d6e00,#f9a825,#8d6e00)';
-    bar.style.color = '#fff';
-    bar.classList.add('important-bar');
-    bar.classList.remove('urgent-bar');
-  } else {
-    bar.style.background = ''; bar.style.color = '';
-    bar.classList.remove('urgent-bar','important-bar');
+// ============== [MM01-A1/A2] 公告条：置顶堆叠 + 非置顶轮播 ==============
+/** 按等级返回公告颜色（实心色，避免渐变防 AI 感）。 */
+function _annColors(level){
+  switch(level){
+    case 'urgent':   return {bg:'#b91c1c', fg:'#fff', bd:'#7f1d1d'};
+    case 'important':return {bg:'#b45309', fg:'#fff', bd:'#78350f'};
+    case 'warning':  return {bg:'#fef3c7', fg:'#92400e', bd:'#f59e0b'};
+    case 'info':     return {bg:'#dbeafe', fg:'#1e3a8a', bd:'#3b82f6'};
+    default:         return {bg:'#f1f5f9', fg:'#0f172a', bd:'#cbd5e1'};
   }
-  _syncAnnBarLayout();
+}
+/** 在 body 中找到 "下一个插入点的锚点之后" 的位置插入元素。
+ *  锚点优先级：maintenanceBanner → lastPinned → lastAnn → body prepend。
+ */
+function _annInsertAfter(el, refEl){
+  if(refEl && refEl.parentNode){
+    if(refEl.nextSibling){ refEl.parentNode.insertBefore(el, refEl.nextSibling); }
+    else { refEl.parentNode.appendChild(el); }
+  } else if(document.body){
+    if(document.body.firstChild){ document.body.insertBefore(el, document.body.firstChild); }
+    else { document.body.appendChild(el); }
+  }
+}
+/** 清理上次渲染的置顶和轮播 DOM + 轮播 timer。 */
+function _annClearPrevious(){
+  // 移除旧 DOM
+  document.querySelectorAll('[data-ann-role]').forEach(el => el.remove());
+  // 清理轮播定时器（防泄漏）
+  if(window._ANN_CAROUSEL_TIMER){
+    clearTimeout(window._ANN_CAROUSEL_TIMER);
+    window._ANN_CAROUSEL_TIMER = null;
+  }
+  window._ANN_CAROUSEL_PAUSED = false;
+}
+/** 切换到下一张轮播（当前 slide → 下一个 slide；最后一个绕回第一个）。内部使用，不对外。 */
+function _annCarouselNext(car){
+  if(!car) return;
+  const slides = Array.from(car.querySelectorAll('[data-ann-slide]'));
+  if(slides.length < 2) return;
+  let curIdx = -1;
+  slides.forEach((s,i)=>{ if(s.classList.contains('active')){ curIdx = i; } });
+  if(curIdx < 0) curIdx = 0;
+  slides[curIdx].classList.remove('active');
+  const next = (curIdx + 1) % slides.length;
+  slides[next].classList.add('active');
+}
+/** 注册轮播自动切换 + 悬停暂停 + 左右箭头。 */
+function _annCarouselSetup(car, nonPinned){
+  if(!car || nonPinned.length < 2) return;
+  const INTERVAL = 3000;
+  const tick = () => {
+    if(window._ANN_CAROUSEL_PAUSED){
+      window._ANN_CAROUSEL_TIMER = setTimeout(tick, INTERVAL);
+      return;
+    }
+    try{ _annCarouselNext(car); }catch(e){}
+    window._ANN_CAROUSEL_TIMER = setTimeout(tick, INTERVAL);
+  };
+  window._ANN_CAROUSEL_TIMER = setTimeout(tick, INTERVAL);
+  car.addEventListener('mouseenter', ()=>{ window._ANN_CAROUSEL_PAUSED = true; });
+  car.addEventListener('mouseleave', ()=>{ window._ANN_CAROUSEL_PAUSED = false; });
+  const prev = car.querySelector('[data-ann-arrow="prev"]');
+  const next = car.querySelector('[data-ann-arrow="next"]');
+  if(prev){ prev.addEventListener('click', ()=>{
+    const slides = Array.from(car.querySelectorAll('[data-ann-slide]'));
+    if(slides.length < 2) return;
+    let curIdx = -1;
+    slides.forEach((s,i)=>{ if(s.classList.contains('active')){ curIdx = i; } });
+    slides.forEach(s=>s.classList.remove('active'));
+    const p = (curIdx - 1 + slides.length) % slides.length;
+    slides[p].classList.add('active');
+  });}
+  if(next){ next.addEventListener('click', ()=>{ _annCarouselNext(car); }); }
+}
+
+function renderSiteAnnBar(forceShow){
+  _annClearPrevious();
+  if(!document.body) return;
+  const list = Array.isArray(annGetActive()) ? annGetActive() : [];
+  if(list.length === 0){ return; }
+
+  // ============== 1. 过滤：移除今天用户手动关闭过的 非置顶/非强 公告？ — 保留老逻辑：
+  //    当有置顶/urgent 存在时，必须显示（无视隐藏标志）；否则 只有 forceShow 或 不是今日全隐藏才显示。
+  const todayKey = beijingYMD(new Date());
+  const hasForce = list.some(x => x.level==='urgent' || x.pinned || x.pin);
+  if(!forceShow && !hasForce){
+    try{
+      const hk = localStorage.getItem(ADM_ANN_HIDE) || '';
+      if(hk === todayKey){ return; }
+    }catch(e){ /* ignore */ }
+  }
+
+  // ============== 2. 分组 + 置顶按发布时间倒序
+  const pinnedSet = window._ANN_PINNED_HIDDEN || new Set();
+  const allPinned = list.filter(a => (a.pinned || a.pin) && !a.deleted && !pinnedSet.has(String(a.id)))
+                       .sort((a,b)=> (+b.published_at||0) - (+a.published_at||0));
+  const nonPinned = list.filter(a => !(a.pinned || a.pin) && !a.deleted);
+
+  // ============== 3. 找到锚点（maintenanceBanner 若存在，则所有公告条放在它之后）
+  let anchor = document.getElementById('maintenanceBanner');
+
+  // ============== 4. 渲染每条置顶（独立 DOM，按发布时间倒序，顺序：p1 → p2 → ...）
+  const esc = s => String(s==null?'':s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  for(let i=0;i<allPinned.length;i++){
+    const a = allPinned[i];
+    const c = _annColors(a.level);
+    const d = document.createElement('div');
+    d.setAttribute('data-ann-role','pinned');
+    d.setAttribute('data-ann-id', String(a.id));
+    d.style.cssText = 'position:relative;left:0;right:0;top:0;z-index:58;'
+      + 'padding:8px 44px 8px 18px;'
+      + 'font-size:14px;line-height:1.55;'
+      + 'border-bottom:1px solid '+c.bd+';'
+      + 'background:'+c.bg+';color:'+c.fg+';';
+    const title = esc(a.title || '公告');
+    const body  = esc(a.body || '');
+    const lvText = a.level==='urgent' ? '【紧急】' : (a.level==='important'?'【重要】':'');
+    d.innerHTML = '<div style="max-width:1200px;margin:0 auto;">'
+        + '<span data-ann-pin-badge style="display:inline-block;margin-right:8px;padding:1px 8px;border-radius:8px;'
+        +   'background:rgba(0,0,0,.15);color:'+c.fg+';font-size:12px;letter-spacing:.5px;">📌 置顶</span>'
+        + '<strong>' + lvText + title + '</strong>'
+        + (body ? '：' + body : '')
+      + '</div>'
+      + '<button type="button" data-ann-close aria-label="关闭" '
+      +   'style="position:absolute;top:6px;right:10px;background:transparent;border:none;'
+      +   'color:'+c.fg+';font-size:18px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:8px;">×</button>';
+    _annInsertAfter(d, anchor);
+    anchor = d; // 下一个插到这一个后面
+    // 关闭按钮：写入隐藏集合并从 DOM 移除
+    const btn = d.querySelector('[data-ann-close]');
+    if(btn){ btn.addEventListener('click', ()=>{
+      try{ pinnedSet.add(String(a.id)); }catch(_){}
+      d.remove();
+    });}
+  }
+
+  // ============== 5. 非置顶：轮播容器（只有一个，里面装多张 slide）
+  if(nonPinned.length > 0){
+    const car = document.createElement('div');
+    car.setAttribute('data-ann-role','carousel');
+    car.style.cssText = 'position:relative;left:0;right:0;z-index:57;'
+      + 'background:#f8fafc;color:#0f172a;border-bottom:1px solid #e2e8f0;'
+      + 'font-size:13px;line-height:1.6;';
+    // 箭头：左右
+    car.innerHTML = ''
+      + '<div style="position:relative;max-width:1200px;margin:0 auto;padding:8px 48px;">'
+      +   '<button type="button" data-ann-arrow="prev" aria-label="上一条" '
+      +     'style="position:absolute;top:50%;left:10px;transform:translateY(-50%);'
+      +     'width:26px;height:26px;border-radius:13px;border:1px solid #cbd5e1;background:#fff;'
+      +     'color:#0f172a;font-size:14px;line-height:1;cursor:pointer;">◀</button>'
+      +   '<button type="button" data-ann-arrow="next" aria-label="下一条" '
+      +     'style="position:absolute;top:50%;right:10px;transform:translateY(-50%);'
+      +     'width:26px;height:26px;border-radius:13px;border:1px solid #cbd5e1;background:#fff;'
+      +     'color:#0f172a;font-size:14px;line-height:1;cursor:pointer;">▶</button>';
+    // slides（每条非置顶一条 slide；只有第 1 条 .active）
+    for(let i=0;i<nonPinned.length;i++){
+      const a = nonPinned[i];
+      const c = _annColors(a.level);
+      const slide = document.createElement('div');
+      slide.setAttribute('data-ann-slide', i===0 ? 'active' : '');
+      slide.setAttribute('data-ann-id', String(a.id));
+      if(i===0){ slide.classList.add('active'); }
+      slide.style.cssText = (i===0 ? 'display:block;' : 'display:none;')
+        + 'padding:2px 2px;color:'+c.fg+';';
+      const title = esc(a.title || '公告');
+      const body  = esc(a.body || '');
+      slide.innerHTML = '<strong style="color:'+c.bg+';filter:brightness(.65);">' + title + '</strong>'
+        + (body ? '：' + body : '');
+      car.firstChild.appendChild(slide);
+    }
+    car.firstChild.insertAdjacentHTML('beforeend', '</div>');
+    _annInsertAfter(car, anchor);
+    // display 控制：active → display:block，其他 → none（加在 classList.add 后，便于样式统一）
+    const ensureDisp = () => {
+      car.querySelectorAll('[data-ann-slide]').forEach(s => {
+        s.style.display = s.classList.contains('active') ? 'block' : 'none';
+      });
+    };
+    // 监听 class 变化：覆盖一个 MutationObserver 太复杂，直接包装切换函数更简单
+    const _origNext = _annCarouselNext;
+    (function(){
+      // 在箭头点击里处理完 active 后再统一重设 display：
+      const slides = Array.from(car.querySelectorAll('[data-ann-slide]'));
+      slides.forEach(s => {
+        const origAdd = s.classList.add.bind(s.classList);
+        s.classList.add = function(...cls){ const r = origAdd(...cls); ensureDisp(); return r; };
+        const origRem = s.classList.remove.bind(s.classList);
+        s.classList.remove = function(...cls){ const r = origRem(...cls); ensureDisp(); return r; };
+      });
+    })();
+    // 注册轮播定时器 + 悬停暂停 + 左右箭头
+    _annCarouselSetup(car, nonPinned);
+    ensureDisp();
+  }
 }
 
 /* ==================== 心跳上报（在线状态） ==================== */
@@ -10052,7 +10324,78 @@ let MAINTENANCE = {
   _poppedThisSession: false,
 };
 
-// ---- 内存：按次批准监听器（token → [{fn}]） ----
+// ============== [MM01] 维护模式：辅助函数 ==============
+/** 构建维护模式 alert 文案（含定时开始/结束时段）。所有拦截点统一使用。 */
+function _maintAlertText(){
+  const M = MAINTENANCE || {};
+  let txt = M.message || '网站正在维护，请等待通知。';
+  if(M.enabled && M.scheduled){
+    const s = M.start_at, e = M.end_at;
+    if(s || e){
+      const cut = iso => iso ? String(iso).slice(0,16).replace('T',' ') : '';
+      txt += '（维护时间：' + (cut(s) || '—') + ' 至 ' + (cut(e) || '—') + '）';
+    }
+  }
+  return txt;
+}
+/** 清空 auth 弹窗所有输入框。 */
+function _maintClearAuth(){
+  const ids = ['authUser','authPass','authPass2','authEmail'];
+  ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const notice = document.getElementById('authNotice');
+  if(notice) notice.style.display = 'none';
+}
+/** 维护拦截的统一动作：弹维护提示 + 清输入 + 关弹窗 + 回 welcome。 */
+function _maintBlockAndBackToWelcome(){
+  const msg = _maintAlertText();
+  alert('🔴 ' + msg);
+  _maintClearAuth();
+  closeAuth && typeof closeAuth === 'function' && closeAuth();
+  go && typeof go === 'function' && go('welcome');
+}
+/**
+ * 维护模式登录前轻量查询：只用账号名查云端 admin_level。
+ * 超级管理员（SUPER_ADMIN_ID）本地直接返回 super（无需等待网络）。
+ * 网络失败/超时 → 返回 'unknown'（按"放行继续密码校验"处理，避免误拦管理员）。
+ * 账号不存在（0 行）→ 返回 'not_found'（视为非管理员，拦截）。
+ * @param {string} u - 纯账号名（已 sanitize 过）
+ * @returns {'super'|'sub'|'none'|'unknown'|'not_found'}
+ */
+async function _maintAdminLevelPreCheck(u){
+  if(!u) return 'not_found';
+  if(u === SUPER_ADMIN_ID) return 'super';
+  if(!cloudUsable()) return 'unknown';
+  try{
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 15 * 1000); // 15s 超时防卡
+    const res = await fetch(
+      SB_URL + '/rest/v1/users?select=id,admin_level&id=eq.' + encodeURIComponent(u),
+      {
+        method: 'GET',
+        headers: {
+          apikey: SB_KEY,
+          'Authorization': 'Bearer ' + SB_KEY,
+          'Accept': 'application/json'
+        },
+        signal: ctrl.signal
+      }
+    );
+    clearTimeout(t);
+    if(!res || !res.ok) return 'unknown';
+    const rows = await res.json();
+    if(!Array.isArray(rows) || rows.length === 0) return 'not_found';
+    const row = rows[0];
+    if(row.admin_level === 'super' || row.admin_level === 'sub') return row.admin_level;
+    if(typeof row.admin_level === 'string') return 'none';
+    // 旧数据：admin_level 缺失但 is_admin=true（基本等同于 super）
+    if(row.is_admin === true) return 'super';
+    return 'none';
+  }catch(e){
+    return 'unknown';
+  }
+}
+
+// ---- 内存：按次批准监听器（token → [{fn}]）----
 let _APPROVAL_LISTENERS = Object.create(null);
 function addApprovalListener(token, cb){
   if(!token || typeof cb !== 'function') return;
