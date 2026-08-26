@@ -7992,7 +7992,7 @@ async function adminAnnSendEmail(){
   if(!(a.title||'').trim() && !(a.body||'').trim()){ toast('公告标题或正文不能为空'); return; }
   const btn = $('admAnnEmailBtn');
   if(!btn) return;
-  btn.disabled = true; const old=btn.textContent; btn.textContent='发送中…';
+  btn.disabled = true; btn.textContent='发送中…';
   try{
     const payload = {
       announcement_id: a.id,
@@ -8002,20 +8002,47 @@ async function adminAnnSendEmail(){
       ts: a.ts || Date.now(),
       caller: currentUser || '',
     };
+    if(!cloudUsable()){
+      toast('❌ 当前环境不支持云端调用，请使用 HTTPS 浏览器');
+      return;
+    }
     let resp;
-    if(cloudUsable()){
+    try{
       resp = await fetch(EDGE_FN_BROADCAST, {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify(payload),
       });
-    } else {
-      resp = { ok:false };
+    }catch(fetchErr){
+      // Failed to fetch → 几乎总是 Edge Function 未部署或 CORS 被拦截
+      const msg = (fetchErr && fetchErr.message) ? fetchErr.message : String(fetchErr);
+      console.warn('[email] fetch failed:', msg);
+      toast(
+        '❌ 无法连接邮件服务（Edge Function `broadcast_announcement` 可能未部署）。' +
+        '\n部署步骤：Supabase Dashboard → Edge Functions → 创建函数 → 粘贴 supabase/functions/broadcast_announcement/index.ts → 添加 Resend API Key secret → 部署。' +
+        '\n详细指南见控制台输出。',
+        8000
+      );
+      console.log(
+        '%c[邮件部署指南]%c\n' +
+        '1) 打开 Supabase Dashboard → Edge Functions：' +
+        ' https://supabase.com/dashboard/project/hjryfgujkxuaxovftlai/functions\n' +
+        '2) 点击 "Create new function"，名称填 broadcast_announcement\n' +
+        '3) 将文件 supabase/functions/broadcast_announcement/index.ts 全部内容粘贴到源码编辑器\n' +
+        '4) 部署后，在 Secrets 中添加：\n' +
+        '   - RESEND_API_KEY = 你的 Resend API Key (https://resend.com/api-keys)\n' +
+        '   - RESEND_FROM = 发件人地址（如 医路相伴 <onboarding@resend.dev>）\n' +
+        '   - ANNOUNCE_DRY_RUN = 1  （测试阶段设为 1 可避免真实发邮件）\n' +
+        '5) 保存并部署后，返回本页面重试点「发邮件」',
+        'background:#b71c1c;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;',
+        'color:inherit;'
+      );
+      return;
     }
     if(!resp || !resp.ok){
       let hint = '';
       try{ const t = resp ? await resp.text().catch(()=>'') : ''; hint = t && t.length<300 ? ('；响应：'+t) : ''; }catch(e){}
-      toast('❌ 发送失败：请先部署 Edge Function `broadcast_announcement`' + hint, 5000);
+      toast('❌ 发送失败：' + hint, 5000);
       return;
     }
     const data = await resp.json().catch(()=>({}));
@@ -8034,7 +8061,11 @@ async function adminAnnSendEmail(){
     const fresh = newIdx>=0 ? newList[newIdx] : Object.assign({}, a, { email_sent:true, email_sent_ts:Date.now(), email_count:succ_count, email_fail:fail_count });
     _refreshAnnEmailBox(fresh);
     adminRenderAnnouncements();
-    toast(`✓ 邮件已发起：成功 ${succ_count}，失败 ${fail_count}`);
+    if(data.dry_run){
+      toast(`✓ 干跑测试：将向 ${succ_count} 位用户发送（未真实发邮件，设 ANNOUNCE_DRY_RUN=0 后正式发送）`);
+    } else {
+      toast(`✓ 邮件已发起：成功 ${succ_count}，失败 ${fail_count}`);
+    }
   }catch(e){ toast('❌ 发送失败：' + (e && e.message ? e.message : e)); }
   finally { btn.disabled = false; btn.textContent = '📧 发送邮件'; }
 }
