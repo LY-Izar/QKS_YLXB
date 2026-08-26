@@ -96,6 +96,46 @@
     --radius:12px;
     --radius-lg:16px;
   }
+  /* ================= 移动端（≤768px）字号 / 密度基线（支付宝风格） ================= */
+  /* 标准模式：html 根字号 14px（=支付宝正文），标题卡片整体下修 */
+  @media (max-width: 768px){
+    html:not(.care){ font-size: 14px; }
+    html.care      { font-size: 18px; }
+    :root:not(body.care){
+      --fs-base:14px;
+      --fs-title:18px;
+      --fs-h1:20px;
+      --btn-h:46px;
+    }
+    body:not(.care){
+      --fs-base:14px;
+      --fs-title:18px;
+      --fs-h1:20px;
+      --btn-h:46px;
+    }
+    body.care{
+      --fs-base:18px;
+      --fs-title:24px;
+      --fs-h1:28px;
+      --btn-h:60px;
+    }
+    body.care .nav-logo{width:26px;height:26px;font-size:13px;}
+    body.care .sheet{padding:22px;}
+    body.care .grid .tile{min-height:108px;}
+  }
+  /* 窄屏下大输入框的字号不超过 16px（避免 iOS 自动放大） */
+  @media (max-width: 768px){
+    input,select,textarea{ max-font-size: 16px; }
+    textarea{ font-size: 14px; }
+    h1.page-title{font-size:22px;}
+    body.care h1.page-title{font-size:28px;}
+    h2.section-title{font-size:18px;}
+    body.care h2.section-title{font-size:22px;}
+    h3.sub-title{font-size:16px;}
+    body.care h3.sub-title{font-size:20px;}
+    .nav-brand{font-size:1rem;}
+    .nav-link{font-size:.85rem;padding:6px 10px;}
+  }
 
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
@@ -863,17 +903,77 @@
   body.dark .voicebar .vdone{background:var(--surface-2);color:var(--ink);}
   body.care .voicebar .vdone{font-size:17px;padding:8px 16px;}
 
-  /* ===== 提醒弹窗 ===== */
+  /* ===== 提醒弹窗 / Toast =====
+   *  规则：
+   *   - z-index: 50 （明确低于导航栏 z-index:55，不遮挡导航；也低于公告条 60、mask 70、FAB 60、语音条 65）
+   *   - 位置：底部向上 ~90px，避免挡住页面上方内容和导航
+   *   - 成功类：轻、淡、1s 消失（1s 内读不到也 OK，用户看界面变动就知道成功了）
+   *   - 告警/错误类：深、对比强、2.5s 消失（必须让用户知道哪里出错了）
+   */
   .notify-banner{
-    position:fixed;top:86px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:80;
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;
-    padding:14px 22px;border-radius:16px;
-    font-weight:700;font-size:18px;box-shadow:0 10px 30px color-mix(in srgb, var(--primary) 40%, transparent);
-    display:none;max-width:92vw;text-align:center;cursor:pointer;
+    position:fixed;
+    left:50%;
+    bottom:96px;
+    transform:translateX(-50%) translateY(16px);
+    z-index:50;
+    background:rgba(28,43,40,.86);
+    color:#fff;
+    padding:10px 16px;
+    border-radius:14px;
+    font-weight:600;
+    font-size:13px;
+    box-shadow:0 10px 24px rgba(16,58,50,.25);
+    display:none;
+    max-width:85vw;
+    text-align:center;
+    cursor:pointer;
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    transition:opacity .22s ease, transform .22s ease;
+    opacity:0;
+    line-height:1.45;
   }
-  body.care .notify-banner{font-size:23px;}
-  .notify-banner.show{display:block;animation:slideDown .3s ease forwards;}
-  @keyframes slideDown{to{transform:translateX(-50%) translateY(0);}}
+  body.care .notify-banner{font-size:16px;padding:12px 20px;}
+  /* 成功类 toast：更淡、更小、更轻 */
+  .notify-banner.tone-success{
+    background:rgba(15,157,143,.82);
+    color:#fff;
+    font-weight:600;
+    font-size:12px;
+    padding:8px 14px;
+    border-radius:12px;
+  }
+  body.care .notify-banner.tone-success{font-size:15px;padding:10px 16px;}
+  /* 错误/告警 toast：深、醒目、对比强 */
+  .notify-banner.tone-error{
+    background:rgba(200,40,40,.92);
+    color:#fff;
+    font-weight:700;
+    font-size:14px;
+    padding:11px 18px;
+    border:1px solid #ffc9c5;
+    box-shadow:0 14px 28px rgba(200,40,40,.40);
+  }
+  body.care .notify-banner.tone-error{font-size:18px;padding:14px 22px;}
+  .notify-banner.show{
+    display:block;
+    opacity:1;
+    animation:toastUp .28s cubic-bezier(.2,.9,.3,1.2) forwards;
+  }
+  @keyframes toastUp{
+    from{opacity:0;transform:translateX(-50%) translateY(14px);}
+    to  {opacity:1;transform:translateX(-50%) translateY(0);}
+  }
+  /* 窄屏进一步优化 */
+  @media (max-width: 768px){
+    .notify-banner{
+      bottom:calc(90px + env(safe-area-inset-bottom));
+      max-width:85vw;
+    }
+    body.care .notify-banner{
+      bottom:calc(110px + env(safe-area-inset-bottom));
+    }
+  }
 
   .divider{height:1px;background:var(--border);margin:18px 0;opacity:.7;}
   .hint{font-size:12px;color:var(--muted);margin-top:8px;}
@@ -917,6 +1017,35 @@
   .modal{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
   .modal.hidden{display:none !important;}
   .modal .card{max-width:500px;width:100%;box-shadow:0 4px 16px rgba(16,58,50,0.08);}
+  /* 语音不可用横幅 + FAB 红点徽章（替代长 toast alert） */
+  .voice-warn-banner{
+    padding:10px 14px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;
+    border-radius:12px;font-size:13px;line-height:1.6;
+    display:flex;gap:10px;align-items:flex-start;
+    box-shadow:0 4px 14px rgba(251,146,60,.12);
+  }
+  body.care .voice-warn-banner{font-size:16px;padding:14px 18px;}
+  .voice-warn-banner b{color:#7c2d12;}
+  .voice-warn-banner .ic{font-size:18px;flex:none;line-height:1.4;}
+  body.care .voice-warn-banner .ic{font-size:22px;}
+  .voice-warn-banner .vb-body{flex:1;min-width:0;}
+  .voice-warn-banner button.close{
+    flex:none;background:#fff;color:#7c2d12;border:1px solid #fdba74;
+    padding:4px 10px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;
+  }
+  body.care .voice-warn-banner button.close{font-size:14px;padding:6px 14px;}
+  /* 语音 FAB（右下角麦克风）的红点徽章 */
+  .voice-fab{position:relative;}
+  .voice-fab[data-voice="bad"]::after{
+    content:'';
+    position:absolute;top:-2px;right:-2px;
+    width:12px;height:12px;border-radius:50%;
+    background:#ef4444;border:2px solid #fff;
+    box-shadow:0 0 0 1px rgba(0,0,0,.08), 0 0 10px rgba(239,68,68,.55);
+    z-index:2;
+  }
+  body.care .voice-fab[data-voice="bad"]::after{width:16px;height:16px;}
+  .voice-fab[data-voice="ok"]::after{display:none;}
   .lbl{display:block;font-size:13px;font-weight:700;color:var(--ink-2);margin:0 0 4px;}
   .chkbox{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);cursor:pointer;}
   .chkbox input{width:16px;height:16px;}
@@ -1067,6 +1196,8 @@
   <div class="view" id="view-home">
     <h1 id="homeHi">您好</h1>
     <p class="lead">今天身体感觉怎么样？需要什么帮助？</p>
+    <!-- 语音不可用时的横幅提示（替代长 toast，可手动关闭） -->
+    <div id="voiceStatusBanner" style="margin:10px 0 16px;"></div>
     <div class="card" style="margin-bottom:12px;">
       <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
@@ -3002,30 +3133,54 @@ const DB = {
 /* ==================== 提示 / 通知 ==================== */
 const _toastQueue = [];
 let _toastBusy = false;
+function _classifyToast(msg){
+  // 判断 toast 类型：成功(1s, tone-success) / 错误(2.5s, tone-error) / 默认(2s, 默认深色)
+  const s = String(msg || '');
+  if(/(成功|已保存|已记录|保存|已开启|已关闭|已删除|已清空|已同步|已绑定|已解绑|已提交|已更新|完成|好啦|好的|OK|添加成功|创建成功|已注册|已登录|已退出|切换成功)$/.test(s)
+     || /^(测试|已)/.test(s)){
+    return {tone:'tone-success', ms: 1000};
+  }
+  if(/(失败|错误|异常|不行|无法|不能|拒绝|无效|不匹配|未找到|不允许|禁止|403|超时|中断|崩溃|冲突|已满|过期|已过期|缺少|为空|不能为空|超过|格式不正确|请检查|请输入|请先|请|建议)/.test(s)
+     || /(请联系|请在|请使用|需|需要)/.test(s)){
+    return {tone:'tone-error', ms: 2500};
+  }
+  return {tone:'tone-default', ms: 2000};
+}
 function _flushToast(){
   if(_toastBusy || !_toastQueue.length) return;
   const item = _toastQueue.shift();
   _toastBusy = true;
   const b = $('notifyBanner');
   if(!b){ _toastBusy = false; return; }
-  b.textContent = item.msg; b.classList.add('show');
+  b.classList.remove('tone-success','tone-error','tone-default');
+  if(item.tone && item.tone !== 'tone-default') b.classList.add(item.tone);
+  b.textContent = item.msg;
+  // 用 requestAnimationFrame 让 class 切换 + show 同时 transition
+  b.classList.remove('show');
+  // 强制 reflow
+  void b.offsetWidth;
+  b.classList.add('show');
   clearTimeout(b._t);
   b._t = setTimeout(()=>{
     b.classList.remove('show');
-    _toastBusy = false;
-    setTimeout(_flushToast, 200);
+    setTimeout(()=>{
+      _toastBusy = false;
+      // 下一条 toast
+      setTimeout(_flushToast, 160);
+    }, 240); // 过渡动画 + 240ms
   }, item.ms);
 }
 function toast(msg, ms){
-  if(!ms) ms = /保存|已记录|成功/.test(msg) ? 5000 : 3800;
-  _toastQueue.push({msg, ms});
+  const t = _classifyToast(msg);
+  if(!ms) ms = t.ms;
+  _toastQueue.push({msg, ms, tone: t.tone});
   _flushToast();
 }
 function notify(msg){
   toast(msg);
   autoSpeak(msg);
   if('Notification' in window && Notification.permission === 'granted'){
-    new Notification('医路相伴 · 提醒', {body: msg});
+    try{ new Notification('医路相伴 · 提醒', {body: msg}); }catch(e){}
   }
 }
 
@@ -3166,14 +3321,13 @@ function handlePushFail(msg){
   closePushFailMask();
   if(myRole === 'elder'){
     const tip = '浏览器推送开启失败，请联系家属帮您处理。';
-    toast(tip, 6000);
+    toast(tip);
     speak(tip);
   }else{
-    // 家属端（含默认身份）：先提示具体原因，再弹教程
-    toast(msg || '浏览器推送开启失败', 5000);
+    // 家属端：提示具体原因 + 弹教程（toast 走错误类 2.5s，避免超长）
+    toast(msg || '浏览器推送开启失败');
     const m = $('pushFailMask');
     if(m){ m.classList.add('show'); }
-    else { toast(msg || '浏览器推送开启失败', 6000); }
   }
 }
 function closePushFailMask(){
@@ -3250,12 +3404,28 @@ function loadVoices(){
   if(!('speechSynthesis' in window)) return;
   const vs = speechSynthesis.getVoices();
   if(vs && vs.length > 0){ voicesList = vs; voicesReady = true; }
+  // 加载完初始语音列表 → 预判语音 OK/Bad，给 FAB 加红点徽章
+  if(voicesReady){
+    const zh = voicesList.filter(v => v.lang && (v.lang.toLowerCase().startsWith('zh') || v.lang.toLowerCase().startsWith('cmn')));
+    const local = zh.filter(v => v.localService).length;
+    if(!zh.length){
+      _setVoiceBadge('bad');
+    }else if(zh.length && !local){
+      // 只有远程中文语音，大概率静默失败 → 先 bad 徽章
+      _setVoiceBadge('bad');
+    }else{
+      _setVoiceBadge('ok');
+    }
+  }
 }
 if('speechSynthesis' in window){
   loadVoices();
   speechSynthesis.onvoiceschanged = loadVoices;
   // 部分浏览器（尤其 Edge）首次交互才会加载语音列表，点击时补拉一次
   document.addEventListener('pointerdown', ()=>{ if(!voicesReady) loadVoices(); }, {capture:true});
+}else{
+  // 浏览器完全不支持 speechSynthesis（罕见）
+  if(typeof _setVoiceBadge === 'function') _setVoiceBadge('bad');
 }
 let speakSeq = 0;
 let _activeUtts = []; // 防 GC：部分浏览器会回收未开始朗读的 utterance 导致无声
@@ -3306,7 +3476,7 @@ function speak(text, rate){
       const chunks = (String(text).match(/[^。！？；\n]+[。！？；\n]*/g) || [text]).map(s=>s.trim()).filter(Boolean);
       (chunks.length ? chunks : [String(text)]).forEach(ch=>{
         startOne(ch, true,
-          ()=>{ started = true; },
+          ()=>{ started = true; _setVoiceBadge('ok'); },  // 成功启动 → 徽章 OK
           e=>{ errored = e; });
       });
       // 看门狗 1：2.5 秒未启动 → 不指定语音重试（绕开损坏/远程不可达的语音对象）
@@ -3315,9 +3485,9 @@ function speak(text, rate){
         if(speechSynthesis.speaking || speechSynthesis.pending) return;
         let ok2 = false;
         startOne(String(text).slice(0, 60), false,
-          ()=>{ ok2 = true; toast('🔊 语音已启动', 2000); },
+          ()=>{ ok2 = true; _setVoiceBadge('ok'); toast('🔊 语音已启动', 1200); },
           ()=>{});
-        // 看门狗 2：重试仍无反应 → 给出可诊断的提示
+        // 看门狗 2：重试仍无反应 → 横幅提示（Q 方案：横幅+红点徽章，替代长 toast）
         setTimeout(()=>{
           if(seq !== speakSeq || ok2) return;
           if(speechSynthesis.speaking || speechSynthesis.pending) return;
@@ -3325,11 +3495,11 @@ function speak(text, rate){
           const zh = vs.filter(v=>v.lang && v.lang.toLowerCase().startsWith('zh'));
           const local = zh.filter(v=>v.localService).length;
           if(zh.length && !local){
-            toast('浏览器只有在线中文语音且无法连接服务，请安装本地中文语音：设置 → 时间和语言 → 语音 → 添加语音（中文）', 10000);
+            _showVoiceBanner('online-only', zh.length, 0);
           }else if(zh.length === 0){
-            toast('未检测到中文语音包，请在系统设置 → 时间和语言 → 语音 中添加中文语音后重试', 10000);
+            _showVoiceBanner('no-zh', 0, 0);
           }else{
-            toast('语音引擎无响应（中文语音 ' + zh.length + ' 个）。请检查：系统音量/静音键、Windows 声音设置中浏览器是否被静音，或改用 Edge 浏览器', 10000);
+            _showVoiceBanner('unresponsive', zh.length, local);
           }
         }, 2500);
       }, 2500);
@@ -3337,9 +3507,57 @@ function speak(text, rate){
     // cancel 后立即 speak 在 Chrome/Edge 可能被吞掉，稍作延迟更可靠
     setTimeout(doSpeak, 120);
   }catch(e){
+    _setVoiceBadge('bad');
     toast('语音朗读异常，请重试');
   }
 }
+/* 语音状态：ok/bad。Bad 时：
+   - 首页顶部显示横幅（替代 10s 长 toast），用户可关掉
+   - 右下角语音 FAB 右上角显示红色圆点徽章
+*/
+function _setVoiceBadge(status){
+  // status: 'ok' 或 'bad'
+  const fab = $('voiceFab');
+  if(fab) fab.setAttribute('data-voice', status);
+  document.body.setAttribute('data-voice-status', status);
+}
+function _showVoiceBanner(kind, zhCount, localCount){
+  // 写横幅（只在 view-home#voiceStatusBanner 显示）
+  const host = $('voiceStatusBanner');
+  if(!host) return;
+  // 如果用户已经关掉过一个同类错误，不重复骚扰（1 会话内幂等）
+  const key = 'med_voice_banner_' + kind;
+  if(sessionStorage.getItem(key) === '1'){
+    host.innerHTML = '';
+    return;
+  }
+  let title = '', body = '';
+  if(kind === 'online-only'){
+    title = '语音：在线中文语音无法连接服务器';
+    body = '系统检测到您的浏览器只有远程中文语音（需要联网拉取）。国内网络下容易被墙。请安装本地中文语音包：<b>系统设置 → 时间和语言 → 语音 → 添加「中文(简体)」</b>，或使用 Edge 浏览器自带的本地语音。';
+  }else if(kind === 'no-zh'){
+    title = '语音：未检测到中文语音包';
+    body = '当前设备没有中文语音引擎。请在系统设置中添加中文语音包（Windows 设置路径：<b>时间和语言 → 语音 → 添加语音 → 中文(简体,中国)</b>），添加后重启浏览器即可启用。iOS/iPadOS 请在<b>设置 → 辅助功能 → 朗读内容 → 语音</b>里下载中文普通话。';
+  }else{
+    title = '语音引擎无响应（可用中文语音 ' + (zhCount||0) + ' 个，本地包 '+ (localCount||0) +' 个）';
+    body = '请逐一排查：<b>①</b>系统音量/静音键是否被调到最小？<b>②</b>Windows/手机声音设置里，该浏览器是否被静音？<b>③</b>试试改用 Edge 浏览器，它自带本地中文语音包，兼容性最好。如果用的是 Chrome，请安装本地中文语音包（见上面提示）。';
+  }
+  host.innerHTML =
+    '<div class="voice-warn-banner" id="voiceWarnBanner">' +
+      '<span class="ic">⚠️</span>' +
+      '<div class="vb-body"><b>' + title + '</b><br>' + body + '</div>' +
+      '<button class="close" aria-label="关闭">知道了</button>' +
+    '</div>';
+  const btn = host.querySelector('button.close');
+  if(btn){
+    btn.addEventListener('click', ()=>{
+      host.innerHTML = '';
+      sessionStorage.setItem(key, '1');
+    });
+  }
+  _setVoiceBadge('bad');
+}
+
 function stopSpeak(){ try{ speechSynthesis.cancel(); }catch(e){} }
 /* 自动播报门控：仅老人端自动触发语音；家属端只有点击🔊朗读按钮才出声 */
 function autoSpeak(text, rate){
@@ -3674,6 +3892,7 @@ function voiceToInput(targetId){
 function applyMode(){
   const care = localStorage.getItem('med_mode') === 'care';
   document.body.classList.toggle('care', care);
+  document.documentElement.classList.toggle('care', care);
   $('modeToggle').textContent = care ? '标准模式' : '关怀模式';
   applyTheme();
 }
@@ -5383,7 +5602,11 @@ function playDidiAlert(durationSec){
   }catch(e){ console.warn('滴滴警报声播放失败：', e); }
 }
 /** 生成"服药提醒专用"大字 UI Modal（避免重复 toast）：一次只弹一个，点击关闭。
- *  修复：不再接受拼 HTML 的 msg（之前会被 escape 成 <b> 原文）。改用结构化参数。*/
+ *  适配规则：
+ *   - z-index: 50 （低于导航栏 z-index:55，不遮挡导航/公告条）
+ *   - 位置：居中偏上（top ≈ 20%），避免移动端键盘顶出屏幕
+ *   - 移动端 max-width 88vw, max-height calc(100dvh - 180px)，正文 ≤ 16px
+ *   - 不再接受拼 HTML 的 msg（之前会被 escape 成 <b> 原文）。改用结构化参数。*/
 let _medAlertModalOpen = false;
 function showMedAlertUI(titleMsg, hintMsg, onClose){
   if(_medAlertModalOpen) return;
@@ -5391,13 +5614,15 @@ function showMedAlertUI(titleMsg, hintMsg, onClose){
   function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   const wrap = document.createElement('div');
   wrap.id = '__medAlertWrap__';
-  wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);';
+  // 低 z-index：不遮挡导航栏（55）、公告条（60）、mask（70）
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:50;display:flex;align-items:flex-start;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);padding-top:20vh;';
   const box = document.createElement('div');
-  box.style.cssText = 'min-width:320px;max-width:92vw;background:#fff;border:2px solid #ef4444;border-radius:18px;padding:22px 24px;box-shadow:0 22px 60px rgba(239,68,68,.35);color:#111;';
-  box.innerHTML = '<div style="font-size:20px;font-weight:800;color:#ef4444;margin-bottom:10px;">'+ic('ic-bell')+' 用药提醒</div>' +
-    '<div style="font-size:16px;line-height:1.55;font-weight:700;">' + esc(titleMsg||'') + '</div>' +
-    (hintMsg ? ('<div style="margin-top:10px;color:#ef4444;font-weight:700;font-size:15px;line-height:1.55;">' + esc(hintMsg) + '</div>') : '') +
-    '<div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;"><button class="btn sm" id="__medAlertClose__">我知道了</button></div>';
+  box.style.cssText = 'min-width:300px;width:100%;max-width:min(520px,88vw);max-height:calc(100dvh - 180px);overflow:auto;background:#fff;border:2px solid #ef4444;border-radius:18px;padding:18px 20px;box-shadow:0 22px 60px rgba(239,68,68,.30);color:#111;';
+  box.innerHTML =
+    '<div style="font-size:18px;font-weight:800;color:#ef4444;margin-bottom:8px;">'+ic('ic-bell')+' 用药提醒</div>' +
+    '<div style="font-size:15px;line-height:1.6;font-weight:700;">' + esc(titleMsg||'') + '</div>' +
+    (hintMsg ? ('<div style="margin-top:8px;color:#c53030;font-weight:700;font-size:14px;line-height:1.55;">' + esc(hintMsg) + '</div>') : '') +
+    '<div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;"><button class="btn sm" id="__medAlertClose__">我知道了</button></div>';
   wrap.appendChild(box);
   document.body.appendChild(wrap);
   const close = ()=>{
@@ -8239,7 +8464,7 @@ async function adminAnnSendEmail(){
     if(!resp || !resp.ok){
       let hint = '';
       try{ const t = resp ? await resp.text().catch(()=>'') : ''; hint = t && t.length<300 ? ('；响应：'+t) : ''; }catch(e){}
-      toast('❌ 发送失败：' + hint, 5000);
+      toast('❌ 发送失败：' + hint);
       return;
     }
     const data = await resp.json().catch(()=>({}));
