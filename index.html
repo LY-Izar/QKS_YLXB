@@ -28,14 +28,14 @@
     --danger:#e53e3e;
     --warn:#dd6b20;
     --ok:#38a169;
-    --radius:14px;
-    --radius-lg:20px;
+    --radius:8px;
+    --radius-lg:12px;
     --fs-base:17px;
     --fs-title:25px;
     --fs-h1:30px;
     --btn-h:52px;
-    --shadow:0 2px 12px rgba(16,58,50,0.08);
-    --shadow-lg:0 8px 28px rgba(16,58,50,0.12);
+    --shadow:0 1px 3px rgba(16,58,50,0.06);
+    --shadow-lg:0 4px 16px rgba(16,58,50,0.08);
   }
   /* 暗色模式（家属端等标准界面可用，关怀模式下自动回退暖色） */
   body.dark{
@@ -66,52 +66,8 @@
   body.dark .voice-fab{border-color:var(--bg);}
   body.dark .mask{background:rgba(0,0,0,.6);}
 
-  /* ===== 黑暗模式卡片边缘高光（BorderGlow 风格） ===== */
   body.dark .card{
-    --edge-proximity:0;
-    --cursor-angle:45deg;
-    --edge-sens:40;
-    --color-sens:60;
     border-color:rgba(255,255,255,.14);
-  }
-  body.dark .card::after{
-    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-    box-shadow:
-      inset 0 0 0 1px rgba(194,153,255,.55),
-      inset 0 0 2px 0 rgba(194,153,255,.4),
-      inset 0 0 6px 0 rgba(194,153,255,.22),
-      inset 0 0 14px 1px rgba(194,153,255,.12);
-    -webkit-mask:conic-gradient(from var(--cursor-angle) at 50% 50%,
-      #000 2%, transparent 3%, transparent 97%, #000 98%);
-    mask:conic-gradient(from var(--cursor-angle) at 50% 50%,
-      #000 2%, transparent 3%, transparent 97%, #000 98%);
-    opacity:calc((var(--edge-proximity) - var(--edge-sens)) / (100 - var(--edge-sens)));
-    transition:opacity .3s ease-out;
-  }
-  /* 彩色网格渐变描边：仅支持 mask-composite 的浏览器启用 */
-  @supports (-webkit-mask-composite: xor) or (mask-composite: exclude){
-    body.dark .card::before{
-      content:'';position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;
-      padding:2px;
-      background:
-        radial-gradient(at 80% 55%, hsla(268,100%,76%,.95) 0px, transparent 50%),
-        radial-gradient(at 69% 34%, hsla(349,100%,74%,.95) 0px, transparent 50%),
-        radial-gradient(at 8% 6%, hsla(136,100%,78%,.95) 0px, transparent 50%),
-        radial-gradient(at 41% 38%, hsla(192,100%,64%,.95) 0px, transparent 50%),
-        radial-gradient(at 86% 85%, hsla(186,100%,74%,.95) 0px, transparent 50%),
-        radial-gradient(at 82% 18%, hsla(52,100%,65%,.95) 0px, transparent 50%),
-        radial-gradient(at 51% 4%, hsla(12,100%,72%,.95) 0px, transparent 50%),
-        linear-gradient(#c299ff 0 0);
-      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite:xor;
-      mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      mask-composite:exclude;
-      opacity:calc((var(--edge-proximity) - var(--color-sens)) / (100 - var(--color-sens)));
-      transition:opacity .3s ease-out;
-    }
-  }
-  body.dark .card::after{
-    background:none;mix-blend-mode:normal;
   }
   body.care{
     --bg:#fff8ec;
@@ -131,8 +87,8 @@
     --fs-title:32px;
     --fs-h1:40px;
     --btn-h:72px;
-    --radius:18px;
-    --radius-lg:26px;
+    --radius:12px;
+    --radius-lg:16px;
   }
 
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -212,10 +168,6 @@
   #navbar::after{
     content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
     background:
-      radial-gradient(circle 220px at var(--lg-mx) var(--lg-my),
-        rgba(255,255,255,.16) 0%,
-        rgba(var(--lg-glow),.08) 35%,
-        transparent 65%),
       linear-gradient(180deg,rgba(255,255,255,.12) 0%,transparent 15%);
     opacity:.5;
     transition:opacity .4s ease;
@@ -593,9 +545,8 @@
     display:inline-flex;align-items:center;justify-content:center;gap:8px;
     min-height:var(--btn-h);padding:0 22px;border-radius:var(--radius);
     font-weight:700;font-size:18px;transition:.15s;
-    background:var(--primary);
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;
-    box-shadow:0 4px 14px rgba(16,58,50,.16);
+    background:var(--primary);color:#fff;
+    box-shadow:0 1px 3px rgba(16,58,50,.12);
   }
   body.care .btn{font-size:25px;padding:0 30px;min-height:72px;}
   .btn:active{transform:scale(.97);}
@@ -603,8 +554,8 @@
   .btn.block{display:flex;width:100%;}
   .btn.ghost{background:var(--primary-soft);color:var(--primary-deep);box-shadow:none;}
   .btn.line{background:transparent;border:2px solid var(--primary);color:var(--primary);box-shadow:none;}
-  .btn.warn{background:var(--accent);background:linear-gradient(135deg,var(--accent),#c2410c);color:#fff;box-shadow:0 4px 14px rgba(180,83,9,.25);}
-  .btn.danger{background:var(--danger);background:linear-gradient(135deg,var(--danger),#9b2c2c);color:#fff;box-shadow:0 4px 14px rgba(155,44,44,.25);}
+  .btn.warn{background:var(--accent);color:#fff;box-shadow:0 1px 3px rgba(180,83,9,.18);}
+  .btn.danger{background:var(--danger);color:#fff;box-shadow:0 1px 3px rgba(155,44,44,.18);}
   .btn.sm{min-height:40px;padding:0 14px;font-size:14px;border-radius:10px;box-shadow:none;}
   body.care .btn.sm{min-height:54px;font-size:19px;}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
@@ -620,11 +571,11 @@
   .tile:active{transform:scale(.96);}
   @media (hover:hover){ .tile:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:color-mix(in srgb, var(--primary) 35%, var(--border));} }
   .tile .ic{
-    font-size:30px;line-height:1;width:58px;height:58px;border-radius:16px;
+    font-size:30px;line-height:1;width:58px;height:58px;border-radius:10px;
     display:grid;place-items:center;
     background:var(--primary-soft);
   }
-  body.care .tile .ic{font-size:36px;width:74px;height:74px;border-radius:20px;}
+  body.care .tile .ic{font-size:36px;width:74px;height:74px;border-radius:12px;}
   .grid .tile:nth-child(2) .ic{background:#e7f0fb;}
   .grid .tile:nth-child(3) .ic{background:#fdeef0;}
   .grid .tile:nth-child(4) .ic{background:#fdf6e3;}
@@ -641,7 +592,7 @@
   body.care .tile .ds{font-size:18px;}
   .tile.feature{
     border-color:color-mix(in srgb, var(--primary) 45%, var(--border));
-    background:linear-gradient(145deg,var(--primary-soft),var(--surface) 65%);
+    background:var(--primary-soft);
   }
 
   /* ===== 表单 ===== */
@@ -685,9 +636,9 @@
   body.care .sym-chip{font-size:22px;padding:14px 22px;border-width:3px;}
   .sym-chip:active{transform:scale(.95);}
   .sym-chip.on{
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));
+    background:var(--primary);
     border-color:var(--primary-deep);color:#fff;
-    box-shadow:0 3px 10px color-mix(in srgb, var(--primary) 35%, transparent);
+    box-shadow:0 1px 3px color-mix(in srgb, var(--primary) 25%, transparent);
   }
 
   /* ===== 紧急度徽章 ===== */
@@ -719,7 +670,7 @@
   }
   .step .num{
     flex:none;width:36px;height:36px;border-radius:50%;
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));
+    background:var(--primary);
     color:#fff;display:grid;place-items:center;font-weight:800;font-size:17px;
   }
   body.care .step .num{width:48px;height:48px;font-size:24px;}
@@ -745,9 +696,8 @@
   body.care .med-item .tm{font-size:19px;}
   .med-item .pill{
     font-family:ui-monospace,monospace;
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;
+    background:var(--primary);color:#fff;
     border-radius:10px;padding:6px 10px;font-weight:700;font-size:17px;
-    box-shadow:0 3px 8px color-mix(in srgb, var(--primary) 30%, transparent);
   }
   body.care .med-item .pill{font-size:24px;padding:8px 14px;}
 
@@ -772,15 +722,14 @@
 
   /* ===== 欢迎页主卡 ===== */
   .hero-ic{
-    width:88px;height:88px;border-radius:26px;margin:4px auto 10px;
+    width:88px;height:88px;border-radius:var(--radius-lg);margin:4px auto 10px;
     display:grid;place-items:center;font-size:46px;
     background:var(--primary-soft);
-    background:linear-gradient(145deg,var(--primary-soft),color-mix(in srgb, var(--primary) 18%, var(--surface)));
   }
   body.dark .hero-ic{
-    background:linear-gradient(145deg,rgba(53,177,132,.22),rgba(53,177,132,.08));
+    background:rgba(53,177,132,.16);
   }
-  body.care .hero-ic{width:104px;height:104px;font-size:54px;border-radius:32px;}
+  body.care .hero-ic{width:104px;height:104px;font-size:54px;border-radius:16px;}
 
   /* ===== 家属端专属特效（React Bits 风格，关怀模式下全部关闭） ===== */
   #view-family{position:relative;z-index:0;}
@@ -789,38 +738,30 @@
   @media (hover:hover){
     #view-family .card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:color-mix(in srgb, var(--primary) 30%, var(--border));}
   }
-  #view-family .btn:not(.ghost):not(.line){position:relative;overflow:hidden;}
-  #view-family .btn:not(.ghost):not(.line)::before{
-    content:'';position:absolute;top:0;left:-80%;width:45%;height:100%;
-    background:linear-gradient(105deg,transparent,rgba(255,255,255,.34),transparent);
-    transform:skewX(-20deg);
-    animation:btnShine 3.4s ease-in-out infinite;
-  }
-  @keyframes btnShine{0%,55%{left:-80%;}100%{left:170%;}}
   #view-family .med-item{animation:feedIn .45s ease both;}
   @keyframes feedIn{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
 
   /* 慢病管理：档案选择状态条 */
   .chronic-status{padding:14px 16px;border-radius:16px;margin-bottom:12px;font-weight:600;font-size:15px;line-height:1.5;display:flex;align-items:center;gap:10px;}
   body.care .chronic-status{font-size:18px;padding:18px 20px;}
-  .chronic-status.prompt{background:linear-gradient(135deg,var(--care-bg),rgba(255,193,7,.18));border:1.5px solid var(--care-color);color:#8f3d00;}
-  .chronic-status.active{background:linear-gradient(135deg,rgba(15,157,143,.14),rgba(15,157,143,.06));border:2px solid var(--primary);color:var(--primary-deep);box-shadow:0 4px 14px rgba(15,157,143,.18);}
-  body.dark .chronic-status.prompt{background:linear-gradient(135deg,rgba(255,193,7,.18),rgba(255,193,7,.08));border-color:rgba(255,193,7,.55);color:#ffd66b;}
-  body.dark .chronic-status.active{background:linear-gradient(135deg,rgba(15,157,143,.22),rgba(15,157,143,.08));border-color:var(--primary);color:#7de4d4;box-shadow:0 6px 22px rgba(15,157,143,.28);}
+  .chronic-status.prompt{background:var(--care-bg,rgba(255,193,7,.14));border:1.5px solid var(--care-color,var(--accent));color:#8f3d00;}
+  .chronic-status.active{background:rgba(15,157,143,.10);border:2px solid var(--primary);color:var(--primary-deep);box-shadow:0 1px 3px rgba(15,157,143,.14);}
+  body.dark .chronic-status.prompt{background:rgba(255,193,7,.14);border-color:rgba(255,193,7,.55);color:#ffd66b;}
+  body.dark .chronic-status.active{background:rgba(15,157,143,.16);border-color:var(--primary);color:#7de4d4;}
   .chronic-status .cs-ic{font-size:22px;}
   body.care .chronic-status .cs-ic{font-size:26px;}
   .chronic-status .cs-name{font-size:18px;font-weight:800;}
   body.care .chronic-status .cs-name{font-size:22px;}
 
   /* 慢病档案选中项高亮 */
-  .med-item.chronic-sel{border:2.5px solid var(--primary);background:linear-gradient(135deg,rgba(15,157,143,.10),transparent);box-shadow:0 4px 14px rgba(15,157,143,.14);}
+  .med-item.chronic-sel{border:2.5px solid var(--primary);background:rgba(15,157,143,.08);box-shadow:0 1px 3px rgba(15,157,143,.12);}
   .med-item.chronic-sel::before{content:'当前';position:absolute;top:-10px;left:14px;background:var(--primary);color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;}
   #chronicList .med-item{position:relative;}
 
   /* 家属端：选中老人高亮 */
-  #view-family .med-item.elder-sel{border:2.5px solid #8b5cf6;background:linear-gradient(135deg,rgba(139,92,246,.10),transparent);box-shadow:0 4px 14px rgba(139,92,246,.16);}
+  #view-family .med-item.elder-sel{border:2.5px solid #8b5cf6;background:rgba(139,92,246,.08);box-shadow:0 1px 3px rgba(139,92,246,.12);}
   #view-family .med-item.elder-sel::before{content:'查看中';position:absolute;top:-10px;left:14px;background:#8b5cf6;color:#fff;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;}
-  body.dark #view-family .med-item.elder-sel{border-color:#a78bfa;background:linear-gradient(135deg,rgba(167,139,250,.18),transparent);}
+  body.dark #view-family .med-item.elder-sel{border-color:#a78bfa;background:rgba(167,139,250,.14);}
   body.care #view-family h1{color:var(--ink);}
   body.care #view-family .card{overflow:visible;}
   body.care #view-family .btn:not(.ghost):not(.line)::before{display:none;}
@@ -835,15 +776,15 @@
   .voice-fab{
     position:fixed;right:16px;bottom:24px;z-index:60;
     width:58px;height:58px;border-radius:50%;
-    background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;font-size:26px;
+    background:var(--primary);color:#fff;font-size:26px;
     display:grid;place-items:center;
-    box-shadow:0 6px 20px color-mix(in srgb, var(--primary) 45%, transparent);
+    box-shadow:0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent);
     transition:.15s;border:3px solid #fff;
   }
   body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:40px;}
   .voice-fab:active{transform:scale(.92);}
   @media (hover:hover){ .voice-fab:hover{filter:brightness(1.06);} }
-  .voice-fab.listening{background:linear-gradient(135deg,var(--danger),#9b2c2c);animation:pulse 1s infinite;}
+  .voice-fab.listening{background:var(--danger);animation:pulse 1s infinite;}
   @keyframes pulse{50%{box-shadow:0 0 0 12px color-mix(in srgb, var(--danger) 22%, transparent);}}
   /* ===== 用药按钮 成功反馈动画：按钮点击脉冲 + 卡片成功绿色边框闪烁 ===== */
   @keyframes btnSuccessPulse{
@@ -868,12 +809,12 @@
   /* 卡片内本地确认提示（顶部 toast 易被滚出视野） */
   .med-inline-toast{
     margin-top:8px;padding:8px 12px;border-radius:10px;
-    background:linear-gradient(135deg,rgba(34,197,94,.14),rgba(34,197,94,.05));
+    background:rgba(34,197,94,.12);
     border:1px solid rgba(34,197,94,.35);color:var(--ink);font-weight:600;
     animation:pop .25s ease both;
   }
   .med-inline-toast.skip{
-    background:linear-gradient(135deg,rgba(239,68,68,.14),rgba(239,68,68,.05));
+    background:rgba(239,68,68,.12);
     border-color:rgba(239,68,68,.35);
   }
 
@@ -935,9 +876,71 @@
   body.care .tag{font-size:14px;}
   .center{text-align:center;}
   .gap6{display:flex;flex-direction:column;gap:6px;}
+
+  /* 线性图标（SVG symbol 引用，currentColor 自适应明暗） */
+  .icn{width:1.2em;height:1.2em;display:inline-block;vertical-align:-0.2em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .tile .icn{color:var(--primary-deep);}
+  body.dark .tile .icn{color:var(--primary);}
+  .hero-ic .icn{width:46px;height:46px;color:var(--primary);}
+  body.care .hero-ic .icn{width:54px;height:54px;}
+  .nav-icon-btn .icn{width:22px;height:22px;}
+  .voice-fab .icn{width:26px;height:26px;}
+  body.care .voice-fab .icn{width:32px;height:32px;}
+  .badge .icn{width:1em;height:1em;vertical-align:-0.15em;}
+  .bp-icon .icn{color:var(--primary-deep);}
+  body.dark .bp-icon .icn{color:var(--primary);}
+  h2 .icn,h3 .icn{width:1.1em;height:1.1em;vertical-align:-0.18em;color:var(--primary-deep);}
+  body.dark h2 .icn,body.dark h3 .icn{color:var(--primary);}
+  .cs-ic .icn{color:var(--primary);}
+  .sym-chip .icn{width:1.1em;height:1.1em;vertical-align:-0.15em;}
+  .btn .icn{width:1.1em;height:1.1em;vertical-align:-0.15em;}
 </style>
 </head>
 <body>
+
+<!-- 图标 symbol sprite（线性 2px 描边，currentColor 自适应明暗） -->
+<svg class="ic-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden">
+  <symbol id="ic-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.6" y1="16.6" x2="21" y2="21"/></g></symbol>
+  <symbol id="ic-route" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6 H14 a3 3 0 0 1 0 6 H10 a3 3 0 0 0 0 6 H15.5"/></g></symbol>
+  <symbol id="ic-pill" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="6" rx="3" transform="rotate(45 12 12)"/><line x1="9.2" y1="9.2" x2="14.8" y2="14.8"/></g></symbol>
+  <symbol id="ic-chart" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="20"/><rect x="6" y="11" width="3" height="9"/><rect x="11" y="6" width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></g></symbol>
+  <symbol id="ic-book" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6 C10 4 6 4 4 5 V18 C6 17 10 17 12 19 C14 17 18 17 20 18 V5 C18 4 14 4 12 6 Z"/><line x1="12" y1="6" x2="12" y2="19"/></g></symbol>
+  <symbol id="ic-hospital" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 V11 L12 4 L20 11 V20 Z"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></g></symbol>
+  <symbol id="ic-users" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20 A5.5 5.5 0 0 1 14.5 20"/><path d="M14.5 20 A5 5 0 0 1 20.5 20"/><circle cx="16.5" cy="9" r="2.6"/></g></symbol>
+  <symbol id="ic-mic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6.5 11 A5.5 5.5 0 0 0 17.5 11"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></g></symbol>
+  <symbol id="ic-camera" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7 L9.5 4.5 H14.5 L16 7"/><circle cx="12" cy="13.5" r="4"/></g></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L10 17.5 L19 7.5"/></g></symbol>
+  <symbol id="ic-x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></g></symbol>
+  <symbol id="ic-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L22 20 H2 Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="ic-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21 C16 16 18 13 18 10 A6 6 0 0 0 6 10 C6 13 8 16 12 21 Z"/><circle cx="12" cy="10" r="2.5"/></g></symbol>
+  <symbol id="ic-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17 H18 L17 15.5 V11 A5.5 5.5 0 0 0 6.5 11 V15.5 Z"/><path d="M10 19 A2 2 0 0 0 14 19"/></g></symbol>
+  <symbol id="ic-chat" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5 H21 V16 H11 L6 20 V16 H3 Z"/></g></symbol>
+  <symbol id="ic-bulb" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 18 h5 l1 -2 a6 6 0 1 0 -7 0 z"/><line x1="10" y1="21" x2="14" y2="21"/></g></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="16" y2="13.5"/></g></symbol>
+  <symbol id="ic-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11 V8 a4 4 0 0 1 8 0 v3"/></g></symbol>
+  <symbol id="ic-clipboard" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="3" rx="1"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="15" y2="15"/></g></symbol>
+  <symbol id="ic-trend" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17 L9 11 L13 15 L21 7"/><path d="M15 7 H21 V13"/></g></symbol>
+  <symbol id="ic-pencil" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5 a2.1 2.1 0 0 1 3 3 L7 19 l-4 1 1-4 Z"/><line x1="12" y1="7.5" x2="16.5" y2="12"/></g></symbol>
+  <symbol id="ic-moon" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8 A9 9 0 1 1 11.2 3 a7 7 0 0 0 9.8 9.8 Z"/></g></symbol>
+  <symbol id="ic-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.3" y2="6.3"/><line x1="17.7" y1="17.7" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.3" y2="17.7"/><line x1="17.7" y1="6.3" x2="19.1" y2="4.9"/></g></symbol>
+  <symbol id="ic-user" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21 a8 8 0 0 1 16 0"/></g></symbol>
+  <symbol id="ic-nose" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5 C9.5 5 9 14 10 18 C10.5 19.5 13.5 19.5 14 18 C15 14 14.5 5 12 5 Z"/><line x1="10.5" y1="16" x2="13.5" y2="16"/></g></symbol>
+  <symbol id="ic-lung" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="4" x2="12" y2="11"/><path d="M9 7 C6 9 5 14 6 18 C6.5 19.5 8.5 19 9 18 V11"/><path d="M15 7 C18 9 19 14 18 18 C17.5 19.5 15.5 19 15 18 V11"/></g></symbol>
+  <symbol id="ic-head" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 14 a4.5 4.5 0 1 1 8 0 c0 1.5 -0.8 2.5 -1 3.5 H9 c-0.2 -1 -1 -2 -1 -3.5 Z"/><path d="M12 3 L10.5 6.5 L13 6.5 L11.5 10"/></g></symbol>
+  <symbol id="ic-abdomen" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7 C6 5 18 5 18 7 C20 13 18 20 12 20 C6 20 4 13 6 7 Z"/></g></symbol>
+  <symbol id="ic-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12 C5 7.5 9 6 12 6 C15 6 19 7.5 22 12 C19 16.5 15 18 12 18 C9 18 5 16.5 2 12 Z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+  <symbol id="ic-ear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 C13 4 16 6.5 16 11 C16 14 14.5 15 14.5 17 C14.5 19 12.5 20 12 20"/><path d="M10 11 a3 3 0 0 1 3 3"/></g></symbol>
+  <symbol id="ic-tooth" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3 C5 3 4 6 5 10 C6 14 7 21 9 21 C10 21 10 16 12 16 C14 16 14 21 15 21 C17 21 18 14 19 10 C20 6 19 3 17 3 C14 3 13 5 12 5 C11 5 10 3 7 3 Z"/></g></symbol>
+  <symbol id="ic-brain" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5 C7 5 6 8 7.5 10 C6 11 6 14 7.5 15 C6.5 17 8.5 19 10 18 V5 Z"/><path d="M14.5 5 C17 5 18 8 16.5 10 C18 11 18 14 16.5 15 C17.5 17 15.5 19 14 18 V5 Z"/><line x1="12" y1="5" x2="12" y2="19"/></g></symbol>
+  <symbol id="ic-bandage" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></g></symbol>
+  <symbol id="ic-heart" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20 C10 18 5 14 5 9 C5 6.5 7 5 9 5 C10.5 5 12 6.5 12 6.5 C12 6.5 13.5 5 15 5 C17 5 19 6.5 19 9 C19 14 14 18 12 20 Z"/></g></symbol>
+  <symbol id="ic-volume" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9 H8 L13 5 V19 L8 15 H4 Z"/><path d="M16 9 A3 3 0 0 1 16 15"/><path d="M18.5 6.5 A6 6 0 0 1 18.5 17.5"/></g></symbol>
+  <symbol id="ic-link" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15 L15 9"/><path d="M7 12 L5 14 A3.5 3.5 0 0 0 10 19 L12 17"/><path d="M12 7 L14 5 A3.5 3.5 0 0 1 19 10 L17 12"/></g></symbol>
+  <symbol id="ic-thermometer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 a2 2 0 0 1 2 2 v9 a3.5 3.5 0 1 1 -4 0 V5 a2 2 0 0 1 2 -2 Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 A8 8 0 0 1 18 7 L20 9"/><path d="M20 5 V9 H16"/><path d="M20 12 A8 8 0 0 1 6 17 L4 15"/><path d="M4 19 V15 H8"/></g></symbol>
+  <symbol id="ic-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2 V4 M12 20 V22 M2 12 H4 M20 12 H22 M4.5 4.5 L6 6 M18 18 L19.5 19.5 M4.5 19.5 L6 18 M18 6 L19.5 4.5"/></g></symbol>
+</svg>
 
 <!-- 液态玻璃 SVG 滤镜定义（不可见） -->
 <svg class="liquid-glass-defs" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
@@ -965,7 +968,7 @@
     <li><a class="nav-link" data-v="more" onclick="go('hospital')"><span class="nm-s">医院</span><span class="nm-f">找医院</span></a></li>
     <li><a class="nav-link" data-v="welcome" onclick="go('welcome')">账户</a></li>
   </ul>
-  <button class="nav-icon-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式">🌙</button>
+  <button class="nav-icon-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式"><svg class="icn"><use href="#ic-moon"/></svg></button>
   <button class="nav-mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
 </nav>
 
@@ -975,7 +978,7 @@
     <h1>欢迎使用<br>「医路相伴」</h1>
     <p class="lead">帮老人看懂病、挂对号、记对药，让就医不再难。</p>
     <div class="card center">
-      <div class="hero-ic">🏥</div>
+      <div class="hero-ic"><svg class="icn"><use href="#ic-hospital"/></svg></div>
       <h2 id="welcomeMsg" style="margin:8px 0;">您好，请先登录</h2>
       <p class="sub">登录后可保存病例、医嘱与用药提醒</p>
       <div class="gap6">
@@ -984,7 +987,7 @@
       </div>
     </div>
     <div class="card feature">
-      <h2>👴 建议开启「关怀模式」</h2>
+      <h2><svg class="icn"><use href="#ic-user"/></svg> 建议开启「关怀模式」</h2>
       <p class="sub">字体更大、按钮更醒目、颜色更柔和，并自动语音播报，专为长辈优化。</p>
       <button class="btn block warn" onclick="enableCare()">一键开启关怀模式</button>
     </div>
@@ -996,16 +999,16 @@
     <h1 id="homeHi">您好</h1>
     <p class="lead">今天身体感觉怎么样？需要什么帮助？</p>
     <div class="card" style="margin-bottom:12px;">
-      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+      <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
     <div class="grid">
-      <button class="tile feature" onclick="go('symptom')"><span class="ic">🔍</span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
-      <button class="tile" onclick="go('flow')"><span class="ic">🗺️</span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
-      <button class="tile" onclick="go('med')"><span class="ic">💊</span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
-      <button class="tile" onclick="go('chronic')"><span class="ic">📊</span><span class="nm">慢病管理</span><span class="ds">记指标 · 看趋势 · 防未然</span></button>
-      <button class="tile" onclick="go('druglib')"><span class="ic">📖</span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
-      <button class="tile" onclick="go('hospital')"><span class="ic">🏥</span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
-      <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc">👨‍👩‍👧</span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
+      <button class="tile feature" onclick="go('symptom')"><span class="ic"><svg class="icn"><use href="#ic-search"/></svg></span><span class="nm">症状自查</span><span class="ds">看症状 · 找科室 · 判轻重</span></button>
+      <button class="tile" onclick="go('flow')"><span class="ic"><svg class="icn"><use href="#ic-route"/></svg></span><span class="nm">就医流程</span><span class="ds">挂号到取药逐步引导</span></button>
+      <button class="tile" onclick="go('med')"><span class="ic"><svg class="icn"><use href="#ic-pill"/></svg></span><span class="nm">用药提醒</span><span class="ds">按时吃药不忘记</span></button>
+      <button class="tile" onclick="go('chronic')"><span class="ic"><svg class="icn"><use href="#ic-chart"/></svg></span><span class="nm">慢病管理</span><span class="ds">记指标 · 看趋势 · 防未然</span></button>
+      <button class="tile" onclick="go('druglib')"><span class="ic"><svg class="icn"><use href="#ic-book"/></svg></span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
+      <button class="tile" onclick="go('hospital')"><span class="ic"><svg class="icn"><use href="#ic-hospital"/></svg></span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
+      <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc"><svg class="icn"><use href="#ic-users"/></svg></span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
     </div>
   </div>
 
@@ -1014,16 +1017,16 @@
     <h1>症状自查</h1>
     <p class="lead">输入或点选您的症状（可多选），为您判断紧急程度和该挂的科室。</p>
     <div class="card" style="margin-bottom:12px;">
-      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+      <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
     <div class="card">
       <h2>① 输入症状文字</h2>
       <p class="sub" style="margin-bottom:4px;">可一次输入多个，用顿号或空格隔开，如：发烧、头痛、咳嗽。</p>
       <div class="inputrow">
         <input class="inp" id="symInput" placeholder="如：发烧、头痛" onkeydown="if(event.key==='Enter')symTextSubmit()" maxlength="200">
-        <button class="btn line" onclick="voiceToInput('symInput')" title="语音输入症状">🎤</button>
+        <button class="btn line" onclick="voiceToInput('symInput')" title="语音输入症状"><svg class="icn"><use href="#ic-mic"/></svg></button>
       </div>
-      <button class="btn block" style="margin-top:10px;" onclick="symTextSubmit()">✅ 识别并选中症状</button>
+      <button class="btn block" style="margin-top:10px;" onclick="symTextSubmit()"><svg class="icn"><use href="#ic-check"/></svg> 识别并选中症状</button>
     </div>
     <div class="card">
       <h2>② 按部位选症状</h2>
@@ -1046,7 +1049,7 @@
     <div class="card">
       <div class="gap6">
         <button class="btn block warn" id="btnFlowStart" onclick="startFlow()">开始引导（带语音）</button>
-        <button class="btn block line sm" onclick="speakFlow()">🔊 朗读全流程</button>
+        <button class="btn block line sm" onclick="speakFlow()"><svg class="icn"><use href="#ic-volume"/></svg> 朗读全流程</button>
       </div>
     </div>
     <div class="steps" id="flowSteps"></div>
@@ -1060,7 +1063,7 @@
     <h1>用药提醒</h1>
     <p class="lead">录入医嘱后，到点会用声音和通知提醒您吃药。</p>
     <div class="card" style="margin-bottom:12px;">
-      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+      <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
     <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
       <span class="badge" id="timeOffsetBadge" style="background:#e6f4ea;color:#1a7a3a;">时间校准中…</span>
@@ -1071,13 +1074,13 @@
       <label class="f">药品名称（可说名字或拍照识别）</label>
       <div class="inputrow">
         <input class="inp" id="medName" placeholder="如：阿司匹林" maxlength="50" autocomplete="off">
-        <button class="btn line" onclick="voiceToInput('medName')" title="语音输入药名">🎤</button>
-        <button class="btn line" onclick="scanMed()" title="拍照识别药盒">📷</button>
+        <button class="btn line" onclick="voiceToInput('medName')" title="语音输入药名"><svg class="icn"><use href="#ic-mic"/></svg></button>
+        <button class="btn line" onclick="scanMed()" title="拍照识别药盒"><svg class="icn"><use href="#ic-camera"/></svg></button>
       </div>
       <label class="f" style="margin-top:12px;">剂量 / 说明</label>
       <div class="inputrow">
         <input class="inp" id="medDose" placeholder="如：每次1片，饭后" maxlength="50" autocomplete="off">
-        <button class="btn line" onclick="voiceToInput('medDose')" title="语音输入剂量">🎤</button>
+        <button class="btn line" onclick="voiceToInput('medDose')" title="语音输入剂量"><svg class="icn"><use href="#ic-mic"/></svg></button>
       </div>
       <label class="f" style="margin-top:12px;">频率
         <select class="inp" id="medFreq" onchange="renderTimeInputs(this.value)">
@@ -1090,14 +1093,14 @@
       <div id="medTimes" style="margin-top:12px;"></div>
       <div id="medAdvice"></div>
       <button class="btn block" onclick="addMed()">保存用药</button>
-      <button class="btn block ghost" style="margin-top:10px;" onclick="showAllAdvice()">💡 AI 用药建议</button>
-      <button class="btn block line" style="margin-top:10px;" onclick="go('druglib')">📖 浏览药品库（共 <b id="drugCount">0</b> 种）</button>
+      <button class="btn block ghost" style="margin-top:10px;" onclick="showAllAdvice()"><svg class="icn"><use href="#ic-bulb"/></svg> AI 用药建议</button>
+      <button class="btn block line" style="margin-top:10px;" onclick="go('druglib')"><svg class="icn"><use href="#ic-book"/></svg> 浏览药品库（共 <b id="drugCount">0</b> 种）</button>
     </div>
     <div id="medList"></div>
 
     <!-- 用药依从性（老人端） -->
     <div class="card" id="medComplianceCard" style="margin-top:12px;">
-      <h2>✅ 我的用药依从性</h2>
+      <h2><svg class="icn"><use href="#ic-check"/></svg> 我的用药依从性</h2>
       <div id="complianceStats" style="margin-bottom:12px;"></div>
       <div id="complianceCalendar"></div>
     </div>
@@ -1108,10 +1111,10 @@
     <h1>药品库</h1>
     <p class="lead">依据官方资料整理的常用药查询，支持药名、商品名、英文名搜索。</p>
     <div class="card">
-      <h2>🔎 查药</h2>
+      <h2><svg class="icn"><use href="#ic-search"/></svg> 查药</h2>
       <div class="inputrow">
         <input class="inp" id="drugSearch" placeholder="如：阿司匹林 / 拜阿司匹灵" maxlength="50" autocomplete="off">
-        <button class="btn line" onclick="voiceDrugSearch()" title="语音输入药名">🎤</button>
+        <button class="btn line" onclick="voiceDrugSearch()" title="语音输入药名"><svg class="icn"><use href="#ic-mic"/></svg></button>
       </div>
       <div class="sym-list" id="drugCats" style="margin-top:12px;"></div>
     </div>
@@ -1128,12 +1131,12 @@
     <h1>慢性病管理</h1>
     <p class="lead">记录指标、查看趋势、管理用药，慢性病不再难管。</p>
     <div class="card" style="margin-bottom:12px;">
-      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+      <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
 
     <!-- 慢病档案 -->
     <div class="card">
-      <h2>📋 我的慢病档案</h2>
+      <h2><svg class="icn"><use href="#ic-clipboard"/></svg> 我的慢病档案</h2>
       <div id="chronicStatus" class="chronic-status"></div>
       <div id="chronicList"></div>
       <div class="divider"></div>
@@ -1153,7 +1156,7 @@
         <label class="f" style="margin-top:10px;">确诊医院</label>
         <div class="inputrow">
           <input class="inp" id="chronicHosp" placeholder="如：市第一人民医院" maxlength="50" autocomplete="off">
-          <button class="btn line" onclick="voiceToInput('chronicHosp')" title="语音输入">🎤</button>
+          <button class="btn line" onclick="voiceToInput('chronicHosp')" title="语音输入"><svg class="icn"><use href="#ic-mic"/></svg></button>
         </div>
         <label class="f" style="margin-top:10px;">个人目标范围</label>
         <div id="chronicTargets" style="margin-top:6px;"></div>
@@ -1163,7 +1166,7 @@
 
     <!-- 指标录入 -->
     <div class="card" id="chronicMetricCard" style="display:none;">
-      <h2>📝 录入指标</h2>
+      <h2><svg class="icn"><use href="#ic-pencil"/></svg> 录入指标</h2>
       <label class="f">指标类型</label>
       <select class="inp" id="metricType" onchange="onMetricTypeChange()">
         <option value="bp">血压（收缩压/舒张压）</option>
@@ -1176,15 +1179,15 @@
       <label class="f" style="margin-top:10px;">备注（可选）</label>
       <div class="inputrow">
         <input class="inp" id="metricNote" placeholder="如：饭后两小时" maxlength="100" autocomplete="off">
-        <button class="btn line" onclick="voiceToInput('metricNote')" title="语音输入">🎤</button>
+        <button class="btn line" onclick="voiceToInput('metricNote')" title="语音输入"><svg class="icn"><use href="#ic-mic"/></svg></button>
       </div>
-      <button class="btn block" style="margin-top:10px;" onclick="saveMetric()">✅ 保存指标</button>
+      <button class="btn block" style="margin-top:10px;" onclick="saveMetric()"><svg class="icn"><use href="#ic-check"/></svg> 保存指标</button>
       <div id="metricHistory" style="margin-top:14px;"></div>
     </div>
 
     <!-- 趋势图表 -->
     <div class="card" id="chronicChartCard" style="display:none;">
-      <h2>📈 趋势图表</h2>
+      <h2><svg class="icn"><use href="#ic-trend"/></svg> 趋势图表</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <button class="btn sm line" onclick="renderChart('7d')">近7天</button>
         <button class="btn sm line" onclick="renderChart('30d')">近30天</button>
@@ -1199,7 +1202,7 @@
 
     <!-- 复诊提醒 -->
     <div class="card" id="chronicFollowupCard" style="display:none;">
-      <h2>🏥 复诊提醒</h2>
+      <h2><svg class="icn"><use href="#ic-hospital"/></svg> 复诊提醒</h2>
       <div id="followupList"></div>
       <div class="divider"></div>
       <label class="f">复诊日期</label>
@@ -1220,7 +1223,7 @@
 
     <!-- 预警列表 -->
     <div class="card" id="chronicAlertCard" style="display:none;">
-      <h2>⚠️ 健康预警</h2>
+      <h2><svg class="icn"><use href="#ic-alert"/></svg> 健康预警</h2>
       <div id="chronicAlertList"></div>
     </div>
   </div>
@@ -1231,18 +1234,18 @@
     <p class="lead">根据实时位置，自动推荐离您最近的 5 所医院（可按症状匹配科室）。</p>
     <div class="card">
       <div class="gap6">
-        <button class="btn block" onclick="locate()">📍 获取我的位置</button>
-        <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明</button>
+        <button class="btn block" onclick="locate()"><svg class="icn"><use href="#ic-pin"/></svg> 获取我的位置</button>
+        <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明</button>
       </div>
     </div>
     <div class="card">
-      <h2 style="font-size:19px;margin-bottom:2px;">🔎 输入地点查医院</h2>
+      <h2 style="font-size:19px;margin-bottom:2px;"><svg class="icn"><use href="#ic-search"/></svg> 输入地点查医院</h2>
       <p class="sub" style="margin-bottom:4px;">输入小区、街道或地标名称，以该位置推荐附近医院。</p>
       <div class="inputrow">
         <input class="inp" id="addrInput" placeholder="如：天府广场" onkeydown="if(event.key==='Enter')searchPlace()" maxlength="100" autocomplete="off">
-        <button class="btn line" onclick="voiceToInput('addrInput')" title="语音输入地点">🎤</button>
+        <button class="btn line" onclick="voiceToInput('addrInput')" title="语音输入地点"><svg class="icn"><use href="#ic-mic"/></svg></button>
       </div>
-      <button class="btn block" style="margin-top:10px;" onclick="searchPlace()">🔍 按这个地点找医院</button>
+      <button class="btn block" style="margin-top:10px;" onclick="searchPlace()"><svg class="icn"><use href="#ic-search"/></svg> 按这个地点找医院</button>
     </div>
     <div id="map"></div>
     <div class="hint" id="mapHint" style="margin:10px 0;">进入本页将自动获取实时位置，推荐最近的 5 所医院。</div>
@@ -1254,10 +1257,10 @@
     <h1 id="familyTitle">家属端</h1>
     <p class="lead" id="familyLead">让家人实时了解您的就医与用药情况。</p>
     <div class="card" style="margin-bottom:12px;">
-      <button class="btn block line sm" onclick="speakCurrent()">🔊 语音说明当前页面</button>
+      <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
     <div class="card" id="cardElderCode">
-      <h2>👨‍👩‍👧 我的邀请码</h2>
+      <h2><svg class="icn"><use href="#ic-users"/></svg> 我的邀请码</h2>
       <p class="sub">把下面的邀请码告诉家人，家人在「我是家属」身份下输入，即可在手机上查看您的健康动态。</p>
       <div class="gap6">
         <div class="inp center" style="font-family:ui-monospace,monospace;font-weight:800;letter-spacing:2px;font-size:20px;" id="familyCode">—</div>
@@ -1265,7 +1268,7 @@
       </div>
     </div>
     <div class="card" id="cardFamilyBind">
-      <h2 id="bindCardTitle">🔗 绑定老人</h2>
+      <h2 id="bindCardTitle"><svg class="icn"><use href="#ic-link"/></svg> 绑定老人</h2>
       <p class="sub" id="bindCardDesc">输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。支持绑定多位老人。</p>
       <div id="boundList"></div>
       <div class="gap6" id="bindFormArea">
@@ -1274,14 +1277,14 @@
       </div>
     </div>
     <div class="card" id="cardFamilyFeed">
-      <h2>📋 家人健康动态</h2>
+      <h2><svg class="icn"><use href="#ic-clipboard"/></svg> 家人健康动态</h2>
       <div id="familyFeed"></div>
     </div>
     <div class="card" id="cardChronicSummary" style="display:none;">
-      <h2>📊 慢病摘要 & 趋势</h2>
+      <h2><svg class="icn"><use href="#ic-chart"/></svg> 慢病摘要 & 趋势</h2>
       <div id="chronicSummaryContent"></div>
       <div class="divider"></div>
-      <h2>📈 近30天趋势</h2>
+      <h2><svg class="icn"><use href="#ic-trend"/></svg> 近30天趋势</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <select class="inp sm" id="familyChartType" style="width:auto;" onchange="drawFamilyChart()">
           <option value="bp">血压</option>
@@ -1296,20 +1299,20 @@
         <div id="familyChartEmpty" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);font-size:14px;">该指标暂无数据</div>
       </div>
       <div class="divider"></div>
-      <h2>📋 全部指标记录（近90天）</h2>
+      <h2><svg class="icn"><use href="#ic-clipboard"/></svg> 全部指标记录（近90天）</h2>
       <div id="familyMetricList" style="margin-top:8px;"></div>
     </div>
     <div class="card" id="cardElderCompliance" style="display:none;">
-      <h2>✅ 老人用药依从性</h2>
+      <h2><svg class="icn"><use href="#ic-check"/></svg> 老人用药依从性</h2>
       <div id="elderComplianceStats" style="margin-bottom:12px;"></div>
       <div id="elderComplianceCalendar"></div>
     </div>
     <div class="card" id="cardPushSettings">
-      <h2>🔔 远程提醒设置</h2>
+      <h2><svg class="icn"><use href="#ic-bell"/></svg> 远程提醒设置</h2>
       <p class="sub">绑定后，即使您关闭网页，也能收到家人的用药提醒。支持两种方式，任选其一或都开。</p>
       <div class="gap6" style="margin-top:12px;">
         <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface-2);border-radius:12px;">
-          <span style="font-size:24px;">🔔</span>
+          <span style="font-size:24px;"><svg class="icn"><use href="#ic-bell"/></svg></span>
           <div style="flex:1;">
             <div style="font-weight:700;">浏览器推送</div>
             <div class="hint" id="pwaStatus">检测中…</div>
@@ -1317,7 +1320,7 @@
           <button class="btn sm" id="pwaBtn" onclick="togglePWA()">开启推送</button>
         </div>
         <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface-2);border-radius:12px;margin-top:10px;">
-          <span style="font-size:24px;">💬</span>
+          <span style="font-size:24px;"><svg class="icn"><use href="#ic-chat"/></svg></span>
           <div style="flex:1;">
             <div style="font-weight:700;">微信推送（PushPlus）</div>
             <div class="hint" id="ppStatus">未绑定</div>
@@ -1330,8 +1333,8 @@
 </main>
 
 <!-- 悬浮语音按钮 -->
-<button class="voice-fab" id="voiceFab" onclick="voiceToggle()">🎤</button>
-<div class="voicebar" id="voicebar"><span class="mic">🎤</span><span id="voiceText">请说话…</span><button class="vdone" onclick="finishListen()">说完了</button></div>
+<button class="voice-fab" id="voiceFab" onclick="voiceToggle()"><svg class="icn"><use href="#ic-mic"/></svg></button>
+<div class="voicebar" id="voicebar"><span class="mic"><svg class="icn"><use href="#ic-mic"/></svg></span><span id="voiceText">请说话…</span><button class="vdone" onclick="finishListen()">说完了</button></div>
 
 <!-- 提醒横幅 -->
 <div class="notify-banner" id="notifyBanner" onclick="this.classList.remove('show')"></div>
@@ -1362,8 +1365,8 @@
     </div>
     <label class="f" id="rolePick">我的身份
       <div class="gap6">
-        <button class="btn block" id="roleElder" onclick="pickRole('elder')">👵 我是老人</button>
-        <button class="btn block ghost" id="roleFamily" onclick="pickRole('family')">👨‍👩‍👧 我是家属</button>
+        <button class="btn block" id="roleElder" onclick="pickRole('elder')"><svg class="icn"><use href="#ic-user"/></svg> 我是老人</button>
+        <button class="btn block ghost" id="roleFamily" onclick="pickRole('family')"><svg class="icn"><use href="#ic-users"/></svg> 我是家属</button>
       </div>
     </label>
     <div class="gap6">
@@ -1377,7 +1380,7 @@
 <!-- AI 用药建议弹层 -->
 <div class="mask" id="adviceMask">
   <div class="sheet">
-    <h3>💡 AI 用药建议</h3>
+    <h3><svg class="icn"><use href="#ic-bulb"/></svg> AI 用药建议</h3>
     <div id="adviceContent"></div>
     <p class="hint">建议仅供参考，请以医生处方为准。</p>
     <button class="btn block" style="margin-top:16px;" onclick="$('adviceMask').classList.remove('show')">我知道了</button>
@@ -1387,7 +1390,7 @@
 <!-- 语音录入确认 -->
 <div class="mask" id="voiceAskMask">
   <div class="sheet">
-    <h3>🎤 开启语音输入？</h3>
+    <h3><svg class="icn"><use href="#ic-mic"/></svg> 开启语音输入？</h3>
     <p class="sub">语音输入需要麦克风权限，识别在本机完成。可以连续说多个症状或内容，说完后点击「说完了」按钮结束。</p>
     <label class="f" style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;">
       <input type="checkbox" id="voiceRemember" checked> 记住选择，下次不再询问
@@ -1402,7 +1405,7 @@
 <!-- PushPlus 绑定弹层 -->
 <div class="mask" id="pushplusMask">
   <div class="sheet">
-    <h3>💬 绑定微信推送（PushPlus）</h3>
+    <h3><svg class="icn"><use href="#ic-chat"/></svg> 绑定微信推送（PushPlus）</h3>
     <p class="sub">
       1. 打开 <a href="https://www.pushplus.plus" target="_blank" style="color:var(--primary);">www.pushplus.plus</a>，用微信扫码登录<br>
       2. 复制页面上的 Token<br>
@@ -1422,13 +1425,13 @@
 <!-- 浏览器推送开启失败教程弹层（家属端） -->
 <div class="mask" id="pushFailMask">
   <div class="sheet">
-    <h3>🔔 浏览器推送开启失败？请按以下步骤排查</h3>
+    <h3><svg class="icn"><use href="#ic-bell"/></svg> 浏览器推送开启失败？请按以下步骤排查</h3>
     <p class="sub" style="line-height:1.9;">
       <b>1. 检查系统权限：</b><br>
       Windows：设置 → 隐私和安全性 → 通知，开启浏览器通知；再检查「专注助手/勿扰模式」是否关闭。<br>
       手机：系统设置 → 应用 → 浏览器 → 通知，允许通知。<br><br>
       <b>2. 检查浏览器权限：</b><br>
-      点击地址栏左侧的 🔒 / ⚙ 图标 → 找到「通知」→ 设为「允许」，然后刷新页面重试。<br><br>
+      点击地址栏左侧的锁形 / 齿轮 图标 → 找到「通知」→ 设为「允许」，然后刷新页面重试。<br><br>
       <b>3. 确认访问方式：</b><br>
       浏览器推送需要 HTTPS 网址（本站已支持）。若从本地文件打开（file:// 开头）则无法使用。<br><br>
       <b>4. 浏览器兼容性：</b><br>
@@ -1445,6 +1448,24 @@
 </div>
 
 <script>
+/* ==================== 图标辅助 ==================== */
+var SYM_ICON_MAP={
+  '🌡️':'ic-thermometer','🥶':'ic-thermometer','😮‍💨':'ic-lung','💨':'ic-lung',
+  '🗣️':'ic-chat','🤧':'ic-nose','🫁':'ic-lung','💔':'ic-heart','💓':'ic-heart',
+  '💦':'ic-alert','🩸':'ic-heart','🤕':'ic-head','⚡':'ic-alert','💫':'ic-head',
+  '🆘':'ic-alert','🦶':'ic-bandage','🌀':'ic-alert','😵':'ic-alert',
+  '🤢':'ic-abdomen','😖':'ic-abdomen','🤮':'ic-abdomen','💧':'ic-abdomen',
+  '🚽':'ic-abdomen','🚨':'ic-alert','🍚':'ic-abdomen','🟡':'ic-alert',
+  '🍽️':'ic-abdomen','🍬':'ic-alert','⚖️':'ic-alert','🦴':'ic-bandage',
+  '🧍':'ic-user','🙅':'ic-user','🦵':'ic-bandage','🚰':'ic-alert',
+  '⛔':'ic-alert','🔴':'ic-bandage','🎈':'ic-alert','👁️':'ic-eye',
+  '🌑':'ic-eye','👀':'ic-eye','👂':'ic-ear','🦷':'ic-tooth',
+  '😷':'ic-tooth','🌙':'ic-moon','😔':'ic-head','🧠':'ic-brain',
+  '🩹':'ic-bandage','🧷':'ic-bandage','🫀':'ic-heart','🟠':'ic-abdomen'
+};
+function ic(id){return '<svg class="icn"><use href="#'+id+'"/></svg>';}
+function ei(e){var id=SYM_ICON_MAP[e];return id?ic(id):e;}
+
 /* ==================== 数据：症状知识库 ==================== */
 // 紧急度: red=立即急诊 yellow=尽快就医(1-2天) green=可先观察
 // 每条症状直接对应紧急程度与建议科室，不给出具体病名
@@ -1519,7 +1540,7 @@ function renderBodyParts(){
   if(!grid) return;
   grid.innerHTML = Object.entries(BODY_PARTS).map(([key,info]) => {
     return '<button class="body-part-btn" data-part="'+key+'" onclick="bodyPartClick(\''+key+'\')">'
-      + '<span class="bp-icon">'+info.icon+'</span>'
+      + '<span class="bp-icon">'+ei(info.icon)+'</span>'
       + '<span class="bp-name">'+info.label+'</span>'
       + '</button>';
   }).join('');
@@ -1543,7 +1564,7 @@ function bodyPartClick(part){
     + syms.map(s => {
       const sel = selectedSyms.has(s.id);
       // 统一用 on class，与 renderSyms(symList) 选中态 CSS .sym-chip.on 完全一致
-      return '<button class="sym-chip'+(sel?' on':'')+'" onclick="toggleBodySym(\''+s.id+'\')">'+(sel?'<span style="margin-right:2px;">✓</span>':'')+s.icon+' '+s.name+'</button>';
+      return '<button class="sym-chip'+(sel?' on':'')+'" onclick="toggleBodySym(\''+s.id+'\')">'+(sel?'<span style="margin-right:2px;">✓</span>':'')+ei(s.icon)+' '+s.name+'</button>';
     }).join('')
     + '</div>';
   autoSpeak(info.label+'相关症状');
@@ -1587,9 +1608,9 @@ const FLOW = [
 ];
 
 const URGENT_TIP = {
-  red:'🆘 情况紧急：请立即前往医院急诊，或拨打 120。不要拖延！',
-  yellow:'⏰ 建议 1-2 天内就医，尽快挂号就诊。',
-  green:'😊 情况较轻，可先居家观察。若症状加重或持续，再及时就医。'
+  red:ic('ic-alert')+' 情况紧急：请立即前往医院急诊，或拨打 120。不要拖延！',
+  yellow:ic('ic-clock')+' 建议 1-2 天内就医，尽快挂号就诊。',
+  green:ic('ic-check')+' 情况较轻，可先居家观察。若症状加重或持续，再及时就医。'
 };
 
 /* ==================== 数据：药品知识库（依据官方资料整理） ==================== */
@@ -2830,7 +2851,7 @@ async function updatePWABadge(){
     btn.disabled = true;
     btn.textContent = '不可用';
   }else if(status === 'subscribed'){
-    badge.textContent = '✅ 已开启，关闭页面也能收到';
+    badge.textContent = '已开启，关闭页面也能收到';
     btn.disabled = false;
     btn.textContent = '关闭推送';
   }else{
@@ -2866,7 +2887,7 @@ async function clearPushPlus(){
 
 async function updatePPBadge(){
   const token = await getPushPlusToken();
-  $('ppStatus').textContent = token ? '✅ 已绑定' : '未绑定';
+  $('ppStatus').textContent = token ? '已绑定' : '未绑定';
 }
 
 /* ==================== 语音 ==================== */
@@ -3306,7 +3327,7 @@ function applyTheme(){
   const dark = themeDark && !document.body.classList.contains('care');
   document.body.classList.toggle('dark', dark);
   const btn = $('btnTheme');
-  if(btn) btn.textContent = themeDark ? '☀️' : '🌙';
+  if(btn) btn.innerHTML = themeDark ? ic('ic-sun') : ic('ic-moon');
 }
 function toggleTheme(){
   themeDark = !themeDark;
@@ -3315,62 +3336,10 @@ function toggleTheme(){
   toast(themeDark ? '已切换到深色模式' : '已切换到浅色模式');
 }
 
-/* 家属端卡片 Spotlight 跟随光斑 */
-function initSpotlight(){
-  if(!window.matchMedia('(hover:hover)').matches) return;
-  document.querySelectorAll('#view-family .card').forEach(c=>{
-    c.addEventListener('pointermove', e=>{
-      const r = c.getBoundingClientRect();
-      c.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-      c.style.setProperty('--my', (e.clientY - r.top) + 'px');
-    });
-  });
-}
-
-/* 黑暗模式卡片边缘高光：指针跟踪边缘接近度与角度（BorderGlow 移植） */
-function initEdgeGlow(){
-  if(!window.matchMedia('(hover:hover)').matches) return;
-  document.addEventListener('pointermove', e=>{
-    const card = e.target && e.target.closest ? e.target.closest('.card') : null;
-    if(!card) return;
-    const r = card.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    const cx = r.width / 2, cy = r.height / 2;
-    const dx = x - cx, dy = y - cy;
-    const kx = dx !== 0 ? cx / Math.abs(dx) : Infinity;
-    const ky = dy !== 0 ? cy / Math.abs(dy) : Infinity;
-    const edge = Math.min(Math.max(1 / Math.min(kx, ky), 0), 1);
-    let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
-    if(angle < 0) angle += 360;
-    card.style.setProperty('--edge-proximity', (edge * 100).toFixed(3));
-    card.style.setProperty('--cursor-angle', angle.toFixed(3) + 'deg');
-  }, {passive:true});
-  document.addEventListener('pointerout', e=>{
-    const card = e.target && e.target.closest ? e.target.closest('.card') : null;
-    if(!card) return;
-    const related = e.relatedTarget;
-    if(related && card.contains(related)) return;
-    card.style.setProperty('--edge-proximity', '0');
-  }, {passive:true});
-}
-
-/* 顶部液态玻璃导航：鼠标跟随光斑 + 滚动加深（国防之盾同款） */
+/* 顶部液态玻璃导航：滚动加深 */
 function initGlassNav(){
   const nav = $('navbar');
   if(!nav) return;
-  if(window.matchMedia('(hover:hover)').matches){
-    let raf = null;
-    nav.addEventListener('mousemove', e=>{
-      if(raf) return;
-      raf = requestAnimationFrame(()=>{
-        raf = null;
-        const r = nav.getBoundingClientRect();
-        if(!r.width || !r.height) return;
-        nav.style.setProperty('--lg-mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
-        nav.style.setProperty('--lg-my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
-      });
-    });
-  }
   window.addEventListener('scroll', ()=>{
     nav.classList.toggle('scrolled', window.scrollY > 80);
   }, {passive:true});
@@ -3855,7 +3824,7 @@ async function afterLogin(){
 function updateUserUI(){
   if(currentUser){
     $('welcomeMsg').textContent = '您好，' + currentUser;
-    $('homeHi').textContent = '您好，' + currentUser + ' 👋';
+    $('homeHi').textContent = '您好，' + currentUser;
     $('btnLogin').textContent = '切换账号';
   } else {
     $('welcomeMsg').textContent = '您好，请先登录';
@@ -3881,7 +3850,7 @@ function updateFamilyView(){
   if(tileDs) tileDs.textContent = elder
     ? '让家人随时看到我的健康动态'
     : '查看老人的自查 · 用药 · 就医动态';
-  if(tileIc) tileIc.textContent = elder ? '👨‍👩‍👧' : '📋';
+  if(tileIc) tileIc.innerHTML = elder ? ic('ic-users') : ic('ic-clipboard');
 }
 
 /* ==================== 症状自查 ==================== */
@@ -3892,7 +3861,7 @@ function renderSyms(){
     const sel = selectedSyms.has(s.id);
     b.className = 'sym-chip' + (sel ? ' on' : '');
     // 与 bodyPartClick 的步骤2症状按钮视觉一致：选中时前置 ✓
-    b.innerHTML = (sel ? '<span style="margin-right:2px;">✓</span>' : '') + s.icon + ' ' + s.name;
+    b.innerHTML = (sel ? '<span style="margin-right:2px;">✓</span>' : '') + ei(s.icon) + ' ' + s.name;
     b.onclick = () => {
       if(selectedSyms.has(s.id)) selectedSyms.delete(s.id);
       else selectedSyms.add(s.id);
@@ -3955,32 +3924,32 @@ function analyzeSym(){
     '<p class="sub">根据「' + chosen.map(s=>s.name).join('、') + '」判断</p>' +
     '<div class="center" style="margin:8px 0;"><span class="badge big ' + maxU + '">' + uLabel[maxU] + '</span></div>' +
     '<p style="font-weight:700;margin:10px 0;">' + URGENT_TIP[maxU] + '</p></div>';
-  html += '<div class="card"><h2>🏥 建议前往科室</h2>' +
+  html += '<div class="card"><h2>'+ic('ic-hospital')+' 建议前往科室</h2>' +
     '<div style="font-size:26px;font-weight:800;color:var(--primary);margin:6px 0;">' + mainDept + '</div>' +
     (altDepts.length ? '<p class="sub">若挂不上号，也可选择：' + altDepts.join('、') + '</p>' : '') +
-    (notes.length ? '<div class="divider"></div>' + notes.map(n=>'<p class="sub">⚠️ ' + n + '</p>').join('') : '') +
+    (notes.length ? '<div class="divider"></div>' + notes.map(n=>'<p class="sub">'+ic('ic-alert')+' ' + n + '</p>').join('') : '') +
     '<p class="hint">以上仅为就诊科室建议，具体诊断请以医生判断为准。</p></div>';
   html += '<div class="card"><h2>您选择的症状</h2><div class="rows">';
   chosen.forEach(s=>{
-    const ul = {red:'🔴 紧急', yellow:'🟡 尽快', green:'🟢 观察'}[s.u];
+    const ul = {red:'紧急', yellow:'尽快', green:'观察'}[s.u];
     // 步骤3高亮样式：和步骤2 chip 的渐变选中态视觉呼应，按紧急度给左侧色条 + 背景色
     const barColor = {red:'linear-gradient(180deg,#ef4444,#dc2626)', yellow:'linear-gradient(180deg,#f59e0b,#d97706)', green:'linear-gradient(180deg,#10b981,#059669)'}[s.u];
     const bgColor  = {red:'rgba(239,68,68,0.07)',   yellow:'rgba(245,158,11,0.08)',        green:'rgba(16,185,129,0.07)'}[s.u];
     const txtColor = {red:'#b91c1c', yellow:'#92400e', green:'#047857'}[s.u];
     html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:6px 0;border-radius:12px;border:1px solid var(--border);background:'+bgColor+';">'
       + '<div style="width:5px;border-radius:4px;align-self:stretch;background:'+barColor+';margin-top:2px;"></div>'
-      + '<div style="flex:1;"><div style="font-weight:700;color:'+txtColor+';">✓ ' + s.icon + ' ' + s.name + '　' + ul + '</div>'
+      + '<div style="flex:1;"><div style="font-weight:700;color:'+txtColor+';">✓ ' + ei(s.icon) + ' ' + s.name + '　' + ul + '</div>'
       + '<div class="hint" style="margin-top:2px;">对应科室：' + s.d.join(' / ') + '</div></div></div>';
   });
   html += '</div></div>';
   html += '<div class="gap6" style="margin-top:6px;">' +
-    '<button class="btn block" onclick="go(\'flow\')">👉 下一步：看就医流程</button>' +
-    '<button class="btn block ghost" onclick="go(\'hospital\')">🏥 按科室找附近医院</button></div>';
+    '<button class="btn block" onclick="go(\'flow\')">下一步：看就医流程</button>' +
+    '<button class="btn block ghost" onclick="go(\'hospital\')">'+ic('ic-hospital')+' 按科室找附近医院</button></div>';
   $('symResult').innerHTML = html;
   // 记录事件
   addEvent('自查', '自查了症状「' + chosen.map(s=>s.name).join('、') + '」，判断：' + uLabel[maxU] + '，建议科室：' + mainDept);
   // 语音
-  autoSpeak('根据您的症状，整体判断为' + uLabel[maxU] + '。建议前往' + mainDept + '就诊。' + URGENT_TIP[maxU].replace(/🆘|⏰|😊/g,''));
+  autoSpeak('根据您的症状，整体判断为' + uLabel[maxU] + '。建议前往' + mainDept + '就诊。' + URGENT_TIP[maxU].replace(/<[^>]+>/g,''));
   $('symResult').scrollIntoView({behavior:'smooth'});
 }
 
@@ -4074,7 +4043,7 @@ async function calibrateTime(){
       badge.style.background = '#fff3d6';
       badge.style.color = '#9a6a00';
     }else{
-      badge.textContent = '⚠️ 本机时差过大（偏差' + (offsetSec>=0?'+':'') + offsetSec + '秒）';
+      badge.textContent = '本机时差过大（偏差' + (offsetSec>=0?'+':'') + offsetSec + '秒）';
       badge.style.background = '#fde8e8';
       badge.style.color = '#c53030';
     }
@@ -4219,9 +4188,9 @@ async function renderMeds(){
     const t = document.createElement('div');
     t.className = 't';
     t.style.cssText = 'flex:1;min-width:0;word-break:normal;overflow-wrap:anywhere;';
-    t.innerHTML = '<div class="nm">💊 ' + m.name + '</div>' +
+    t.innerHTML = '<div class="nm">'+ic('ic-pill')+' ' + m.name + '</div>' +
       '<div class="tm">' + (m.dose||'') + ' · ' + freqLabel[m.freq] + '</div>' +
-      (drug ? '<div class="tm" style="color:var(--primary-deep);">💡 ' + drug.advice + '</div>' : '');
+      (drug ? '<div class="tm" style="color:var(--primary-deep);">'+ic('ic-bulb')+' ' + drug.advice + '</div>' : '');
     const delBtn = document.createElement('button');
     delBtn.className = 'btn sm line';
     delBtn.textContent = '删除';
@@ -4258,17 +4227,17 @@ async function renderMeds(){
       }
       const tmTxt = displayHHMM(log);
       if(status === 'taken'){
-        badgeHtml = '<span class="badge green" style="margin-left:4px;">✅ 已服用' + (tmTxt ? '（'+tmTxt+'）':'') + '</span>';
+        badgeHtml = '<span class="badge green" style="margin-left:4px;">'+ic('ic-check')+' 已服用' + (tmTxt ? '（'+tmTxt+'）':'') + '</span>';
       } else if(status === 'late_taken'){
-        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fb923c;color:#fff;">⚠️ 已补用' + (tmTxt ? '（'+tmTxt+'，晚'+Math.round((log && log.late_minutes)||0)+'分钟）':'') + '</span>';
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fb923c;color:#fff;">'+ic('ic-alert')+' 已补用' + (tmTxt ? '（'+tmTxt+'，晚'+Math.round((log && log.late_minutes)||0)+'分钟）':'') + '</span>';
       } else if(status === 'skipped'){
-        badgeHtml = '<span class="badge" style="margin-left:4px;background:#ef4444;color:#fff;">❌ 今日已跳过（漏服）</span>';
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#ef4444;color:#fff;">'+ic('ic-x')+' 今日已跳过（漏服）</span>';
       } else if(diffMin >= 10){
-        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fde68a;color:#92400e;">⏰ 已过 ' + Math.floor(diffMin) + ' 分钟</span>';
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#fde68a;color:#92400e;">'+ic('ic-clock')+' 已过 ' + Math.floor(diffMin) + ' 分钟</span>';
       } else if(diffMin >= 0){
-        badgeHtml = '<span class="badge" style="margin-left:4px;background:#bfdbfe;color:#1e3a8a;">🔔 提醒时间到</span>';
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#bfdbfe;color:#1e3a8a;">'+ic('ic-bell')+' 提醒时间到</span>';
       } else {
-        badgeHtml = '<span class="badge" style="margin-left:4px;background:#e0e7ff;color:#3730a3;">🕐 还有 ' + Math.ceil(-diffMin) + ' 分钟</span>';
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#e0e7ff;color:#3730a3;">'+ic('ic-clock')+' 还有 ' + Math.ceil(-diffMin) + ' 分钟</span>';
       }
       const pillLine = document.createElement('div');
       pillLine.style.cssText = 'display:flex;align-items:center;gap:4px;flex-wrap:wrap;';
@@ -4278,7 +4247,7 @@ async function renderMeds(){
       // ====== 修复 2：按钮点没反应 —— 彻底不用 HTML onclick 字符串传参（引号/转义坑），改用 data-attr + 全局 body.click 委托 ======
       if(!status && diffMin >= -0){
         const isLate = diffMin >= 10;
-        const takeLabel = isLate ? '💡 已补用' : '✅ 已服用';
+        const takeLabel = isLate ? '已补用' : '已服用';
         const takeBg = isLate ? 'background:#fb923c;' : 'background:#22c55e;';
         const takeStatus = isLate ? 'late_taken' : 'taken';
         const btnRow = document.createElement('div');
@@ -4294,7 +4263,7 @@ async function renderMeds(){
         const btnSkip = document.createElement('button');
         btnSkip.className = 'btn sm line';
         btnSkip.style.cssText = 'border-color:#ef4444;color:#ef4444;';
-        btnSkip.textContent = '↪️ 跳过今天';
+        btnSkip.textContent = '跳过今天';
         btnSkip.dataset.medAction = 'skipped';
         btnSkip.dataset.medId = String(m.id);
         btnSkip.dataset.date = todayStr;
@@ -4390,11 +4359,11 @@ function showDrugAdvice(drug){
   if(!el) return;
   if(!drug){ el.innerHTML = ''; return; }
   el.innerHTML = '<div class="advice-box">' +
-    '<div class="av-t">💡 AI 建议 · ' + drug.name +
+    '<div class="av-t">'+ic('ic-bulb')+' AI 建议 · ' + drug.name +
       ' <span class="badge green" style="font-size:12px;vertical-align:middle;">' + drug.cat + '</span></div>' +
-    '<div>🕐 <b>服用建议：</b>' + drug.advice + '</div>' +
-    '<div>⚠️ <b>注意事项：</b>' + drug.caution + '</div>' +
-    '<div>🚫 <b>相互作用：</b>' + drug.inter + '</div>' +
+    '<div>'+ic('ic-clock')+' <b>服用建议：</b>' + drug.advice + '</div>' +
+    '<div>'+ic('ic-alert')+' <b>注意事项：</b>' + drug.caution + '</div>' +
+    '<div>'+ic('ic-x')+' <b>相互作用：</b>' + drug.inter + '</div>' +
     '<div class="hint" style="margin-top:6px;">数据来源：' + DRUG_META.source + '。仅供参考。</div></div>';
   autoSpeak('检测到' + drug.name + '。' + drug.advice + ' ' + drug.caution);
 }
@@ -4422,9 +4391,9 @@ async function showAllAdvice(){
     unique.forEach(d=>{
       html += '<div class="advice-box"><div class="av-t">' + d.name +
         ' <span class="badge green" style="font-size:12px;vertical-align:middle;">' + d.cat + '</span></div>' +
-        '<div>🕐 <b>服用建议：</b>' + d.advice + '</div>' +
-        '<div>⚠️ <b>注意事项：</b>' + d.caution + '</div>' +
-        '<div>🚫 <b>相互作用：</b>' + d.inter + '</div></div>';
+        '<div>'+ic('ic-clock')+' <b>服用建议：</b>' + d.advice + '</div>' +
+        '<div>'+ic('ic-alert')+' <b>注意事项：</b>' + d.caution + '</div>' +
+        '<div>'+ic('ic-x')+' <b>相互作用：</b>' + d.inter + '</div></div>';
     });
     // 相互作用检测
     const tips = [];
@@ -4437,7 +4406,7 @@ async function showAllAdvice(){
       }
     }
     if(tips.length){
-      html += '<div class="advice-box" style="border-color:var(--danger);background:#fdecec;"><div class="av-t" style="color:var(--danger);">🚨 相互作用提醒</div>' +
+      html += '<div class="advice-box" style="border-color:var(--danger);background:#fdecec;"><div class="av-t" style="color:var(--danger);">'+ic('ic-alert')+' 相互作用提醒</div>' +
         tips.map(t=>'<div>• '+t+'</div>').join('') + '</div>';
     }
   }
@@ -4479,11 +4448,11 @@ function renderDrugLib(){
     return;
   }
   el.innerHTML = '<p class="hint">共找到 <b>' + list.length + '</b> 种药品</p>' + list.map(d=>
-    '<div class="advice-box"><div class="av-t">💊 ' + d.name +
+    '<div class="advice-box"><div class="av-t">'+ic('ic-pill')+' ' + d.name +
     ' <span class="badge green" style="font-size:12px;vertical-align:middle;">' + d.cat + '</span></div>' +
-    '<div>🕐 <b>服用建议：</b>' + d.advice + '</div>' +
-    '<div>⚠️ <b>注意事项：</b>' + d.caution + '</div>' +
-    '<div>🚫 <b>相互作用：</b>' + d.inter + '</div></div>'
+    '<div>'+ic('ic-clock')+' <b>服用建议：</b>' + d.advice + '</div>' +
+    '<div>'+ic('ic-alert')+' <b>注意事项：</b>' + d.caution + '</div>' +
+    '<div>'+ic('ic-x')+' <b>相互作用：</b>' + d.inter + '</div></div>'
   ).join('');
 }
 function voiceDrugSearch(){
@@ -4586,7 +4555,7 @@ function showMedAlertUI(titleMsg, hintMsg, onClose){
   wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);';
   const box = document.createElement('div');
   box.style.cssText = 'min-width:320px;max-width:92vw;background:#fff;border:2px solid #ef4444;border-radius:18px;padding:22px 24px;box-shadow:0 22px 60px rgba(239,68,68,.35);color:#111;';
-  box.innerHTML = '<div style="font-size:20px;font-weight:800;color:#ef4444;margin-bottom:10px;">🔔 用药提醒</div>' +
+  box.innerHTML = '<div style="font-size:20px;font-weight:800;color:#ef4444;margin-bottom:10px;">'+ic('ic-bell')+' 用药提醒</div>' +
     '<div style="font-size:16px;line-height:1.55;font-weight:700;">' + esc(titleMsg||'') + '</div>' +
     (hintMsg ? ('<div style="margin-top:10px;color:#ef4444;font-weight:700;font-size:15px;line-height:1.55;">' + esc(hintMsg) + '</div>') : '') +
     '<div style="margin-top:18px;display:flex;gap:10px;justify-content:flex-end;"><button class="btn sm" id="__medAlertClose__">我知道了</button></div>';
@@ -5117,11 +5086,11 @@ function renderBoundList(){
   if(!list) return;
   list.innerHTML = '';
   if(familyBinds.length === 0){
-    title.textContent = '🔗 绑定老人';
+    title.textContent = '绑定老人';
     desc.textContent = '输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。支持绑定多位老人。';
     return;
   }
-  title.textContent = '👨‍👩‍👧 已绑定 ' + familyBinds.length + ' 位老人';
+  title.textContent = '已绑定 ' + familyBinds.length + ' 位老人';
   desc.textContent = '点击老人卡片可查看其健康动态。支持绑定多位老人，可随时添加或解除。';
   familyBinds.forEach((code, idx) => {
     const card = document.createElement('div');
@@ -5129,7 +5098,7 @@ function renderBoundList(){
     card.className = 'med-item' + (isActive ? ' elder-sel' : '');
     card.style.position = 'relative';
     card.innerHTML = '<div style="display:flex;align-items:center;gap:12px;">' +
-      '<div style="font-size:24px;">👴</div>' +
+      '<div style="font-size:24px;">'+ic('ic-user')+'</div>' +
       '<div style="flex:1;cursor:pointer;" onclick="selectElder(\'' + code + '\')">' +
       '<div style="font-weight:700;font-size:15px;" id="elderName_' + idx + '">加载中...</div>' +
       '<div class="hint">邀请码：<span style="font-family:ui-monospace,monospace;font-weight:700;">' + code + '</span></div>' +
@@ -5387,7 +5356,7 @@ async function renderChronicSummary(elderCode){
     if(profOk){
       const profs = await profRes.json();
       if(profs && profs.length){ profCount = profs.length;
-        html += '<p class="sub" style="margin-bottom:6px;">👤 老人慢病档案（'+ profCount +'项）</p><div class="gap6" style="margin-bottom:8px;">';
+        html += '<p class="sub" style="margin-bottom:6px;">'+ic('ic-user')+' 老人慢病档案（'+ profCount +'项）</p><div class="gap6" style="margin-bottom:8px;">';
         profs.forEach(p => {
           html += '<div class="med-item" style="padding:10px 14px;"><div style="flex:1;">'
             + '<b style="font-size:16px;color:var(--primary-deep);">' + (DISEASE_LABELS[p.disease_type] || p.disease_type) + '</b>'
@@ -5396,10 +5365,10 @@ async function renderChronicSummary(elderCode){
         });
         html += '</div><div class="divider"></div>';
       } else {
-        html += '<p class="hint">👤 老人暂未创建慢病档案（可在老人端 → 慢病管理 → 新建档案中创建）。</p>';
+        html += '<p class="hint">'+ic('ic-user')+' 老人暂未创建慢病档案（可在老人端 → 慢病管理 → 新建档案中创建）。</p>';
       }
     } else {
-      html += '<p class="hint">👤 慢病档案读取失败（HTTP ' + (profRes?profRes.status:'?') + '，可能 RLS 未开启）</p>';
+      html += '<p class="hint">'+ic('ic-user')+' 慢病档案读取失败（HTTP ' + (profRes?profRes.status:'?') + '，可能 RLS 未开启）</p>';
     }
     let rows = [];
     if(metricOk){ rows = await metricRes.json(); metricCount = rows.length; }
@@ -5431,7 +5400,7 @@ async function renderChronicSummary(elderCode){
       const alerts = await alertRes.json();
       alerts && alerts.length && (alertCount = alerts.length);
       if(alerts && alerts.length){
-        html += '<div class="divider"></div><p class="sub" style="margin-bottom:4px;">🔔 未读预警（' + alerts.length + '）</p>';
+        html += '<div class="divider"></div><p class="sub" style="margin-bottom:4px;">'+ic('ic-bell')+' 未读预警（' + alerts.length + '）</p>';
         alerts.forEach(a => {
           const color = a.alert_level === 'critical' ? '#ef4444' : (a.alert_level === 'warning' ? '#eab308' : '#3b82f6');
           html += '<div class="med-item" style="border-left:3px solid ' + color + ';"><div style="font-weight:700;color:' + color + ';">' + (a.title || '预警') + '</div><div>' + (a.message || '') + '</div>'
@@ -5622,7 +5591,7 @@ async function renderChronicList(){
 
   let statusHTML = '';
   if(!mine.length){
-    statusHTML = `<div class="chronic-status prompt"><span class="cs-ic">👆</span><span>请在下方<strong>选择疾病类型</strong>，创建您的第一个慢病档案。</span></div>`;
+    statusHTML = `<div class="chronic-status prompt"><span class="cs-ic">${ic('ic-clipboard')}</span><span>请在下方<strong>选择疾病类型</strong>，创建您的第一个慢病档案。</span></div>`;
     listEl.innerHTML = '<p class="hint">暂无慢病档案。</p>';
     hideChronicCards();
     statusEl.innerHTML = statusHTML;
@@ -5631,11 +5600,11 @@ async function renderChronicList(){
 
   const sel = mine.find(c => c.id === selectedChronicId);
   if(!sel){
-    statusHTML = `<div class="chronic-status prompt"><span class="cs-ic">👆</span><span>请<strong>点击下方档案</strong>选择要管理的慢病，之后才能录入和查看数据。</span></div>`;
+    statusHTML = `<div class="chronic-status prompt"><span class="cs-ic">${ic('ic-clipboard')}</span><span>请<strong>点击下方档案</strong>选择要管理的慢病，之后才能录入和查看数据。</span></div>`;
     hideChronicCards();
   } else {
     const label = DISEASE_LABELS[sel.disease_type] || sel.disease_type;
-    statusHTML = `<div class="chronic-status active"><span class="cs-ic">✅</span><span>当前管理：<span class="cs-name">${label}</span></span>${sel.diagnose_date ? `<span class="hint">确诊 ${sel.diagnose_date}</span>` : ''}<span class="hint">录入指标、查看趋势都属于这个档案</span></div>`;
+    statusHTML = `<div class="chronic-status active"><span class="cs-ic">${ic('ic-check')}</span><span>当前管理：<span class="cs-name">${label}</span></span>${sel.diagnose_date ? `<span class="hint">确诊 ${sel.diagnose_date}</span>` : ''}<span class="hint">录入指标、查看趋势都属于这个档案</span></div>`;
   }
   statusEl.innerHTML = statusHTML;
 
@@ -5692,7 +5661,7 @@ function hideChronicCards(){
   const emptyEl = $('chronicChartEmpty');
   if(emptyEl){
     emptyEl.style.display = 'flex';
-    emptyEl.innerHTML = '📊 请先在上方<b>创建或选择慢病档案</b>（点"档案列表"里的任意一条），之后才能查看近7/30/90天的指标趋势。';
+    emptyEl.innerHTML = ic('ic-chart')+' 请先在上方<b>创建或选择慢病档案</b>（点"档案列表"里的任意一条），之后才能查看近7/30/90天的指标趋势。';
   }
   try{ _destroyChronicChart(); }catch(e){}
 }
@@ -5737,7 +5706,7 @@ function onMetricTypeChange(){
     const ph = { fasting:'空腹血糖 mmol/L', postprandial:'餐后血糖 mmol/L', heart_rate:'心率 次/分', weight:'体重 kg' }[type] || '数值';
     area.innerHTML = '<div style="display:flex;gap:8px;align-items:center;">'
       + '<input class="inp" id="m_v1" type="number" step="0.1" placeholder="' + ph + '" style="width:160px;" inputmode="decimal">'
-      + '<button class="btn line" onclick="voiceToInput(\'m_v1\')" title="语音输入">🎤</button>'
+      + '<button class="btn line" onclick="voiceToInput(\'m_v1\')" title="语音输入"><svg class="icn"><use href="#ic-mic"/></svg></button>'
       + '</div>';
   }
 }
@@ -6158,8 +6127,8 @@ async function renderCompliance(targetUser, statsId, calId){
     if(!hasMeds && !myLogs.length){
       sEl.innerHTML =
         '<div style="padding:14px;border:2px dashed var(--border);border-radius:12px;background:var(--surface-2);">' +
-          '<div style="font-size:18px;font-weight:700;margin-bottom:6px;">📊 用药依从性 0%</div>' +
-          '<p class="hint" style="margin:0;">暂未添加用药，请先在"用药提醒"添加药品，到点后点击「✅ 已服用」即可开始统计近 30 天依从率、补服/漏服情况与日历热力图。</p>' +
+          '<div style="font-size:18px;font-weight:700;margin-bottom:6px;">'+ic('ic-chart')+' 用药依从性 0%</div>' +
+          '<p class="hint" style="margin:0;">暂未添加用药，请先在"用药提醒"添加药品，到点后点击「已服用」即可开始统计近 30 天依从率、补服/漏服情况与日历热力图。</p>' +
         '</div>';
       cEl.innerHTML = '<p class="hint" style="margin-top:8px;">（日历暂无数据，服药后将自动显示每日颜色）</p>';
       return;
@@ -6176,11 +6145,11 @@ async function renderCompliance(targetUser, statsId, calId){
         '<div style="font-size:32px;font-weight:700;color:' + (rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + rate + '%</div>' +
         '<div class="hint">近30天用药依从率<br>已服 ' + served + ' / 应服 ' + (myLogs.length || 0) + ' 次</div>' +
       '</div>' +
-      (myLogs.length === 0 ? '<div class="hint" style="margin-top:6px;color:var(--primary-deep);">📝 暂无服药记录，到点后点击「已服用」即可开始统计。</div>' : '') +
+      (myLogs.length === 0 ? '<div class="hint" style="margin-top:6px;color:var(--primary-deep);">'+ic('ic-pencil')+' 暂无服药记录，到点后点击「已服用」即可开始统计。</div>' : '') +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">' +
-        '<span class="badge green">✅ 按时 ' + onTime + '</span>' +
-        '<span class="badge" style="background:#fb923c;color:#fff;">⚠️ 补服 ' + late + '</span>' +
-        '<span class="badge" style="background:#ef4444;color:#fff;">❌ 漏服 ' + skip + '</span>' +
+        '<span class="badge green">'+ic('ic-check')+' 按时 ' + onTime + '</span>' +
+        '<span class="badge" style="background:#fb923c;color:#fff;">'+ic('ic-alert')+' 补服 ' + late + '</span>' +
+        '<span class="badge" style="background:#ef4444;color:#fff;">'+ic('ic-x')+' 漏服 ' + skip + '</span>' +
       '</div>' +
     '</div>';
     // ====== 日历 30 天格子：日期计算 & scheduled_date 匹配统一走北京时间（防止 UTC→本地差 1 天导致"26 号格子对 25 号数据"）======
@@ -6188,7 +6157,7 @@ async function renderCompliance(targetUser, statsId, calId){
     const days = [];
     for(let i = 29; i >= 0; i--){
       const d = new Date(now.getTime() - i * 86400000);
-      // 🔴 关键：ds 必须是北京时间 YYYY-MM-DD，因为 markMedTaken 存 scheduled_date 用的是 beijingYMD
+      // 关键：ds 必须是北京时间 YYYY-MM-DD，因为 markMedTaken 存 scheduled_date 用的是 beijingYMD
       const ds = beijingYMD(d);
       const dayLogs = myLogs.filter(l => String(l.scheduled_date).slice(0,10) === ds);
       const dayTotal = dayLogs.length;
@@ -6234,7 +6203,7 @@ async function renderCompliance(targetUser, statsId, calId){
     try{
       const sEl = document.getElementById(statsId || 'complianceStats');
       const cEl = document.getElementById(calId   || 'complianceCalendar');
-      if(sEl) sEl.innerHTML = '<p class="hint" style="color:#ef4444;">⚠️ 依从性渲染异常：' + String(err && err.message || err) + '<br>请刷新页面重试。</p>';
+      if(sEl) sEl.innerHTML = '<p class="hint" style="color:#ef4444;">'+ic('ic-alert')+' 依从性渲染异常：' + String(err && err.message || err) + '<br>请刷新页面重试。</p>';
       if(cEl) cEl.innerHTML = '';
     }catch(e){}
   }
@@ -6322,13 +6291,13 @@ async function markMedTaken(medId, date, timeSlot, status){
   }
   // --- 操作反馈 toast + 重绘界面（按钮状态立刻更新 + 依从性重新计算） ---
   if(status === 'taken'){
-    toast('✅ 已记录服药');
+    toast('已记录服药');
     addEvent('用药依从性', '按时服药：时间段 ' + date + ' ' + timeSlot);
   } else if(status === 'late_taken'){
-    toast('⚠️ 已补服（晚' + lateMin + '分钟）');
+    toast('已补服（晚' + lateMin + '分钟）');
     addEvent('用药依从性', '补服：晚' + lateMin + '分钟，时间段 ' + date + ' ' + timeSlot);
   } else {
-    toast('❌ 已记录今日跳过（计入漏服）');
+    toast('已记录今日跳过（计入漏服）');
     addEvent('用药依从性', '跳过（漏服）：时间段 ' + date + ' ' + timeSlot);
   }
   // ====== 核心修复：必须 AWAIT renderMeds/renderCompliance，确保委托端 await markMedTaken 后 DOM 已经稳定 ======
@@ -6348,9 +6317,9 @@ async function markMedTaken(medId, date, timeSlot, status){
       targetChip.querySelectorAll('.med-inline-toast').forEach(n => n.remove());
       const localToast = document.createElement('div');
       localToast.className = 'med-inline-toast' + (status === 'skipped' ? ' skip' : '');
-      if(status === 'taken') localToast.textContent = '✅ 已记录按时服药，依从率会同步更新';
-      else if(status === 'late_taken') localToast.textContent = '⚠️ 已记录补服，稍后请按医嘱时间准时服药';
-      else localToast.textContent = '❌ 已记录今日跳过（漏服），下次请记得服药';
+      if(status === 'taken') localToast.textContent = '已记录按时服药，依从率会同步更新';
+      else if(status === 'late_taken') localToast.textContent = '已记录补服，稍后请按医嘱时间准时服药';
+      else localToast.textContent = '已记录今日跳过（漏服），下次请记得服药';
       targetChip.appendChild(localToast);
       setTimeout(()=>{ try{ localToast.style.transition='opacity .4s'; localToast.style.opacity='0'; setTimeout(()=>{ try{ localToast.remove(); }catch(_){} }, 450); }catch(_){} }, 4200);
     }
@@ -6409,7 +6378,7 @@ async function renderFollowups(){
     const label = DISEASE_LABELS[f.disease_type] || f.disease_type;
     return '<div class="med-item" style="' + (isSoon ? 'border-color:#ef4444;' : '') + '">'
       + '<div style="flex:1;">'
-      + '<div style="font-weight:700;">🏥 ' + f.next_visit_date + ' ' + (f.department || '') + '</div>'
+      + '<div style="font-weight:700;">'+ic('ic-hospital')+' ' + f.next_visit_date + ' ' + (f.department || '') + '</div>'
       + '<div class="hint">' + label + (f.hospital ? ' · ' + f.hospital : '') + '</div>'
       + '</div>'
       + '<button class="btn sm line" onclick="completeFollowup(' + f.id + ')">已完成</button>'
@@ -6463,8 +6432,6 @@ async function init(){
   renderDrugCats();
   renderDrugLib();
   initChannel();
-  initSpotlight();
-  initEdgeGlow();
   initGlassNav();
   initPush();
   try{
