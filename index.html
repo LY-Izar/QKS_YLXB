@@ -8000,13 +8000,13 @@ async function adminAnnSendEmail(){
       body: a.body || '',
       level: a.level || 'normal',
       ts: a.ts || Date.now(),
+      caller: currentUser || '',
     };
     let resp;
     if(cloudUsable()){
-      const at = await _sbAuthToken();
       resp = await fetch(EDGE_FN_BROADCAST, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + at },
+        headers: { 'Content-Type':'application/json' },
         body: JSON.stringify(payload),
       });
     } else {
