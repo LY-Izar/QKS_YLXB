@@ -936,6 +936,12 @@
   .ann-card .ann-body{color:var(--ink-2);margin:6px 0 10px;white-space:pre-wrap;}
   .ann-card .ann-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .ann-card .ann-date{font-size:12px;color:var(--muted);}
+  /* 通知方式卡片（用药提醒） */
+  .notify-opt{display:flex;align-items:flex-start;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;cursor:pointer;user-select:none;}
+  .notify-opt > input[type=checkbox]{width:18px;height:18px;margin-top:3px;flex:0 0 auto;}
+  .notify-opt:has(input:disabled){opacity:0.85;cursor:default;}
+  .notify-opt .btn{flex:0 0 auto;}
+  body.care .notify-opt{padding:16px 18px;}
 </style>
 </head>
 <body>
@@ -1000,6 +1006,8 @@
   <symbol id="ic-close" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></g></symbol>
   <symbol id="ic-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4 H14 L18 8 V14 L13 19 V14 L7 18 V9 Z"/></g></symbol>
   <symbol id="ic-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L10.5 18 L19 7"/></g></symbol>
+  <symbol id="ic-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16 V11 A6 6 0 0 1 18 11 V16 L20 18 H4 L6 16 Z"/><path d="M10 21 A2 2 0 0 0 14 21"/></g></symbol>
+  <symbol id="ic-mail" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7 L12 14 L21 7"/></g></symbol>
 </svg>
 
 <!-- 液态玻璃 SVG 滤镜定义（不可见） -->
@@ -1237,18 +1245,78 @@
 
   <!-- 管理端：编辑公告弹窗 -->
   <div class="modal" id="admAnnModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;padding:20px;">
-    <div class="card" style="width:100%;max-width:500px;">
+    <div class="card" style="width:100%;max-width:560px;">
       <h2 id="admAnnTitle"><svg class="icn"><use href="#ic-ann"/></svg> 新建公告</h2>
       <label class="lbl" style="margin-top:6px;">标题</label>
-      <input class="inp" id="admAnnHead" maxlength="40" placeholder="例如：系统升级通知">
+      <input class="inp" id="admAnnHead" maxlength="60" placeholder="例如：系统升级通知 / 紧急停服公告">
       <label class="lbl" style="margin-top:8px;">正文</label>
-      <textarea class="inp" id="admAnnBody" rows="4" maxlength="400" placeholder="正文内容，最多 400 字（将在顶部滚动显示）"></textarea>
+      <textarea class="inp" id="admAnnBody" rows="5" maxlength="800" placeholder="正文内容（顶部滚动条展示 + 站内弹窗 + 邮件正文）"></textarea>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div>
+          <label class="lbl" style="margin-top:0;">公告等级</label>
+          <select class="inp" id="admAnnLevel">
+            <option value="normal">普通（滚动条展示）</option>
+            <option value="important">重要（优先置顶 + 加粗）</option>
+            <option value="urgent">紧急（用户登录时弹出强提醒弹窗）</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl" style="margin-top:0;">弹窗方式</label>
+          <select class="inp" id="admAnnPopup">
+            <option value="never">不强制弹窗</option>
+            <option value="once">每人弹窗一次（记住已关闭）</option>
+            <option value="session">每会话弹窗一次</option>
+            <option value="always">每次访问都弹窗（慎用）</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div>
+          <label class="lbl" style="margin-top:0;">生效时间（可选，北京时间）</label>
+          <input class="inp" id="admAnnFrom" type="datetime-local">
+        </div>
+        <div>
+          <label class="lbl" style="margin-top:0;">失效时间（可选，北京时间）</label>
+          <input class="inp" id="admAnnTo" type="datetime-local">
+        </div>
+      </div>
+
       <label class="chkbox" style="margin-top:8px;">
-        <input type="checkbox" id="admAnnPin"> <span>置顶显示（优先级最高）</span>
+        <input type="checkbox" id="admAnnPin"> <span>置顶显示（优先级最高，与等级无关）</span>
       </label>
-      <div class="gap6" style="margin-top:10px;">
-        <button class="btn block" onclick="adminSubmitAnn()"><svg class="icn"><use href="#ic-check"/></svg> 保存</button>
+
+      <div id="admAnnEmailBox" style="margin-top:12px;border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 14px;background:var(--surface-2);">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <svg class="icn"><use href="#ic-mail"/></svg>
+          <div style="flex:1 1 auto;font-size:14px;color:var(--ink-2);">
+            <div style="font-weight:700;color:var(--ink);" id="admAnnEmailStat">尚未向注册邮箱推送</div>
+            <div id="admAnnEmailMeta" class="sub" style="margin-top:2px;">点击右侧「发送邮件」按钮，将通过 Resend 向全部已注册邮箱发送本公告（邮件标题=公告标题，正文=公告正文）。</div>
+          </div>
+          <button class="btn sm warn" id="admAnnEmailBtn" onclick="adminAnnSendEmail()" style="background:var(--danger);color:#fff;border-color:var(--danger);">📧 发送邮件</button>
+        </div>
+      </div>
+
+      <div class="gap6" style="margin-top:12px;">
+        <button class="btn block" onclick="adminSubmitAnn()"><svg class="icn"><use href="#ic-check"/></svg> 保存公告</button>
         <button class="btn block ghost" onclick="adminCloseAnn()"><svg class="icn"><use href="#ic-close"/></svg> 取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 公告强提醒弹窗（用户端） -->
+  <div class="modal" id="annPopup" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;align-items:center;justify-content:center;padding:20px;">
+    <div class="card ann-popup-card" style="width:100%;max-width:480px;border:2px solid var(--danger);box-shadow:0 16px 40px rgba(200,0,0,0.25);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <svg class="icn" style="width:28px;height:28px;color:var(--danger);" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9 V13"/><circle cx="12" cy="17" r="0.8" fill="currentColor"/><path d="M10.29 3.86 1.82 18 A2 2 0 0 0 3.56 21 H20.44 A2 2 0 0 0 22.18 18 L13.71 3.86 A2 2 0 0 0 10.29 3.86 Z"/></g></svg>
+        <h2 id="annPopupTitle" style="margin:0;flex:1 1 auto;color:var(--danger);">紧急公告</h2>
+        <button class="btn line sm" onclick="closeAnnPopup()" aria-label="关闭"><svg class="icn"><use href="#ic-close"/></svg></button>
+      </div>
+      <div id="annPopupBody" style="white-space:pre-wrap;color:var(--ink-2);font-size:15px;line-height:1.7;max-height:55vh;overflow:auto;padding-right:6px;"></div>
+      <div id="annPopupFoot" style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span id="annPopupDate" class="ann-date"></span>
+        <button class="btn block" style="max-width:220px;" onclick="closeAnnPopup()">我已阅读并知悉</button>
       </div>
     </div>
   </div>
@@ -1306,13 +1374,37 @@
     <div class="card" style="margin-bottom:12px;">
       <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
-    <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-      <span class="badge" id="timeOffsetBadge" style="background:#e6f4ea;color:#1a7a3a;">时间校准中…</span>
-      <span id="beijingTime" style="font-size:20px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums;">--:--:--</span>
-      <label style="margin-left:auto;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
-        <input type="checkbox" id="emailRemindToggle" onchange="toggleEmailRemind(this.checked)">
-        邮箱提醒
-      </label>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span class="badge" id="timeOffsetBadge" style="background:#e6f4ea;color:#1a7a3a;">时间校准中…</span>
+        <span id="beijingTime" style="font-size:20px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums;">--:--:--</span>
+      </div>
+      <div class="divider" style="margin:2px 0;"></div>
+      <h3 style="font-size:15px;margin:0;color:var(--ink-2);display:flex;align-items:center;gap:6px;">
+        <svg class="icn"><use href="#ic-bell"/></svg> 通知方式
+      </h3>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+        <label class="notify-opt">
+          <input type="checkbox" checked disabled title="默认启用：页面内语音+网页通知">
+          <div style="flex:1 1 auto;">
+            <div style="font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px;"><svg class="icn"><use href="#ic-bell"/></svg> 语音 + 网页通知 <span class="adm-badge admin" style="font-size:11px;">默认</span></div>
+            <div class="sub" style="margin-top:2px;">页面停留时播放语音；开启系统通知可在后台弹提醒。</div>
+          </div>
+        </label>
+        <label class="notify-opt" id="emailNotifyWrap">
+          <input type="checkbox" id="emailRemindToggle" onchange="toggleEmailRemind(this.checked)">
+          <div style="flex:1 1 auto;">
+            <div style="font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px;">
+              <svg class="icn"><use href="#ic-ann"/></svg> 邮件提醒
+              <span id="emailStateBadge" class="adm-badge test" style="font-size:11px;background:var(--surface-2);color:var(--muted);">未绑定邮箱</span>
+            </div>
+            <div class="sub" style="margin-top:2px;" id="emailNotifyText">
+              请先在「账户管理」中绑定邮箱。
+            </div>
+          </div>
+          <button class="btn line sm" id="emailBindShortcut" onclick="go('account')">去绑定</button>
+        </label>
+      </div>
     </div>
     <div class="card">
       <h2>＋ 添加用药</h2>
@@ -3990,6 +4082,8 @@ async function doLogin(){
   }
   toast('登录成功，欢迎回来');
   closeAuth(); await afterLogin();
+  // 登录后：重弹当前生效的 urgent/弹窗型公告
+  try{ enqueueAnnPopups(); }catch(e){}
 }
 async function quickUse(){
   currentUser = null;
@@ -4641,6 +4735,37 @@ async function addMed(){
 }
 async function renderMeds(){
   if(!DB.db){ $('medList').innerHTML = ''; return; }
+  // 刷新通知方式状态（邮箱状态徽章 / 绑定邮箱链接文字）
+  try{
+    const sb = $('emailStateBadge'), stxt = $('emailNotifyText'), scut = $('emailBindShortcut'), tg = $('emailRemindToggle');
+    if(currentUser && DB.db){
+      const rec = await DB.get('users', currentUser);
+      const email = rec && rec.email ? String(rec.email) : '';
+      if(sb){
+        if(email){
+          sb.textContent = email.length>20 ? (email.slice(0,10)+'…'+email.slice(-8)) : email;
+          sb.style.background='var(--primary-soft)'; sb.style.color='var(--primary-deep)';
+        } else {
+          sb.textContent='未绑定邮箱';
+          sb.style.background='var(--surface-2)'; sb.style.color='var(--muted)';
+        }
+      }
+      if(stxt){
+        stxt.textContent = email
+          ? '已开启后，将在用药时间点向该邮箱发送提醒（由后台定时任务驱动）。'
+          : '请先在「账户管理」中绑定邮箱，方可开启邮件提醒。';
+      }
+      if(scut) scut.textContent = email ? '前往修改' : '去绑定';
+      if(tg){
+        tg.checked = !!(rec && rec.emailRemind);
+        if(!email){ tg.checked = false; tg.disabled = true; } else { tg.disabled = !currentUser; }
+      }
+    } else {
+      if(sb){ sb.textContent='未登录'; sb.style.background='var(--surface-2)'; sb.style.color='var(--muted)'; }
+      if(stxt) stxt.textContent='登录后可用邮箱提醒。';
+      if(tg) tg.disabled = true;
+    }
+  }catch(e){}
   // ====== [异步并发保护] 每次发起渲染 → 拿一个 token；写 DOM 前若 token 过时则作废 ======
   //        防止"账号 A 发起的异步渲染"在账号 B 登录后才 resolve，把旧数据写进 B 的页面
   const myToken = bumpRenderToken('renderMeds start');
@@ -7206,9 +7331,10 @@ async function adminDeleteUser(id){
   }catch(e){ toast('删除失败：' + (e.message || '未知错误')); }
 }
 
-/* ============== 管理端：系统公告（localStorage 全局） ============== */
-const ADM_ANN_KEY = 'adm_announcements_v1';
-const ADM_ANN_HIDE = 'adm_ann_hide_day';
+/* ============== 管理端：系统公告（localStorage 全局 v2，升级：level/popup/时段/邮件发送） ============== */
+const ADM_ANN_KEY = 'adm_announcements_v2';
+const ADM_ANN_SEEN = 'adm_ann_popup_seen_v2';        // 已关闭「每人一次」的公告 id 集合
+const ADM_ANN_SESS_SEEN = 'adm_ann_popup_sess_v2';   // 本会话内已弹窗
 function annGetAll(){
   try{
     const raw = localStorage.getItem(ADM_ANN_KEY);
@@ -7219,32 +7345,83 @@ function annGetAll(){
 function annSaveAll(arr){
   localStorage.setItem(ADM_ANN_KEY, JSON.stringify(Array.isArray(arr)?arr:[]));
 }
+function annLevelTag(v){
+  if(v === 'urgent') return {label:'紧急', cls:'tag-pin'};
+  if(v === 'important') return {label:'重要', cls:'tag-important'};
+  return {label:'', cls:''};
+}
+function annPopupLabel(v){
+  switch(v){
+    case 'once': return '每人弹窗一次';
+    case 'session': return '每会话弹窗';
+    case 'always': return '每次访问弹窗';
+    default: return '不弹窗';
+  }
+}
 function annSort(arr){
+  const lv = {urgent:3, important:2, normal:1};
   return arr.slice().sort((a,b)=>{
     if(!!b.pin - !!a.pin) return (!!b.pin) - (!!a.pin);
+    if((lv[b.level||'normal']||0) - (lv[a.level||'normal']||0)) return (lv[b.level||'normal']||0) - (lv[a.level||'normal']||0);
     return (b.ts||0) - (a.ts||0);
   });
+}
+// 对「当前时间」是否处于 [active_from, active_to] 区间（北京时间）
+function annIsActive(a, now){
+  now = now || nowBeijing();
+  if(a.active_from){ const f = new Date(a.active_from); if(!isNaN(+f) && now < f) return false; }
+  if(a.active_to){   const t = new Date(a.active_to);   if(!isNaN(+t) && now > t) return false; }
+  return true;
+}
+function annGetActive(list, now){
+  list = list || annGetAll();
+  return annSort(list).filter(a => annIsActive(a, now));
+}
+function _fmtDTLocal(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(+d)) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
 function adminRenderAnnouncements(){
   const root = $('adminAnnList');
   if(!root) return;
   const list = annSort(annGetAll());
   if(list.length === 0){
-    root.innerHTML = '<div class="sub" style="color:var(--muted);padding:16px;border-radius:var(--radius-lg);background:var(--surface-2);">暂无公告</div>';
+    root.innerHTML = '<div class="sub" style="color:var(--muted);padding:16px;border-radius:var(--radius-lg);background:var(--surface-2);">暂无公告。点击「新建公告」发布第一条 →</div>';
     return;
   }
+  const now = nowBeijing();
   root.innerHTML = list.map(a => {
     const id = a.id;
+    const lv = annLevelTag(a.level);
+    const lvTag = lv.label ? `<span class="${lv.cls}" style="${lv.label==='重要' ? 'background:#ffecb3;color:#6b5400;font-size:12px;padding:2px 8px;border-radius:999px;font-weight:700;' : ''}">${lv.label}</span>` : '';
     const pinTag = a.pin ? '<span class="tag-pin">置顶</span>' : '';
+    const popupTag = (a.popup && a.popup !== 'never') ? `<span class="adm-badge" style="background:#d6ecff;color:#0b5cad;font-size:12px;padding:2px 8px;border-radius:999px;font-weight:700;">${annPopupLabel(a.popup)}</span>` : '';
+    const active = annIsActive(a, now);
+    const activeTag = active
+      ? '<span class="adm-badge admin" style="font-size:12px;padding:2px 8px;border-radius:999px;">生效中</span>'
+      : '<span class="adm-badge test" style="font-size:12px;padding:2px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);">未到/已过期</span>';
+    const range = (a.active_from || a.active_to)
+      ? ('时段：' + (a.active_from ? new Date(a.active_from).toLocaleString('zh-CN') : '  起  ') + ' → ' + (a.active_to ? new Date(a.active_to).toLocaleString('zh-CN') : '  止  '))
+      : '';
+    const emailStat = a.email_sent
+      ? `<div class="sub" style="color:#1a7a3a;font-size:12px;margin-top:4px;">✓ 已发邮件：${new Date(a.email_sent_ts).toLocaleString('zh-CN')}，成功 ${a.email_count||0} / 失败 ${a.email_fail||0}</div>`
+      : '<div class="sub" style="color:var(--muted);font-size:12px;margin-top:4px;">📧 未发送邮件</div>';
     const date = a.ts ? new Date(a.ts).toLocaleString('zh-CN') : '';
     return '<div class="ann-card' + (a.pin?' pin':'') + '">'
       + '<div class="ann-head"><svg class="icn"><use href="#ic-ann"/></svg> '
-      + (a.title || '(无标题)') + pinTag + '</div>'
+      + (a.title || '(无标题)')
+      + ' ' + lvTag + pinTag + activeTag + popupTag + '</div>'
       + '<div class="ann-body">' + (a.body||'').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s])) + '</div>'
+      + (range ? '<div class="sub" style="font-size:12px;color:var(--muted);margin-bottom:6px;">⏰ ' + range + '</div>' : '')
+      + emailStat
       + '<div class="ann-foot"><span class="ann-date">' + date + '</span>'
       + '<div class="gap6">'
       + (a.pin ? '<button class="btn line sm" onclick="adminTogglePinAnn(\''+id+'\')">取消置顶</button>'
               : '<button class="btn line sm" onclick="adminTogglePinAnn(\''+id+'\')">置顶</button>')
+      + '<button class="btn line sm" onclick="adminAnnEmailFromList(\''+id+'\')" title="用 Edge Function 向所有注册邮箱推送本公告"><svg class="icn"><use href="#ic-mail"/></svg> 发邮件</button>'
       + '<button class="btn line sm" onclick="adminEditAnn(\''+id+'\')"><svg class="icn"><use href="#ic-gear"/></svg> 编辑</button>'
       + '<button class="btn warn sm" style="background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteAnn(\''+id+'\')"><svg class="icn"><use href="#ic-trash"/></svg> 删除</button>'
       + '</div></div></div>';
@@ -7252,9 +7429,25 @@ function adminRenderAnnouncements(){
 }
 function adminNewAnnouncement(){ ADM_STATE.annEditId = null; adminOpenAnnEditor(null); }
 function adminEditAnn(id){ ADM_STATE.annEditId = id; adminOpenAnnEditor(id); }
+function adminAnnEmailFromList(id){ ADM_STATE.annEditId = id; adminOpenAnnEditor(id); }
+function _refreshAnnEmailBox(a){
+  const stat = $('admAnnEmailStat'), meta = $('admAnnEmailMeta');
+  if(!a || !stat) return;
+  if(a.email_sent){
+    stat.textContent = `✓ 已发邮件（成功 ${a.email_count||0} / 失败 ${a.email_fail||0}）`;
+    stat.style.color = '#1a7a3a';
+    meta.textContent = '发送时间：' + new Date(a.email_sent_ts).toLocaleString('zh-CN') + '。若需要重新向新注册用户补发，可再次点击「发送邮件」（将忽略已有邮箱，只发给新增邮箱）。';
+  } else {
+    stat.textContent = '尚未向注册邮箱推送';
+    stat.style.color = '';
+    meta.textContent = '点击右侧「发送邮件」按钮，将通过 Edge Function (Resend) 向所有已注册且邮箱非空的用户发送本公告。建议先保存公告，再点击发送。';
+  }
+}
 function adminOpenAnnEditor(id){
   const m = $('admAnnModal'), t = $('admAnnTitle'),
-        h = $('admAnnHead'), b = $('admAnnBody'), p = $('admAnnPin');
+        h = $('admAnnHead'), b = $('admAnnBody'), p = $('admAnnPin'),
+        lv = $('admAnnLevel'), pop = $('admAnnPopup'),
+        fm = $('admAnnFrom'), to = $('admAnnTo');
   if(!m) return;
   if(id){
     const a = annGetAll().find(x => x.id === id);
@@ -7262,11 +7455,21 @@ function adminOpenAnnEditor(id){
     if(h) h.value = a ? a.title || '' : '';
     if(b) b.value = a ? a.body  || '' : '';
     if(p) p.checked = a ? !!a.pin : false;
+    if(lv) lv.value = a && a.level ? a.level : 'normal';
+    if(pop) pop.value = a && a.popup ? a.popup : ((a && a.level==='urgent') ? 'once' : 'never');
+    if(fm) fm.value = a ? _fmtDTLocal(a.active_from) : '';
+    if(to) to.value = a ? _fmtDTLocal(a.active_to) : '';
+    _refreshAnnEmailBox(a);
   } else {
     t.textContent = '新建公告';
     if(h) h.value = '';
     if(b) b.value = '';
     if(p) p.checked = false;
+    if(lv) lv.value = 'normal';
+    if(pop) pop.value = 'never';
+    if(fm) fm.value = '';
+    if(to) to.value = '';
+    _refreshAnnEmailBox({});
   }
   m.classList.remove('hidden');
   m.style.display = 'flex';
@@ -7280,15 +7483,26 @@ function adminSubmitAnn(){
   const h = ($('admAnnHead')||{}).value || '';
   const b = ($('admAnnBody')||{}).value || '';
   const p = ($('admAnnPin')||{}).checked;
+  const lv = ($('admAnnLevel')||{}).value || 'normal';
+  const pop = ($('admAnnPopup')||{}).value || 'never';
+  const fm = ($('admAnnFrom')||{}).value || '';
+  const to = ($('admAnnTo')||{}).value || '';
   if(!h.trim() && !b.trim()){ toast('请填写标题或正文'); return; }
+  if(fm && to && new Date(fm) > new Date(to)){ toast('生效时间不得晚于失效时间'); return; }
   const now = Date.now();
+  const patch = {
+    title: h.trim() || '公告', body: b, pin: !!p,
+    level: lv, popup: pop,
+    active_from: fm ? new Date(fm).toISOString() : null,
+    active_to:   to ? new Date(to).toISOString() : null,
+    ts: now,
+  };
   const list = annGetAll();
   if(ADM_STATE.annEditId){
     const idx = list.findIndex(x => x.id === ADM_STATE.annEditId);
-    if(idx >= 0){ list[idx] = Object.assign({}, list[idx], {title:h.trim(), body:b, pin:!!p, ts:now}); }
+    if(idx >= 0){ list[idx] = Object.assign({}, list[idx], patch); }
   } else {
-    list.push({ id: 'a' + now + '_' + Math.random().toString(36).slice(2,6),
-                title: h.trim() || '公告', body: b, pin: !!p, ts: now });
+    list.push(Object.assign({ id: 'a' + now + '_' + Math.random().toString(36).slice(2,6) }, patch, { email_sent:false, email_sent_ts:null, email_count:0, email_fail:0 }));
   }
   annSaveAll(list);
   adminCloseAnn();
@@ -7304,7 +7518,7 @@ function adminTogglePinAnn(id){
   renderSiteAnnBar();
 }
 function adminDeleteAnn(id){
-  if(!confirm('确认删除这条公告？')) return;
+  if(!confirm('确认删除这条公告？（已发邮件无法撤销）')) return;
   annSaveAll(annGetAll().filter(x => x.id !== id));
   adminRenderAnnouncements();
   renderSiteAnnBar();
@@ -7312,11 +7526,144 @@ function adminDeleteAnn(id){
 }
 function adminPreviewAnnouncements(){
   renderSiteAnnBar(true);
-  toast('已刷新顶部公告条（滚动显示）');
+  toast('已刷新顶部公告条（仅显示当前时段内生效的公告）');
+}
+// 发邮件：调用 Edge Function broadcast_announcement
+const EDGE_FN_BROADCAST = (window.SUPABASE_URL || 'https://hjryfgujkxuaxovftlai.supabase.co') + '/functions/v1/broadcast_announcement';
+async function adminAnnSendEmail(){
+  if(!isAdmin){ toast('仅管理员可发送全站邮件'); return; }
+  if(!ADM_STATE.annEditId){ toast('请先保存公告再发送邮件'); return; }
+  const list = annGetAll();
+  const idx = list.findIndex(x => x.id === ADM_STATE.annEditId);
+  if(idx < 0){ toast('未找到对应公告'); return; }
+  const a = list[idx];
+  if(!(a.title||'').trim() && !(a.body||'').trim()){ toast('公告标题或正文不能为空'); return; }
+  const btn = $('admAnnEmailBtn');
+  if(btn){ btn.disabled = true; const old=btn.textContent; btn.textContent='发送中…'; try{
+    const payload = {
+      announcement_id: a.id,
+      title: a.title || '医路相伴·公告',
+      body: a.body || '',
+      level: a.level || 'normal',
+      ts: a.ts || Date.now(),
+    };
+    let resp;
+    if(cloudUsable()){
+      const at = await _sbAuthToken();
+      resp = await fetch(EDGE_FN_BROADCAST, {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + at },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      resp = { ok:false };
+    }
+    if(!resp || !resp.ok){
+      // 兜底：若 Edge Function 未部署/返回失败，通过 admin_get_email_list 本地直连不可行，明确提示
+      let hint = '';
+      try{ const t = resp ? await resp.text().catch(()=>'') : ''; hint = t && t.length<300 ? ('；响应：'+t) : ''; }catch(e){}
+      toast('❌ 发送失败：请先部署 Edge Function `broadcast_announcement`' + hint, 5000);
+      return;
+    }
+    const data = await resp.json().catch(()=>({}));
+    list[idx] = Object.assign({}, a, {
+      email_sent: true,
+      email_sent_ts: Date.now(),
+      email_count: (data.ok_count || data.sent || data.successCount || 0),
+      email_fail: (data.fail_count || data.failed || data.errorCount || 0),
+    });
+    annSaveAll(list);
+    _refreshAnnEmailBox(list[idx]);
+    adminRenderAnnouncements();
+    toast(`✓ 邮件已发起：成功 ${list[idx].email_count}，失败 ${list[idx].email_fail}`);
+  }catch(e){ toast('❌ 发送失败：' + (e && e.message ? e.message : e)); } finally { if(btn){ btn.disabled = false; btn.textContent = '📧 发送邮件'; } } }
+  else { try{ await _adminAnnSendEmailInner(a, list, idx); }catch(e){ toast('❌ '+e.message); } }
+}
+// 用户端：弹窗队列（首访时弹出 urgent 级 或 设了 popup!=never 的当前生效公告，按优先级依次）
+let _ANN_QUEUE = [];
+let _ANN_CUR = null;
+function annGetSeen(){
+  try{ const r = JSON.parse(localStorage.getItem(ADM_ANN_SEEN)||'{}'); return r && typeof r==='object' ? r : {}; }catch(e){ return {}; }
+}
+function annMarkSeen(id){ const r = annGetSeen(); r[id] = Date.now(); localStorage.setItem(ADM_ANN_SEEN, JSON.stringify(r)); }
+function annGetSessSeen(){
+  if(!window.sessionStorage) return {};
+  try{ const r = JSON.parse(sessionStorage.getItem(ADM_ANN_SESS_SEEN)||'{}'); return r && typeof r==='object' ? r : {}; }catch(e){ return {}; }
+}
+function annMarkSessSeen(id){
+  if(!window.sessionStorage) return;
+  const r = annGetSessSeen(); r[id] = Date.now();
+  sessionStorage.setItem(ADM_ANN_SESS_SEEN, JSON.stringify(r));
+}
+function annShouldPopup(a){
+  if(!annIsActive(a)) return false;
+  const mode = a.popup;
+  if(mode === 'never' && a.level !== 'urgent') return false;
+  if(mode === 'always') return true;
+  const seen = annGetSeen(); if(mode === 'once' && seen[a.id]) return false;
+  const sess = annGetSessSeen(); if((mode === 'session' || (!mode && a.level==='urgent')) && sess[a.id]) return false;
+  if(!mode || mode === 'never'){ // 仅 urgent 默认「每会话一次」
+    if(a.level === 'urgent') return !sess[a.id];
+    return false;
+  }
+  return true;
+}
+function enqueueAnnPopups(){
+  const arr = annGetActive();
+  _ANN_QUEUE = arr.filter(annShouldPopup);
+  if(_ANN_QUEUE.length && !_ANN_CUR) setTimeout(popupNextAnnouncement, 300);
+}
+function popupNextAnnouncement(){
+  if(!_ANN_QUEUE.length){ _ANN_CUR = null; return; }
+  const a = _ANN_QUEUE.shift();
+  _ANN_CUR = a;
+  const root = $('annPopup'); if(!root) return;
+  $('annPopupTitle').textContent = a.title || (a.level==='urgent' ? '紧急公告' : '公告');
+  $('annPopupBody').textContent = a.body || '';
+  $('annPopupDate').textContent = (a.ts ? (new Date(a.ts).toLocaleString('zh-CN') + ' · ') : '') + (a.level==='urgent' ? '紧急公告' : (a.level==='important' ? '重要公告' : '系统公告'));
+  const card = root.querySelector('.ann-popup-card');
+  if(card){
+    if(a.level === 'urgent'){ card.style.borderColor='var(--danger)'; card.style.boxShadow='0 16px 40px rgba(200,0,0,0.25)'; }
+    else if(a.level === 'important'){ card.style.borderColor='#d4a200'; card.style.boxShadow='0 16px 40px rgba(212,162,0,0.2)'; }
+    else { card.style.borderColor='var(--primary)'; card.style.boxShadow='0 16px 40px rgba(15,157,143,0.2)'; }
+  }
+  root.style.display='flex'; root.classList.remove('hidden');
+  // 记录会话级已看（如果是 once 模式则等用户点关闭再写 localStorage）
+  annMarkSessSeen(a.id);
+}
+function closeAnnPopup(){
+  if(_ANN_CUR){
+    const a = _ANN_CUR;
+    if(a.popup === 'once' || a.level === 'urgent') annMarkSeen(a.id);
+  }
+  const root = $('annPopup'); if(root){ root.style.display='none'; root.classList.add('hidden'); }
+  _ANN_CUR = null;
+  if(_ANN_QUEUE.length) setTimeout(popupNextAnnouncement, 200);
 }
 
 /* ============== 顶部公告条：全站渲染（有公告才出现） ============== */
 let _annTimer = null;
+const ADM_ANN_HIDE = 'adm_ann_hide_day';
+// 兼容 v1 → v2 迁移（把旧公告平移到新 key，新字段补齐默认值）
+(function annMigrateV1(){
+  try{
+    if(!localStorage) return;
+    if(localStorage.getItem('adm_announcements_v2')) return;
+    const rawOld = localStorage.getItem('adm_announcements_v1');
+    if(!rawOld) return;
+    const arrOld = JSON.parse(rawOld);
+    if(!Array.isArray(arrOld) || !arrOld.length) return;
+    const mapped = arrOld.map(a => Object.assign({
+      id: a.id || ('mig_' + Date.now() + '_' + Math.random().toString(36).slice(2,5)),
+      title: a.title || '', body: a.body || '', pin: !!a.pin, ts: a.ts || Date.now(),
+      level: a.pin ? 'important' : 'normal', popup: 'never',
+      active_from: null, active_to: null,
+      email_sent: false, email_sent_ts: null, email_count: 0, email_fail: 0,
+    }));
+    localStorage.setItem('adm_announcements_v2', JSON.stringify(mapped));
+    localStorage.removeItem('adm_announcements_v1');
+  }catch(e){}
+})();
 function hideSiteAnnBar(){
   const bar = $('siteAnnBar');
   if(bar) bar.style.display = 'none';
@@ -7326,21 +7673,34 @@ function hideSiteAnnBar(){
 function renderSiteAnnBar(forceShow){
   const bar = $('siteAnnBar'), track = $('siteAnnTrack');
   if(!bar || !track) return;
-  const list = annSort(annGetAll());
+  const list = annGetActive(); // 只取当前时段内生效
   if(list.length === 0){ bar.style.display = 'none'; track.innerHTML = ''; return; }
   const todayKey = beijingYMD(new Date());
   const hiddenKey = (()=>{ try{ return localStorage.getItem(ADM_ANN_HIDE) || ''; }catch(e){ return ''; }})();
-  if(!forceShow && hiddenKey === todayKey){ bar.style.display = 'none'; return; }
+  // 紧急公告或置顶公告：不允许用户"今日不再提示"关闭
+  const hasForce = list.some(x => x.level==='urgent' || x.pin);
+  if(!forceShow && !hasForce && hiddenKey === todayKey){ bar.style.display = 'none'; return; }
   const parts = list.map(a => {
+    const lv = a.level === 'urgent' ? '【紧急】' : (a.level === 'important' ? '【重要】' : '');
     const t = (a.title || '公告').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
     const b = (a.body || '').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
-    const full = t + (b ? '：' + b.replace(/\s+/g,' ') : '');
-    return '<span class="site-ann-item' + (a.pin?' pin':'') + '">' + (a.pin?'【置顶】':'') + full + '</span>';
+    const full = lv + t + (b ? '：' + b.replace(/\s+/g,' ') : '');
+    return '<span class="site-ann-item' + (a.pin?' pin':'') + (a.level==='urgent'?' urgent':'') + '">'
+      + (a.pin?'【置顶】':'') + full + '</span>';
   });
   const one = parts.join('');
-  // 克隆一份实现无缝滚动
   track.innerHTML = '<span class="site-ann-placeholder">' + one + one + '</span>';
   bar.style.display = '';
+  // urgent 级别：让 bar 底色变红
+  if(hasForce && list[0].level === 'urgent'){
+    bar.style.background = 'linear-gradient(90deg,#b71c1c,#e53935,#b71c1c)';
+    bar.style.color = '#fff';
+  } else if (hasForce && list[0].level === 'important') {
+    bar.style.background = 'linear-gradient(90deg,#8d6e00,#f9a825,#8d6e00)';
+    bar.style.color = '#fff';
+  } else {
+    bar.style.background = ''; bar.style.color = '';
+  }
 }
 
 /* ==================== 初始化 ==================== */
@@ -7485,6 +7845,8 @@ async function init(){
   // 家属端定时刷新老人动态（每60秒）
   setInterval(()=>{ if(myRole === 'family' && currentViewBind) pullCloudEvents(currentViewBind); }, 60000);
   checkMeds();
+  // 首访/刷新时：触发紧急或弹窗公告
+  try{ enqueueAnnPopups(); }catch(e){}
 }
 document.addEventListener('DOMContentLoaded', init);
 </script>
