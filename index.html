@@ -6914,6 +6914,37 @@ async function init(){
   $('medName').addEventListener('input', e => showDrugAdvice(matchDrug(e.target.value)));
   $('drugSearch').addEventListener('input', renderDrugLib);
   if(currentUser){
+    // 登录态防御：云端已把该用户删除（TRUNCATE / 被管理员清理）时，
+    // 本地 localStorage/IndexedDB 的"幽灵登录态"必须强制清掉，否则自动登录成不存在的账号
+    // 同时：如果云端 is_admin 与本地不一致（数据库重建导致角色漂移），立即同步到本地
+    if(cloudUsable()){
+      try{
+        const chk = await sbFetch('users?limit=1&select=id,is_admin,role,family_code&id=eq.' + encodeURIComponent(currentUser));
+        if(chk.ok){
+          const rows = await chk.json();
+          const real = Array.isArray(rows) ? rows.filter(x => x && typeof x === 'object' && 'id' in x) : [];
+          if(real.length === 0){
+            console.warn('[init] 云端已无用户', currentUser, '，自动退出登录');
+            toast('本地登录态已过期（该账号在云端已不存在），请重新登录');
+            doLogout();
+          } else {
+            const cloudAdmin = !!real[0].is_admin;
+            if(cloudAdmin !== isAdmin){
+              isAdmin = cloudAdmin;
+              localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
+              if(DB.db){
+                const lr = await DB.get('users', currentUser);
+                if(lr){ lr.isAdmin = cloudAdmin; await DB.put('users', lr); }
+              }
+            }
+            if(real[0].role && real[0].role !== myRole) setRole(real[0].role);
+            if(real[0].family_code) myFamilyCode = real[0].family_code;
+          }
+        }
+      }catch(e){ console.warn('[init] 云端用户探针失败（不影响，跳过）:', e); }
+    }
+  }
+  if(currentUser){
     let rec = null;
     try{
       if(DB.db) rec = await DB.get('users', currentUser);
