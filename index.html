@@ -1099,11 +1099,8 @@
   <symbol id="ic-users" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20 A5.5 5.5 0 0 1 14.5 20"/><path d="M14.5 20 A5 5 0 0 1 20.5 20"/><circle cx="16.5" cy="9" r="2.6"/></g></symbol>
   <symbol id="ic-mic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6.5 11 A5.5 5.5 0 0 0 17.5 11"/><line x1="12" y1="18" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></g></symbol>
   <symbol id="ic-camera" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7 L9.5 4.5 H14.5 L16 7"/><circle cx="12" cy="13.5" r="4"/></g></symbol>
-  <symbol id="ic-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L10 17.5 L19 7.5"/></g></symbol>
   <symbol id="ic-x" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></g></symbol>
   <symbol id="ic-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 L22 20 H2 Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none"/></g></symbol>
-  <symbol id="ic-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21 C16 16 18 13 18 10 A6 6 0 0 0 6 10 C6 13 8 16 12 21 Z"/><circle cx="12" cy="10" r="2.5"/></g></symbol>
-  <symbol id="ic-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17 H18 L17 15.5 V11 A5.5 5.5 0 0 0 6.5 11 V15.5 Z"/><path d="M10 19 A2 2 0 0 0 14 19"/></g></symbol>
   <symbol id="ic-chat" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5 H21 V16 H11 L6 20 V16 H3 Z"/></g></symbol>
   <symbol id="ic-bulb" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 18 h5 l1 -2 a6 6 0 1 0 -7 0 z"/><line x1="10" y1="21" x2="14" y2="21"/></g></symbol>
   <symbol id="ic-clock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="12" x2="16" y2="13.5"/></g></symbol>
@@ -1443,7 +1440,7 @@
             <div style="font-weight:700;color:var(--ink);" id="admAnnEmailStat">尚未向注册邮箱推送</div>
             <div id="admAnnEmailMeta" class="sub" style="margin-top:2px;">点击右侧「发送邮件」按钮，将通过 Resend 向全部已注册邮箱发送本公告（邮件标题=公告标题，正文=公告正文）。</div>
           </div>
-          <button class="btn sm warn" id="admAnnEmailBtn" onclick="adminAnnSendEmail()" style="background:var(--danger);color:#fff;border-color:var(--danger);">📧 发送邮件</button>
+          <button class="btn sm warn" id="admAnnEmailBtn" onclick="adminAnnSendEmail()" style="background:var(--danger);color:#fff;border-color:var(--danger);"><svg class="icn"><use href="#ic-mail"/></svg> 发送邮件</button>
         </div>
       </div>
 
@@ -3485,7 +3482,7 @@ function speak(text, rate){
         if(speechSynthesis.speaking || speechSynthesis.pending) return;
         let ok2 = false;
         startOne(String(text).slice(0, 60), false,
-          ()=>{ ok2 = true; _setVoiceBadge('ok'); toast('🔊 语音已启动', 1200); },
+          ()=>{ ok2 = true; _setVoiceBadge('ok'); toast('语音已启动', 1200); },
           ()=>{});
         // 看门狗 2：重试仍无反应 → 横幅提示（Q 方案：横幅+红点徽章，替代长 toast）
         setTimeout(()=>{
@@ -3559,7 +3556,7 @@ function _showVoiceBanner(kind, zhCount, localCount){
 }
 
 function stopSpeak(){ try{ speechSynthesis.cancel(); }catch(e){} }
-/* 自动播报门控：仅老人端自动触发语音；家属端只有点击🔊朗读按钮才出声 */
+/* 自动播报门控：仅老人端自动触发语音；家属端只有点击语音朗读按钮才出声 */
 function autoSpeak(text, rate){
   if(myRole !== 'elder') return;
   speak(text, rate);
@@ -4022,7 +4019,7 @@ async function go(view){
   if(view === 'med'){
     try{ await renderMeds(); await renderCompliance(); }catch(e){ console.warn('[go:med] renderMeds/Compliance fail:', e); }
   }
-  // 页面自动播报：老人端全程触发；家属端不自动出声（需点🔊按钮）
+  // 页面自动播报：老人端全程触发；家属端不自动出声（需点语音按钮）
   if(myRole === 'elder' && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
 }
 
@@ -8253,7 +8250,7 @@ async function adminRenderAnnouncements(){
       : '';
     const emailStat = a.email_sent
       ? `<div class="sub" style="color:#1a7a3a;font-size:12px;margin-top:4px;">✓ 已发邮件：${new Date(a.email_sent_ts).toLocaleString('zh-CN')}，成功 ${a.email_count||0} / 失败 ${a.email_fail||0}</div>`
-      : '<div class="sub" style="color:var(--muted);font-size:12px;margin-top:4px;">📧 未发送邮件</div>';
+      : '<div class="sub" style="color:var(--muted);font-size:12px;margin-top:4px;"><svg class="icn" style="width:14px;height:14px;vertical-align:-2px;"><use href="#ic-mail"/></svg> 未发送邮件</div>';
     const date = a.ts ? new Date(a.ts).toLocaleString('zh-CN') : '';
     const esc = s => String(s).replace(/'/g, "\\'");
     return '<div class="ann-card' + (a.pin?' pin':'') + '">'
@@ -8414,7 +8411,7 @@ async function adminAnnSendEmail(){
   if(!(a.title||'').trim() && !(a.body||'').trim()){ toast('公告标题或正文不能为空'); return; }
   const btn = $('admAnnEmailBtn');
   if(!btn) return;
-  btn.disabled = true; btn.textContent='发送中…';
+  btn.disabled = true; btn.innerHTML='发送中…';
   try{
     const payload = {
       announcement_id: a.id,
@@ -8489,7 +8486,7 @@ async function adminAnnSendEmail(){
       toast(`✓ 邮件已发起：成功 ${succ_count}，失败 ${fail_count}`);
     }
   }catch(e){ toast('❌ 发送失败：' + (e && e.message ? e.message : e)); }
-  finally { btn.disabled = false; btn.textContent = '📧 发送邮件'; }
+  finally { btn.disabled = false; btn.innerHTML = '<svg class="icn"><use href="#ic-mail"/></svg> 发送邮件'; }
 }
 // 用户端：弹窗队列（首访时弹出 urgent 级 或 设了 popup!=never 的当前生效公告，按优先级依次）
 let _ANN_QUEUE = [];
