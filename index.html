@@ -4122,8 +4122,12 @@ const AUDIT_EMAIL_TO = '1812139075@qq.com';
 const DEFAULT_SUB_PERMS = Object.freeze({db:false, force_popup:false, pin:false, email_push:false, mmode:false});
 let adminLevel = normalizeAdminLevel(localStorage.getItem('med_admin_level'));
 let subPerms   = parseSubPerms(localStorage.getItem('med_sub_perms'));
-/** 兼容：老数据只有 is_admin=true 的账户回退为 super（15184461098_admin 再硬编码兜底） */
+/** 兼容：老数据只有 is_admin=true 的账户回退为 super（15184461098_admin 再硬编码兜底）。
+ *  —— 新增：如果未登录（currentUser == null/空），一律强制 none，防止登出后 admin_level 本地残留
+ *     导致游客被识别为管理员，维护模式红色 banner + 锁定 welcome 不生效。
+ */
 function normalizeAdminLevel(raw){
+  if(!currentUser) return 'none';
   if(raw === 'super' || raw === 'sub' || raw === 'none') return raw;
   if(isAdmin) return 'super';
   return 'none';
@@ -4152,6 +4156,7 @@ function persistAuthLevel({level, perms}){
 }
 /** 全局统一权限判定：当前账户对 permKey 是否【拥有长期权限（或 super）】（不触发申请，只读） */
 function hasPerm(permKey){
+  if(!currentUser) return false;
   if(currentUser === SUPER_ADMIN_ID || adminLevel === 'super') return true;
   if(adminLevel !== 'sub') return false;
   if(!permKey) return true; // 未指定权限 = 基础操作，sub 默认允许
@@ -4159,6 +4164,7 @@ function hasPerm(permKey){
 }
 /** 当前账户可视作"管理员"（super+sub 都算） */
 function isAnyAdmin(){
+  if(!currentUser) return false;
   return (currentUser === SUPER_ADMIN_ID) || (adminLevel === 'super') || (adminLevel === 'sub');
 }
 
@@ -4884,12 +4890,21 @@ async function doLogout(){
   currentUser = null;
   localStorage.removeItem('med_user');
   localStorage.removeItem('med_is_admin');
+  // —— 维护模式锁定修复：登出必须同步清空管理员分级缓存（否则刷新后 adminLevel='super' 残留，
+  //    未登录态却被识别为管理员，看不到红色 banner 也不会被锁定 welcome）
+  adminLevel = 'none';
+  subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+  localStorage.removeItem('med_admin_level');
+  localStorage.removeItem('med_sub_perms');
   isAdmin = false;
   await resetAppState();
   myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
   setRole('elder');
   go('welcome');
   updateUserUI();
+  // 登出后立刻重算维护 banner + nav + 锁定按钮（防止管理员登出后残留管理员视图）
+  try{ renderMaintenanceBanner(); }catch(_){}
+  try{ refreshNavVisibilityForMaintenance(); }catch(_){}
   toast('已退出登录');
 }
 function updateUserUI(){
@@ -9862,6 +9877,21 @@ async function init(){
             doLogout();
           } else {
             const cloudAdmin = !!real[0].is_admin;
+            // [AH-P1] 云端探针同步 admin_level / sub_perms（防止本地与云端管理员级别漂移）
+            const _lvlFromCloud = (typeof real[0].admin_level === 'string') ? real[0].admin_level
+                                : (cloudAdmin ? 'super' : 'none');
+            const _prmFromCloud = (real[0].sub_perms && typeof real[0].sub_perms === 'object')
+                                  ? real[0].sub_perms : null;
+            const _newLvl = (currentUser === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlFromCloud);
+            const _newPrm = parseSubPerms(_prmFromCloud ? JSON.stringify(_prmFromCloud) : null);
+            if(_newLvl !== adminLevel){
+              adminLevel = _newLvl;
+              localStorage.setItem('med_admin_level', adminLevel);
+            }
+            if(JSON.stringify(_newPrm) !== JSON.stringify(subPerms)){
+              subPerms = _newPrm;
+              localStorage.setItem('med_sub_perms', JSON.stringify(subPerms));
+            }
             // 所有云端字段的本地回填（保持 IndexedDB 与云端同步）
             if(DB.db){
               const lr = await DB.get('users', currentUser);
@@ -9872,6 +9902,10 @@ async function init(){
                   localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
                   lr.isAdmin = cloudAdmin; changed = true;
                 }
+                if(lr.admin_level !== adminLevel){ lr.admin_level = adminLevel; changed = true; }
+                const _prmStr = JSON.stringify(subPerms);
+                const _lrPrmStr = JSON.stringify(lr.sub_perms && typeof lr.sub_perms==='object' ? lr.sub_perms : DEFAULT_SUB_PERMS);
+                if(_prmStr !== _lrPrmStr){ lr.sub_perms = JSON.parse(_prmStr); changed = true; }
                 // 回填 email（云端绑定结果优先）
                 if(Object.prototype.hasOwnProperty.call(real[0], 'email')){
                   const cloudEmail = real[0].email || null;
@@ -10102,6 +10136,7 @@ function applyMaintenance(next, source){
 
 /** 判断当前用户/游客能否在维护模式下继续使用：super + sub 都可以（不管身份） */
 function isAdminDuringMaintenance(){
+  if(!currentUser) return false;
   return (currentUser === SUPER_ADMIN_ID) || (adminLevel === 'super') || (adminLevel === 'sub');
 }
 
@@ -10179,29 +10214,50 @@ if(__govOrigGo){
   };
 }
 
-/** 维护模式下：导航栏隐藏（管理员除外）/显示 */
+/** 维护模式下：导航栏隐藏（管理员除外）/显示；同步 btnQuick 锁定。**
+ *  每次都会刷新 2 个 UI 点，避免"仅 kickback 时才锁、刷新后不生效"。
+ */
 function refreshNavVisibilityForMaintenance(){
   const nav = document.getElementById('navbar');
-  if(!nav) return;
-  if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
-    nav.style.display = 'none';
-  } else {
-    nav.style.display = '';
+  if(nav){
+    if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+      nav.style.display = 'none';
+    } else {
+      nav.style.display = '';
+    }
+  }
+  // —— 维护模式 + 非管理员/游客：禁用「先看看暂不登录」（任何渲染路径都要做，不只是 kickbackForMaintenance）
+  const q = document.getElementById('btnQuick');
+  if(q){
+    const lock = MAINTENANCE.enabled && !isAdminDuringMaintenance();
+    q.disabled = !!lock;
+    q.style.opacity   = lock ? .5 : '';
+    q.style.cursor    = lock ? 'not-allowed' : '';
+    q.style.pointerEvents = lock ? 'none' : '';
   }
 }
 
-/** 顶部维护 banner：非管理员显示红色大条（置顶最紧急）；管理员显示小灰蓝条 */
+/** 顶部维护 banner：非管理员显示红色大条（置顶最紧急）；管理员显示小灰蓝条。
+ *  每次刷新同时调用 refreshNavVisibilityForMaintenance() 保证 btnQuick/navbar 同步。
+ */
 function renderMaintenanceBanner(){
   let bar = document.getElementById('maintenanceBanner');
   if(!MAINTENANCE.enabled){
     if(bar){ bar.remove(); }
+    // 即使 banner 已移除，也要还原 navbar/btnQuick（维护模式关闭后要恢复按钮可用）
+    try{ refreshNavVisibilityForMaintenance(); }catch(_){}
     return;
   }
   const forAdmin = isAdminDuringMaintenance();
   if(!bar){
     bar = document.createElement('div');
     bar.id = 'maintenanceBanner';
-    document.body.insertBefore(bar, document.body.firstChild);
+    // 兼容：某些广告拦截或自定义样式 body.firstChild 可能不是元素
+    if(document.body && document.body.firstChild){
+      document.body.insertBefore(bar, document.body.firstChild);
+    } else if(document.body){
+      document.body.prepend(bar);
+    }
   }
   let msg = MAINTENANCE.message || '网站正在维护，请等待通知。';
   let extra = '';
@@ -10224,6 +10280,8 @@ function renderMaintenanceBanner(){
       + 'padding:10px 14px;font-size:15px;font-weight:800;border-bottom:3px solid #7f1d1d;letter-spacing:.5px;';
     bar.innerHTML = '<div style="max-width:1200px;margin:0 auto;">🔴 最紧急通知：' + _escHTML(msg) + extra + '</div>';
   }
+  // —— 每次 banner 刷新后同步 navbar / 锁定按钮（刷新页面维护模式默认开启也能正确锁死）
+  try{ refreshNavVisibilityForMaintenance(); }catch(_){}
 }
 
 // ---- URL ?admin_approve=<token> / ?admin_reject=<token> 落地：B1 批准/拒绝 ----
@@ -10488,6 +10546,15 @@ if(__origAfterLogin){
 
 // ---- 启动：setupGlobalGovernance：（1）拉一次 app_settings/maintenance （2）挂 Realtime 或 fallback 轮询 （3）处理 URL approve/reject（4）刷新 banner + nav
 async function setupGlobalGovernance(){
+  // —— 维护模式锁定修复②：页面加载/刷新进入时，强制重算一次 adminLevel/subPerms
+  //    防止 localStorage 中残留 med_admin_level='super' 但 med_user 已被清掉（doLogout 竞态），
+  //    导致游客态被误判为管理员，看不到红色 banner 也不会被锁定 welcome。
+  adminLevel = normalizeAdminLevel(localStorage.getItem('med_admin_level'));
+  subPerms   = parseSubPerms(localStorage.getItem('med_sub_perms'));
+  if(!currentUser){
+    isAdmin = false;
+    localStorage.setItem('med_is_admin', '0');
+  }
   // 维护 banner 先初始化（enabled=false 时不会显示）
   try{ renderMaintenanceBanner(); refreshNavVisibilityForMaintenance(); }catch(e){}
 

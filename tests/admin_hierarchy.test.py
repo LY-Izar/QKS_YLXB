@@ -1,4 +1,4 @@
-"""管理员分层 + 维护模式 + 非法字符审查 TDD（AH1-AH13）。
+"""管理员分层 + 维护模式 + 非法字符审查 TDD（AH1-AH15）。
 
 覆盖：
   AH1  super-admin(15184461098_admin) 导航栏可见"管理"，sub-admin 必须选家属角色才显示
@@ -16,6 +16,11 @@
   AH11 全局非法字符过滤器：sanitizeText 对 <script>、反引号、$、|、\\ 转成全角或移除
   AH12 所有保存函数：validateText 命中 DANGER_PATTERNS(union select / -- / drop table) 时返回 ok=false
   AH13 mountGlobalInputGuards 对所有 input/textarea 已自动挂 guard，输入非法字符后 value 被净化
+  AH14 [BUGFIX] 登出 doLogout() 必须清掉 med_admin_level / sub_perms，否则刷新后残留为 admin
+       → 游客状态下 refresh 后 isAdminDuringMaintenance() 必须返回 false
+  AH15 [BUGFIX] 维护模式开启后，游客 welcome 冷启动（refresh 无踢人触发）下：
+       → renderMaintenanceBanner 显示红色 banner（forAdmin=false）
+       → refreshNavVisibilityForMaintenance 使 btnQuick disabled=true，navbar 隐藏
 
 依赖：
   pip install playwright
@@ -198,6 +203,30 @@ def run_tests():
 
         # ---------- AH1: 管理员导航按钮显隐 ----------
         try:
+            # 前置清洗：关维护模式 + 清空所有本地账号状态（避免 AH6~AH15 遗留 MAINTENANCE.enabled=true / 用户缓存，
+            # 否则 #navbar 被维护模式隐藏 → offsetParent=null，误判"navAdmin 不显示"）
+            reload(page)
+            page.evaluate("""(function(){
+              try {
+                // 1) 关维护模式
+                MAINTENANCE = {enabled:false, scheduled:false, start_at:null, end_at:null, message:''};
+                // 2) 移除任何残留 banner
+                const bar = document.getElementById('maintenanceBanner'); if(bar) bar.remove();
+                // 3) 还原 navbar 显示（维护模式关掉后本来应显示，再兜底强制）
+                const nav = document.getElementById('navbar');
+                if(nav) nav.style.display = '';
+                // 4) 清按钮 disabled
+                const q = document.getElementById('btnQuick');
+                if(q){ q.disabled=false; q.style.opacity=''; q.style.cursor=''; q.style.pointerEvents=''; }
+                // 5) 清本地登录态，保证每个 case 纯净
+                ['med_user','med_role','med_is_admin','med_admin_level','med_sub_perms','med_family_code'].forEach(k=>localStorage.removeItem(k));
+                currentUser=null; adminLevel='none'; isAdmin=false; myRole='elder';
+                subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+                if(typeof refreshNavVisibilityForMaintenance==='function') refreshNavVisibilityForMaintenance();
+                if(typeof updateUserUI==='function') updateUserUI();
+              }catch(_){}
+            })();""")
+            page.wait_for_timeout(200)
             # 情况1：游客 → 不显示
             reload(page)
             hidden_guest = page.evaluate("""
@@ -253,7 +282,7 @@ def run_tests():
               try{
                 localStorage.setItem('med_user','sub001');
                 localStorage.setItem('med_role','elder');
-                localStorage.setItem('med_is_admin','true');
+                localStorage.setItem('med_is_admin','1');   /* ⚠️ 代码用 ==='1' 判断 */
                 localStorage.setItem('med_admin_level','sub');
                 localStorage.setItem('med_sub_perms', JSON.stringify({db:false,force_popup:false,pin:false,email_push:false,mmode:false}));
                 try {
@@ -274,12 +303,12 @@ def run_tests():
             # 情况4：sub admin + 家属角色 → 显示
             set_admin_state(page, 'sub001', 'sub', role='family')
             reload(page)
-            show_sub_fam = page.evaluate("""
+            _diag = page.evaluate("""
             (function(){
               try{
                 localStorage.setItem('med_user','sub001');
                 localStorage.setItem('med_role','family');
-                localStorage.setItem('med_is_admin','true');
+                localStorage.setItem('med_is_admin','1');   /* ⚠️ 代码用 ==='1' 判断 */
                 localStorage.setItem('med_admin_level','sub');
                 localStorage.setItem('med_sub_perms', JSON.stringify({db:false,force_popup:false,pin:false,email_push:false,mmode:false}));
                 try {
@@ -289,12 +318,42 @@ def run_tests():
                 if(typeof updateUserUI==='function') updateUserUI();
               }catch(_){}
               const el = document.getElementById('navAdminBtn') || document.getElementById('navAdmin');
-              if(!el) return false;
-              const st = window.getComputedStyle(el);
-              return !(st.display === 'none' || el.offsetParent === null);
+              const diag = {elExists: !!el};
+              if(el){
+                diag.styleDisplay = el.style.display;
+                diag.computedDisplay = window.getComputedStyle(el).display;
+                diag.offsetParentNull = el.offsetParent === null;
+                diag.hiddenAtt = el.hasAttribute('hidden');
+                diag.cls = el.className;
+              }
+              // 再次检查 updateUserUI 关键判断三要素
+              diag.checks = { currentUser: !!window.currentUser, isAnyAdmin: typeof isAnyAdmin==='function' ? isAnyAdmin() : 'fn_missing', isFamily: (myRole==='family') };
+              diag.adminLevel = adminLevel;
+              diag.myRole = myRole;
+              diag.memUser = currentUser;
+              // —— 兼容：前面 reload(page) 触发 setupGlobalGovernance 时可能把维护模式打开，
+              //    此时 currentUser 还没写入 → navbar 被"维护模式+非管理员"隐藏（display:none）。
+              //    现在 user/sub 状态已经就位 → 重新重算 navbar / banner（让 sub admin 能看到自己的 nav）
+              try{
+                if(typeof refreshNavVisibilityForMaintenance==='function') refreshNavVisibilityForMaintenance();
+                if(typeof renderMaintenanceBanner==='function') renderMaintenanceBanner();
+                if(typeof updateUserUI==='function') updateUserUI();
+              }catch(e){ diag.updateErr = (e&&e.message) || String(e); }
+              // 再写一次按钮显示（兜底，即使 navbar 显示了，也要保证 navAdminBtn 自己 display!=none）
+              if(el){
+                el.style.display = (currentUser && isAnyAdmin() && myRole==='family') ? '' : 'none';
+                diag.styleDisplayAfter = el.style.display;
+              }
+              // 看 navbar 的 display 作为隐藏原因
+              const navEl = document.getElementById('navbar');
+              diag.navDisplay = navEl ? navEl.style.display : undefined;
+              diag.navComputed = navEl ? window.getComputedStyle(navEl).display : undefined;
+              diag.shown = el ? !(window.getComputedStyle(el).display==='none' || el.offsetParent===null) : false;
+              return diag;
             })();""")
+            show_sub_fam = bool(_diag.get('shown', False))
             if not show_sub_fam:
-                fail('AH1-4', 'sub admin + 家属角色不显示 navAdmin')
+                fail('AH1-4', 'sub admin + 家属角色不显示 navAdmin. diag=' + json.dumps(_diag, ensure_ascii=False))
             else: ok('AH1-4 sub+family 显示 navAdmin')
         except Exception as e:
             fail('AH1', '异常: ' + traceback.format_exc(limit=1))
@@ -640,6 +699,113 @@ def run_tests():
             else: ok('AH10-4 go() 包装后存在（支持 maintenance 拦截）')
         except Exception as e:
             fail('AH10', '异常: ' + traceback.format_exc(limit=1))
+
+        # ---------- AH14: 登出必须清管理员分级缓存，刷新后游客不再残留 admin ----
+        try:
+            # a) 先伪造已登录 super admin（同步写入内存，否则 doLogout 开头 return）
+            page.evaluate("""
+            (function(){
+              localStorage.setItem('med_user','15184461098_admin');
+              localStorage.setItem('med_role','family');
+              localStorage.setItem('med_is_admin','1');
+              localStorage.setItem('med_admin_level','super');
+              localStorage.setItem('med_sub_perms','{}');
+              try{
+                currentUser='15184461098_admin'; myRole='family'; isAdmin=true; adminLevel='super';
+                subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+                if(typeof updateUserUI==='function') updateUserUI();
+              }catch(_){}
+            })();""")
+            # b) 等待 doLogout 真正 resolve（Playwright evaluate 会 await 返回的 Promise）
+            try:
+                page.evaluate("""(async function(){ return await doLogout(); })();""")
+            except Exception as _lg:
+                # doLogout 内 toast/go 等报错不影响 ls 清理
+                pass
+            # 兜底 poll：最多等 5s 直到 ls 清空
+            page.wait_for_function("""
+            (!localStorage.getItem('med_user')) &&
+            (!localStorage.getItem('med_admin_level')) &&
+            (!localStorage.getItem('med_is_admin') || localStorage.getItem('med_is_admin')!=='1')
+            """, timeout=5000, polling=100)
+            page.wait_for_timeout(200)
+            # c) 检查 localStorage + 内存
+            lvl = page.evaluate("""(function(){
+              return {
+                user: localStorage.getItem('med_user'),
+                lv: localStorage.getItem('med_admin_level'),
+                perms: localStorage.getItem('med_sub_perms'),
+                isadm: localStorage.getItem('med_is_admin'),
+                memUser: currentUser,
+                memLv: adminLevel,
+                memIsAdm: isAdmin,
+                isAdmDuring: isAdminDuringMaintenance(),
+                norm: normalizeAdminLevel('super'),
+              };
+            })();""")
+            if lvl['user']:
+                fail('AH14-1', 'doLogout 后 med_user 仍存在：' + str(lvl['user']))
+            else: ok('AH14-1 doLogout 清除 med_user')
+            if lvl['lv'] not in (None, ''):
+                fail('AH14-2', 'doLogout 后 med_admin_level 残留：' + str(lvl['lv']))
+            else: ok('AH14-2 doLogout 清除 med_admin_level')
+            if lvl['memLv'] != 'none':
+                fail('AH14-3', 'doLogout 后内存 adminLevel 不是 none：' + str(lvl['memLv']))
+            else: ok('AH14-3 doLogout 内存 adminLevel=none')
+            if lvl['isAdmDuring']:
+                fail('AH14-4', 'doLogout 后游客态 isAdminDuringMaintenance()=true，会被误判为管理员')
+            else: ok('AH14-4 游客态 isAdminDuringMaintenance=false')
+            if lvl['norm'] != 'none':
+                fail('AH14-5', '未登录 normalizeAdminLevel(super) 应退化=none，实际=' + str(lvl['norm']))
+            else: ok('AH14-5 normalizeAdminLevel 未登录态退化 none')
+        except Exception as e:
+            fail('AH14', '异常: ' + traceback.format_exc(limit=2))
+
+        # ---------- AH15: 维护模式游客 welcome 冷启动 → 红色 banner + btnQuick disabled + nav hidden
+        try:
+            # a) 确保当前未登录（localStorage 已清）+ 内存 MAINTENANCE.enabled=true
+            page.evaluate("""(function(){
+              currentUser = null; adminLevel='none'; isAdmin=false;
+              localStorage.removeItem('med_user');
+              localStorage.removeItem('med_admin_level');
+              localStorage.removeItem('med_is_admin');
+              subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+              applyMaintenance({enabled:true,message:'站点升级中'}, 'ah15');
+            })();""")
+            page.wait_for_timeout(200)
+            r = page.evaluate("""(function(){
+              const bar = document.getElementById('maintenanceBanner');
+              const q   = document.getElementById('btnQuick');
+              const nav = document.getElementById('navbar');
+              return {
+                forAdmin: bar ? bar.textContent.includes('维护模式已开启') && bar.textContent.includes('管理员可正常使用') : null,
+                // 红色紧急通知使用 🔴 文案（forAdmin=false 时）
+                forUser:  bar ? bar.textContent.includes('最紧急通知') : null,
+                barBg:    bar ? bar.style.backgroundColor : null,
+                qDisabled: q ? q.disabled : null,
+                navDisplay: nav ? nav.style.display : null,
+                memEnabled: MAINTENANCE.enabled,
+              };
+            })();""")
+            if r['forAdmin'] is True:
+                fail('AH15-1', '游客态 banner 错误地显示了管理员蓝灰条内容')
+            else: ok('AH15-1 游客态 banner 未显示管理员文案')
+            if r['forUser'] is not True:
+                fail('AH15-2', '游客态 banner 未显示"最紧急通知"(红色版)，forUser=' + str(r['forUser']))
+            else: ok('AH15-2 游客态 banner 使用红色最紧急通知')
+            # 红色 banner background:#b91c1c
+            if r['barBg'] and 'b91c1c' not in (r['barBg'] or '') and 'rgb(185, 28, 28)' not in (r['barBg'] or ''):
+                fail('AH15-3', '游客态 banner 背景色不是红色(#b91c1c/rgb(185,28,28))：' + str(r['barBg']))
+            else: ok('AH15-3 banner 红色背景')
+            if r['qDisabled'] is not True:
+                fail('AH15-4', 'btnQuick 冷启动未 disabled：' + str(r['qDisabled']))
+            else: ok('AH15-4 先看看暂不登录 已 disabled')
+            # navbar display: 隐藏 = 'none'（注意页面初始化默认如果 display='' 空串也算显示，算失败）
+            if r['navDisplay'] != 'none':
+                fail('AH15-5', '游客+维护中 navbar 仍显示（display=' + str(r['navDisplay']) + '，应=none）')
+            else: ok('AH15-5 navbar 隐藏')
+        except Exception as e:
+            fail('AH15', '异常: ' + traceback.format_exc(limit=1))
 
         # 关闭
         browser.close()
