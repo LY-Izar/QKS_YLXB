@@ -900,9 +900,54 @@
   .cs-ic .icn{color:var(--primary);}
   .sym-chip .icn{width:1.1em;height:1.1em;vertical-align:-0.15em;}
   .btn .icn{width:1.1em;height:1.1em;vertical-align:-0.15em;}
+  /* 管理端表格 */
+  .admin-tbl{width:100%;border-collapse:collapse;font-size:14px;}
+  .admin-tbl th,.admin-tbl td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--divider);vertical-align:middle;}
+  .admin-tbl th{font-weight:700;color:var(--ink-2);background:var(--surface-2);}
+  .admin-tbl td.td-empty{text-align:center;color:var(--muted);padding:24px 0;}
+  .admin-tbl .role-elder{color:#1f9d55;}
+  .admin-tbl .role-family{color:#2f6feb;}
+  .adm-op{display:inline-flex;flex-wrap:wrap;gap:6px;}
+  .adm-op .btn{padding:5px 10px;font-size:13px;}
+  .adm-badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;}
+  .adm-badge.admin{background:var(--primary-soft);color:var(--primary-deep);}
+  .adm-badge.test{background:#fff2d6;color:#a67a00;}
+  body.dark .adm-badge.test{background:#3a2d0e;color:#f5c44b;}
+  /* 管理端弹窗 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .modal.hidden{display:none !important;}
+  .modal .card{max-width:500px;width:100%;box-shadow:0 4px 16px rgba(16,58,50,0.08);}
+  .lbl{display:block;font-size:13px;font-weight:700;color:var(--ink-2);margin:0 0 4px;}
+  .chkbox{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);cursor:pointer;}
+  .chkbox input{width:16px;height:16px;}
+  /* 公告条跑马灯 */
+  .site-ann-track{overflow:hidden;}
+  .site-ann-item{display:inline-block;padding-right:48px;}
+  .site-ann-item.pin{font-weight:800;color:var(--danger);}
+  .site-ann-placeholder{display:inline-block;white-space:nowrap;}
+  @keyframes siteAnnScroll{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+  .site-ann-placeholder{animation:siteAnnScroll linear infinite;animation-duration:60s;}
+  .site-ann-track:hover .site-ann-placeholder{animation-play-state:paused;}
+  /* 公告卡片 */
+  .ann-card{background:var(--surface-2);border-radius:var(--radius-lg);padding:12px 14px;margin-bottom:8px;border:1px solid transparent;}
+  .ann-card.pin{border-color:var(--danger-15);background:var(--surface-danger);}
+  .ann-card .ann-head{font-weight:800;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .ann-card .ann-head .tag-pin{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--danger);color:#fff;font-weight:700;}
+  .ann-card .ann-body{color:var(--ink-2);margin:6px 0 10px;white-space:pre-wrap;}
+  .ann-card .ann-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .ann-card .ann-date{font-size:12px;color:var(--muted);}
 </style>
 </head>
 <body>
+
+<!-- 全站顶部公告条（有公告才显示；滚动轮播） -->
+<div id="siteAnnBar" style="display:none;background:linear-gradient(180deg,var(--primary-soft),var(--surface-2));border-bottom:1px solid var(--primary-soft);">
+  <div class="site-ann-inner" style="max-width:1080px;margin:0 auto;padding:8px 16px;font-size:14px;color:var(--ink);display:flex;gap:10px;align-items:center;">
+    <svg class="icn" style="color:var(--primary);flex:0 0 auto;"><use href="#ic-ann"/></svg>
+    <div class="site-ann-track" id="siteAnnTrack" style="flex:1 1 auto;overflow:hidden;white-space:nowrap;"></div>
+    <button class="btn line sm" style="flex:0 0 auto;padding:4px 10px;font-size:13px;" onclick="hideSiteAnnBar()" title="暂时隐藏今日公告">知道了</button>
+  </div>
+</div>
 
 <!-- 图标 symbol sprite（线性 2px 描边，currentColor 自适应明暗） -->
 <svg class="ic-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden">
@@ -948,6 +993,13 @@
   <symbol id="ic-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2 V4 M12 20 V22 M2 12 H4 M20 12 H22 M4.5 4.5 L6 6 M18 18 L19.5 19.5 M4.5 19.5 L6 18 M18 6 L19.5 4.5"/></g></symbol>
   <symbol id="ic-logout" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17 L20 12 L15 7"/><line x1="20" y1="12" x2="10" y2="12"/><path d="M10 4 H6 A2 2 0 0 0 4 6 V18 A2 2 0 0 0 6 20 H10"/></g></symbol>
   <symbol id="ic-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20"/><path d="M9 7 V5 A2 2 0 0 1 11 3 H13 A2 2 0 0 1 15 5 V7"/><path d="M6 7 V19 A2 2 0 0 0 8 21 H16 A2 2 0 0 0 18 19 V7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g></symbol>
+  <symbol id="ic-users" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20 a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 15 a5 5 0 0 1 7 0"/></g></symbol>
+  <symbol id="ic-ann" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 v2 h5 l4 3 V8 L8 11 H3 Z"/><path d="M15 9 A3 3 0 0 1 15 15"/><path d="M17.5 6.5 A6.5 6.5 0 0 1 17.5 17.5"/><line x1="19" y1="19" x2="20.5" y2="20.5"/></g></symbol>
+  <symbol id="ic-key" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="3.5"/><path d="M10.5 13 L20 3.5 L22 5.5 L18 7.5 L16 5.5 L14 7.5 L16 9.5 L14 11.5 L12.5 10"/></g></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><line x1="16" y1="16" x2="21" y2="21"/></g></symbol>
+  <symbol id="ic-close" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></g></symbol>
+  <symbol id="ic-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4 H14 L18 8 V14 L13 19 V14 L7 18 V9 Z"/></g></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L10.5 18 L19 7"/></g></symbol>
 </svg>
 
 <!-- 液态玻璃 SVG 滤镜定义（不可见） -->
@@ -1115,13 +1167,88 @@
         </div>
       </div>
       <div class="card" style="margin-top:12px;">
+        <h2><svg class="icn"><use href="#ic-users"/></svg> 用户管理</h2>
+        <p class="sub" id="adminUserSummary" style="margin-bottom:8px;">共 0 个账号</p>
+        <div class="inputrow" style="margin-bottom:8px;">
+          <input class="inp" id="adminUserSearch" placeholder="搜索账号名…（可留空显示全部）" maxlength="50" onkeydown="if(event.key==='Enter')adminSearchUsers()">
+          <button class="btn line" onclick="adminSearchUsers()"><svg class="icn"><use href="#ic-search"/></svg> 搜索</button>
+          <button class="btn line" onclick="adminResetSearch()"><svg class="icn"><use href="#ic-close"/></svg> 重置</button>
+        </div>
+        <div class="gap6" style="margin-bottom:10px;">
+          <button class="btn line sm" onclick="adminFilterUsers('all')" id="admFltAll">全部</button>
+          <button class="btn line sm ghost" onclick="adminFilterUsers('admin')" id="admFltAdmin">管理员</button>
+          <button class="btn line sm ghost" onclick="adminFilterUsers('elder')" id="admFltElder">老人</button>
+          <button class="btn line sm ghost" onclick="adminFilterUsers('family')" id="admFltFamily">家属</button>
+          <button class="btn line sm ghost" onclick="adminFilterUsers('test')" id="admFltTest">test_ 账号</button>
+        </div>
+        <div id="adminUserTableWrap" style="overflow-x:auto;">
+          <table class="admin-tbl" id="adminUserTable">
+            <thead><tr>
+              <th>账号</th><th>角色</th><th>邀请码</th><th>绑定</th>
+              <th>管理员</th><th>邮箱</th><th>注册时间</th><th style="width:240px;">操作</th>
+            </tr></thead>
+            <tbody id="adminUserTbody">
+              <tr><td colspan="8" class="td-empty">加载中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+          <span class="sub" id="adminUserPage">第 0/0 页</span>
+          <div class="gap6" style="display:inline-flex;">
+            <button class="btn line sm" onclick="adminPageUsers(-1)">上一页</button>
+            <button class="btn line sm" onclick="adminPageUsers(1)">下一页</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <h2><svg class="icn"><use href="#ic-ann"/></svg> 系统公告</h2>
+        <p class="sub" style="margin-bottom:10px;">公告保存在浏览器本地（所有访问者进入网站时顶部会显示滚动条）。可置顶、可修改、可删除。</p>
+        <div class="gap6" style="margin-bottom:10px;">
+          <button class="btn line sm" onclick="adminNewAnnouncement()"><svg class="icn"><use href="#ic-plus"/></svg> 新建公告</button>
+          <button class="btn line sm ghost" onclick="adminPreviewAnnouncements()"><svg class="icn"><use href="#ic-eye"/></svg> 预览顶部公告条</button>
+        </div>
+        <div id="adminAnnList"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
         <h2><svg class="icn"><use href="#ic-gear"/></svg> 其他管理能力</h2>
         <div class="gap6">
-          <button class="btn block ghost" onclick="toast('后续上线：用户列表、重置密码、切换管理员')">用户管理（开发中）</button>
-          <button class="btn block ghost" onclick="toast('后续上线：系统公告、全局广播')">系统公告（开发中）</button>
           <button class="btn block ghost" onclick="go('account')">返回账户功能页 →</button>
           <button class="btn block ghost" onclick="go('home')">返回首页 →</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理端：重置密码弹窗 -->
+  <div class="modal" id="admResetModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="width:100%;max-width:420px;">
+      <h2><svg class="icn"><use href="#ic-key"/></svg> 重置用户密码</h2>
+      <p class="sub" style="margin:6px 0 10px;">用户：<b id="admResetUser" style="color:var(--primary);"></b></p>
+      <label class="lbl" style="margin-top:6px;">新密码（≥6 位）</label>
+      <input class="inp" id="admResetPass" type="text" maxlength="32" placeholder="新密码，至少 6 位">
+      <div class="gap6" style="margin-top:10px;">
+        <button class="btn block" onclick="adminSubmitReset()"><svg class="icn"><use href="#ic-check"/></svg> 确认重置</button>
+        <button class="btn block ghost" onclick="adminCloseReset()"><svg class="icn"><use href="#ic-close"/></svg> 取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理端：编辑公告弹窗 -->
+  <div class="modal" id="admAnnModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="width:100%;max-width:500px;">
+      <h2 id="admAnnTitle"><svg class="icn"><use href="#ic-ann"/></svg> 新建公告</h2>
+      <label class="lbl" style="margin-top:6px;">标题</label>
+      <input class="inp" id="admAnnHead" maxlength="40" placeholder="例如：系统升级通知">
+      <label class="lbl" style="margin-top:8px;">正文</label>
+      <textarea class="inp" id="admAnnBody" rows="4" maxlength="400" placeholder="正文内容，最多 400 字（将在顶部滚动显示）"></textarea>
+      <label class="chkbox" style="margin-top:8px;">
+        <input type="checkbox" id="admAnnPin"> <span>置顶显示（优先级最高）</span>
+      </label>
+      <div class="gap6" style="margin-top:10px;">
+        <button class="btn block" onclick="adminSubmitAnn()"><svg class="icn"><use href="#ic-check"/></svg> 保存</button>
+        <button class="btn block ghost" onclick="adminCloseAnn()"><svg class="icn"><use href="#ic-close"/></svg> 取消</button>
       </div>
     </div>
   </div>
@@ -3132,7 +3259,7 @@ function speakCurrent(){
     'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
     'view-account':'账户功能。可以修改用户名、修改密码、绑定邮箱，家属账号还可以查看已绑定的老人。',
     'view-admin': isAdmin
-      ? '管理控制台。可以查看数据库概况，一键清理所有 test_ 开头的测试账号及其业务数据，或进入其他管理能力。'
+      ? '管理控制台。可以查看数据库 8 张表的实时统计；红色警告卡可以一键清理所有 test_ 前缀的测试账号和级联数据；用户管理卡可以查看所有账号、搜索筛选、重置密码、切换管理员权限、单独删除账号；系统公告卡可以新建、置顶、编辑、删除公告，公告会在所有访客的网站顶部以滚动条形式显示。'
       : '管理控制台。该页面仅管理员可访问，请使用管理员账号登录。',
     'view-family': myRole === 'family'
       ? '查看亲属。输入老人端的邀请码，即可实时查看老人的症状自查、用药情况和前往医院记录。'
@@ -6838,6 +6965,11 @@ async function updateAdminUI(){
   // 清理结果提示区重置
   var pt = $('purgeTestResult');
   if(pt){ pt.style.display = 'none'; pt.textContent = ''; }
+  // 渲染用户管理 + 系统公告区
+  if(currentUser && isAdmin){
+    try{ adminLoadUsers(); }catch(e){}
+    try{ adminRenderAnnouncements(); }catch(e){}
+  }
 }
 
 async function purgeTestAccounts(){
@@ -6887,6 +7019,330 @@ async function purgeTestAccounts(){
   }
 }
 
+/* ============== 管理端：RPC 封装 + 状态 ============== */
+const ADM_STATE = {
+  filter: 'all', keyword: '', offset: 0, limit: 20, total: 0,
+  resetTarget: '', annEditId: null
+};
+async function adminRPC(name, body){
+  if(!cloudUsable()) throw new Error('当前浏览器不支持云端接口');
+  const url = SB_URL + '/rest/v1/rpc/' + name;
+  const payload = Object.assign({caller: currentUser || ''}, body || {});
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      apikey: SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type': 'application/json', 'Accept': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok){
+    const txt = await res.text();
+    const m = /"message":"([^"]+)"/.exec(txt);
+    const msg = m ? m[1] : ('HTTP ' + res.status + ' ' + res.statusText);
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+async function adminLoadUsers(){
+  if(!currentUser || !isAdmin){ toast('仅管理员可访问'); return; }
+  const tb = $('adminUserTbody');
+  if(!tb) return;
+  const sum = $('adminUserSummary'), pageEl = $('adminUserPage');
+  tb.innerHTML = '<tr><td colspan="8" class="td-empty">加载中…</td></tr>';
+  try{
+    const kw = ADM_STATE.filter === 'test' ? 'test_' : ADM_STATE.keyword;
+    const data = await adminRPC('admin_list_users', {
+      lim: ADM_STATE.limit, offs: ADM_STATE.offset, kw: kw
+    });
+    let rows = data && Array.isArray(data.rows) ? data.rows : [];
+    const total = data && typeof data.total === 'number' ? data.total : rows.length;
+    ADM_STATE.total = total;
+    if(ADM_STATE.filter === 'admin')  rows = rows.filter(r => !!r.is_admin);
+    if(ADM_STATE.filter === 'elder')  rows = rows.filter(r => r.role === 'elder');
+    if(ADM_STATE.filter === 'family') rows = rows.filter(r => r.role === 'family');
+    if(ADM_STATE.filter === 'test')   rows = rows.filter(r => /^test_/.test(r.id));
+
+    if(sum){ sum.textContent = '共 ' + total + ' 个账号（当前显示 ' + rows.length + '）'; }
+    if(pageEl){
+      const pages = Math.max(1, Math.ceil(total / ADM_STATE.limit));
+      const cur = Math.floor(ADM_STATE.offset / ADM_STATE.limit) + 1;
+      pageEl.textContent = '第 ' + cur + '/' + pages + ' 页';
+    }
+    if(rows.length === 0){
+      tb.innerHTML = '<tr><td colspan="8" class="td-empty">没有符合条件的账号</td></tr>';
+      return;
+    }
+    const roleLabel = {elder:'老人',family:'家属'};
+    tb.innerHTML = rows.map(r => {
+      const rid = (r.id || '').toString();
+      const isSelf = rid === currentUser;
+      const isTest = /^test_/.test(rid);
+      const bindCount = typeof r.bind_count === 'number' ? r.bind_count : (r.has_bind ? 1 : 0);
+      const email = r.email ? r.email : '<span style="color:var(--muted)">—</span>';
+      const date = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : '—';
+      const isAdmTd = r.is_admin ? '<span class="adm-badge admin">管理员</span>' : '<span style="color:var(--muted)">否</span>';
+      const testBadge = isTest ? ' <span class="adm-badge test">测试</span>' : '';
+      const roleCls = r.role === 'elder' ? 'role-elder' : r.role === 'family' ? 'role-family' : '';
+      const roleText = roleLabel[r.role] || r.role || '—';
+      const ops = [
+        '<button class="btn line" onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>',
+      ];
+      if(!r.is_admin){
+        ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',true)">设为管理员</button>');
+      } else if(!isSelf){
+        ops.push('<button class="btn ghost" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',false)">取消管理员</button>');
+      }
+      if(!isSelf && rid !== currentUser){
+        ops.push('<button class="btn warn" style="background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteUser(\'' + rid.replace(/'/g,'\\\'') + '\')">删除</button>');
+      } else if(isSelf){
+        ops.push('<span style="font-size:12px;color:var(--muted);">（当前登录）</span>');
+      }
+      return '<tr>'
+        + '<td><b>' + rid + '</b>' + testBadge + '</td>'
+        + '<td class="' + roleCls + '">' + roleText + '</td>'
+        + '<td>' + (r.family_code || '<span style="color:var(--muted)">—</span>') + '</td>'
+        + '<td>' + bindCount + ' 位</td>'
+        + '<td>' + isAdmTd + '</td>'
+        + '<td>' + email + '</td>'
+        + '<td style="color:var(--muted);font-size:12px;">' + date + '</td>'
+        + '<td><div class="adm-op">' + ops.join('') + '</div></td>'
+        + '</tr>';
+    }).join('');
+  }catch(e){
+    console.warn('adminLoadUsers 失败:', e);
+    tb.innerHTML = '<tr><td colspan="8" class="td-empty" style="color:var(--danger);">加载失败：' + (e && e.message ? e.message : '未知错误') + '</td></tr>';
+    toast('用户列表加载失败');
+  }
+}
+
+function adminSearchUsers(){
+  ADM_STATE.keyword = ($('adminUserSearch') || {}).value ? $('adminUserSearch').value.trim() : '';
+  ADM_STATE.offset = 0;
+  adminLoadUsers();
+}
+function adminResetSearch(){
+  if($('adminUserSearch')) $('adminUserSearch').value = '';
+  ADM_STATE.keyword = '';
+  ADM_STATE.filter = 'all';
+  ADM_STATE.offset = 0;
+  ['All','Admin','Elder','Family','Test'].forEach((k,i)=>{
+    const map=['all','admin','elder','family','test'];
+    const el = $('admFlt' + k);
+    if(el){ el.classList.toggle('ghost', map[i] !== 'all'); }
+  });
+  adminLoadUsers();
+}
+function adminFilterUsers(f){
+  ADM_STATE.filter = f;
+  ADM_STATE.offset = 0;
+  [['All','all'],['Admin','admin'],['Elder','elder'],['Family','family'],['Test','test']].forEach(([id,val])=>{
+    const el = $('admFlt' + id);
+    if(el){ el.classList.toggle('ghost', val !== f); }
+  });
+  adminLoadUsers();
+}
+function adminPageUsers(dir){
+  const pages = Math.max(1, Math.ceil(ADM_STATE.total / ADM_STATE.limit));
+  let nextOff = ADM_STATE.offset + dir * ADM_STATE.limit;
+  nextOff = Math.max(0, Math.min(nextOff, (pages - 1) * ADM_STATE.limit));
+  if(nextOff === ADM_STATE.offset){ toast('已到该页边界'); return; }
+  ADM_STATE.offset = nextOff;
+  adminLoadUsers();
+}
+
+function adminResetPass(id){
+  ADM_STATE.resetTarget = id;
+  const m = $('admResetModal'), u = $('admResetUser'), p = $('admResetPass');
+  if(u) u.textContent = id;
+  if(p) p.value = '';
+  if(m){ m.classList.remove('hidden'); m.style.display='flex'; }
+}
+function adminCloseReset(){
+  const m = $('admResetModal');
+  if(m){ m.classList.add('hidden'); m.style.display='none'; }
+  ADM_STATE.resetTarget = '';
+}
+async function adminSubmitReset(){
+  const pass = ($('admResetPass') || {}).value || '';
+  if(pass.length < 6){ toast('新密码至少 6 位'); return; }
+  try{
+    const r = await adminRPC('admin_reset_user_pass', {
+      target_id: ADM_STATE.resetTarget, new_pass: pass
+    });
+    if(r && r.ok){
+      toast('✓ 密码已重置为：' + pass);
+      adminCloseReset();
+    } else {
+      toast('重置失败');
+    }
+  }catch(e){ toast('重置失败：' + (e.message || '未知错误')); }
+}
+
+async function adminSetAdmin(id, toAdmin){
+  const hint = toAdmin ? '把账号 ' + id + ' 设为管理员？' : '取消账号 ' + id + ' 的管理员权限？';
+  if(!confirm(hint)) return;
+  try{
+    const r = await adminRPC('admin_set_admin', { target_id: id, make_admin: !!toAdmin });
+    if(r && r.ok){
+      toast('✓ 操作成功' + (r.note ? '（' + r.note + '）' : ''));
+      adminLoadUsers();
+    } else {
+      toast('操作失败');
+    }
+  }catch(e){ toast('失败：' + (e.message || '未知错误')); }
+}
+
+async function adminDeleteUser(id){
+  if(!confirm('确认删除账号 ' + id + ' 及其所有业务数据？不可恢复！')) return;
+  try{
+    const r = await adminRPC('admin_delete_user', { target_id: id });
+    if(r && r.ok){
+      toast('✓ 已删除 ' + (r.deleted_users||0) + ' 个账号');
+      updateAdminUI();
+      adminLoadUsers();
+    } else toast('删除失败');
+  }catch(e){ toast('删除失败：' + (e.message || '未知错误')); }
+}
+
+/* ============== 管理端：系统公告（localStorage 全局） ============== */
+const ADM_ANN_KEY = 'adm_announcements_v1';
+const ADM_ANN_HIDE = 'adm_ann_hide_day';
+function annGetAll(){
+  try{
+    const raw = localStorage.getItem(ADM_ANN_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function annSaveAll(arr){
+  localStorage.setItem(ADM_ANN_KEY, JSON.stringify(Array.isArray(arr)?arr:[]));
+}
+function annSort(arr){
+  return arr.slice().sort((a,b)=>{
+    if(!!b.pin - !!a.pin) return (!!b.pin) - (!!a.pin);
+    return (b.ts||0) - (a.ts||0);
+  });
+}
+function adminRenderAnnouncements(){
+  const root = $('adminAnnList');
+  if(!root) return;
+  const list = annSort(annGetAll());
+  if(list.length === 0){
+    root.innerHTML = '<div class="sub" style="color:var(--muted);padding:16px;border-radius:var(--radius-lg);background:var(--surface-2);">暂无公告</div>';
+    return;
+  }
+  root.innerHTML = list.map(a => {
+    const id = a.id;
+    const pinTag = a.pin ? '<span class="tag-pin">置顶</span>' : '';
+    const date = a.ts ? new Date(a.ts).toLocaleString('zh-CN') : '';
+    return '<div class="ann-card' + (a.pin?' pin':'') + '">'
+      + '<div class="ann-head"><svg class="icn"><use href="#ic-ann"/></svg> '
+      + (a.title || '(无标题)') + pinTag + '</div>'
+      + '<div class="ann-body">' + (a.body||'').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s])) + '</div>'
+      + '<div class="ann-foot"><span class="ann-date">' + date + '</span>'
+      + '<div class="gap6">'
+      + (a.pin ? '<button class="btn line sm" onclick="adminTogglePinAnn(\''+id+'\')">取消置顶</button>'
+              : '<button class="btn line sm" onclick="adminTogglePinAnn(\''+id+'\')">置顶</button>')
+      + '<button class="btn line sm" onclick="adminEditAnn(\''+id+'\')"><svg class="icn"><use href="#ic-gear"/></svg> 编辑</button>'
+      + '<button class="btn warn sm" style="background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteAnn(\''+id+'\')"><svg class="icn"><use href="#ic-trash"/></svg> 删除</button>'
+      + '</div></div></div>';
+  }).join('');
+}
+function adminNewAnnouncement(){ ADM_STATE.annEditId = null; adminOpenAnnEditor(null); }
+function adminEditAnn(id){ ADM_STATE.annEditId = id; adminOpenAnnEditor(id); }
+function adminOpenAnnEditor(id){
+  const m = $('admAnnModal'), t = $('admAnnTitle'),
+        h = $('admAnnHead'), b = $('admAnnBody'), p = $('admAnnPin');
+  if(!m) return;
+  if(id){
+    const a = annGetAll().find(x => x.id === id);
+    t.textContent = '编辑公告';
+    if(h) h.value = a ? a.title || '' : '';
+    if(b) b.value = a ? a.body  || '' : '';
+    if(p) p.checked = a ? !!a.pin : false;
+  } else {
+    t.textContent = '新建公告';
+    if(h) h.value = '';
+    if(b) b.value = '';
+    if(p) p.checked = false;
+  }
+  m.classList.remove('hidden');
+  m.style.display = 'flex';
+}
+function adminCloseAnn(){
+  const m = $('admAnnModal');
+  if(m){ m.classList.add('hidden'); m.style.display='none'; }
+  ADM_STATE.annEditId = null;
+}
+function adminSubmitAnn(){
+  const h = ($('admAnnHead')||{}).value || '';
+  const b = ($('admAnnBody')||{}).value || '';
+  const p = ($('admAnnPin')||{}).checked;
+  if(!h.trim() && !b.trim()){ toast('请填写标题或正文'); return; }
+  const now = Date.now();
+  const list = annGetAll();
+  if(ADM_STATE.annEditId){
+    const idx = list.findIndex(x => x.id === ADM_STATE.annEditId);
+    if(idx >= 0){ list[idx] = Object.assign({}, list[idx], {title:h.trim(), body:b, pin:!!p, ts:now}); }
+  } else {
+    list.push({ id: 'a' + now + '_' + Math.random().toString(36).slice(2,6),
+                title: h.trim() || '公告', body: b, pin: !!p, ts: now });
+  }
+  annSaveAll(list);
+  adminCloseAnn();
+  adminRenderAnnouncements();
+  renderSiteAnnBar();
+  toast('✓ 已保存');
+}
+function adminTogglePinAnn(id){
+  const list = annGetAll();
+  const idx = list.findIndex(x => x.id === id);
+  if(idx >= 0){ list[idx].pin = !list[idx].pin; list[idx].ts = Date.now(); annSaveAll(list); }
+  adminRenderAnnouncements();
+  renderSiteAnnBar();
+}
+function adminDeleteAnn(id){
+  if(!confirm('确认删除这条公告？')) return;
+  annSaveAll(annGetAll().filter(x => x.id !== id));
+  adminRenderAnnouncements();
+  renderSiteAnnBar();
+  toast('已删除');
+}
+function adminPreviewAnnouncements(){
+  renderSiteAnnBar(true);
+  toast('已刷新顶部公告条（滚动显示）');
+}
+
+/* ============== 顶部公告条：全站渲染（有公告才出现） ============== */
+let _annTimer = null;
+function hideSiteAnnBar(){
+  const bar = $('siteAnnBar');
+  if(bar) bar.style.display = 'none';
+  const key = beijingYMD(new Date());
+  try{ localStorage.setItem(ADM_ANN_HIDE, key); }catch(e){}
+}
+function renderSiteAnnBar(forceShow){
+  const bar = $('siteAnnBar'), track = $('siteAnnTrack');
+  if(!bar || !track) return;
+  const list = annSort(annGetAll());
+  if(list.length === 0){ bar.style.display = 'none'; track.innerHTML = ''; return; }
+  const todayKey = beijingYMD(new Date());
+  const hiddenKey = (()=>{ try{ return localStorage.getItem(ADM_ANN_HIDE) || ''; }catch(e){ return ''; }})();
+  if(!forceShow && hiddenKey === todayKey){ bar.style.display = 'none'; return; }
+  const parts = list.map(a => {
+    const t = (a.title || '公告').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
+    const b = (a.body || '').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
+    const full = t + (b ? '：' + b.replace(/\s+/g,' ') : '');
+    return '<span class="site-ann-item' + (a.pin?' pin':'') + '">' + (a.pin?'【置顶】':'') + full + '</span>';
+  });
+  const one = parts.join('');
+  // 克隆一份实现无缝滚动
+  track.innerHTML = '<span class="site-ann-placeholder">' + one + one + '</span>';
+  bar.style.display = '';
+}
+
 /* ==================== 初始化 ==================== */
 async function init(){
   applyMode();
@@ -6896,6 +7352,8 @@ async function init(){
   renderSyms();
   renderFlow();
   $('drugCount').textContent = DRUG_DB.length;
+  // 顶部公告条：每次进入网站先渲染一次（有公告就显示）
+  try{ renderSiteAnnBar(); }catch(e){ console.warn('公告条渲染失败:', e); }
   renderDrugCats();
   renderDrugLib();
   initChannel();
