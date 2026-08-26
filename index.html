@@ -8240,7 +8240,12 @@ async function init(){
     // 同时：如果云端 is_admin 与本地不一致（数据库重建导致角色漂移），立即同步到本地
     if(cloudUsable()){
       try{
-        const chk = await sbFetch('users?limit=1&select=id,is_admin,role,family_code&id=eq.' + encodeURIComponent(currentUser));
+        // 云端探针：拉取 id/is_admin/role/family_code/email/email_remind
+        // 列不存在时会返回 400，降级到无 email 的版本再重试
+        let chk = await sbFetch('users?limit=1&select=id,is_admin,role,family_code,email,email_remind&id=eq.' + encodeURIComponent(currentUser));
+        if(!chk.ok && chk.status === 400){
+          chk = await sbFetch('users?limit=1&select=id,is_admin,role,family_code&id=eq.' + encodeURIComponent(currentUser));
+        }
         if(chk.ok){
           const rows = await chk.json();
           const real = Array.isArray(rows) ? rows.filter(x => x && typeof x === 'object' && 'id' in x) : [];
@@ -8250,12 +8255,30 @@ async function init(){
             doLogout();
           } else {
             const cloudAdmin = !!real[0].is_admin;
-            if(cloudAdmin !== isAdmin){
-              isAdmin = cloudAdmin;
-              localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
-              if(DB.db){
-                const lr = await DB.get('users', currentUser);
-                if(lr){ lr.isAdmin = cloudAdmin; await DB.put('users', lr); }
+            // 所有云端字段的本地回填（保持 IndexedDB 与云端同步）
+            if(DB.db){
+              const lr = await DB.get('users', currentUser);
+              if(lr){
+                let changed = false;
+                if(cloudAdmin !== isAdmin){
+                  isAdmin = cloudAdmin;
+                  localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
+                  lr.isAdmin = cloudAdmin; changed = true;
+                }
+                // 回填 email（云端绑定结果优先）
+                if(Object.prototype.hasOwnProperty.call(real[0], 'email')){
+                  const cloudEmail = real[0].email || null;
+                  if((lr.email || null) !== cloudEmail){ lr.email = cloudEmail; changed = true; }
+                }
+                // 回填 email_remind
+                if(Object.prototype.hasOwnProperty.call(real[0], 'email_remind')){
+                  const cloudR = !!real[0].email_remind;
+                  if(!!lr.emailRemind !== cloudR){ lr.emailRemind = cloudR; changed = true; }
+                }
+                // 回填 role / family_code（若变化）
+                if(real[0].role && real[0].role !== myRole){ lr.role = real[0].role; changed = true; }
+                if(real[0].family_code && lr.familyCode !== real[0].family_code){ lr.familyCode = real[0].family_code; changed = true; }
+                if(changed){ await DB.put('users', lr); }
               }
             }
             if(real[0].role && real[0].role !== myRole) setRole(real[0].role);
