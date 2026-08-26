@@ -24,8 +24,10 @@
     --primary:#0f9d8f;
     --primary-deep:#0b7d73;
     --primary-soft:#e0f2ef;
-    --accent:#f59e0b;      /* 暖橙，用于紧急/强调 */
+    --accent:#f59e0b;
     --danger:#e53e3e;
+    --danger-15:rgba(229,62,62,.15);
+    --surface-danger:rgba(254,226,226,.28);
     --warn:#dd6b20;
     --ok:#38a169;
     --radius:8px;
@@ -50,6 +52,8 @@
     --primary-soft:rgba(53,177,132,.16);
     --accent:#e07a3f;
     --danger:#e05d5d;
+    --danger-15:rgba(224,93,93,.18);
+    --surface-danger:rgba(224,93,93,.08);
     --warn:#d99a3d;
     --ok:#4caf7d;
     --shadow:0 2px 12px rgba(0,0,0,.35);
@@ -81,6 +85,8 @@
     --primary-soft:#ffe6c2;
     --accent:#d9480f;
     --danger:#c53030;
+    --danger-15:rgba(197,48,48,.18);
+    --surface-danger:#ffe5e5;
     --warn:#c0560a;
     --ok:#2f7d32;
     --fs-base:23px;
@@ -941,6 +947,7 @@
   <symbol id="ic-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 A8 8 0 0 1 18 7 L20 9"/><path d="M20 5 V9 H16"/><path d="M20 12 A8 8 0 0 1 6 17 L4 15"/><path d="M4 19 V15 H8"/></g></symbol>
   <symbol id="ic-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2 V4 M12 20 V22 M2 12 H4 M20 12 H22 M4.5 4.5 L6 6 M18 18 L19.5 19.5 M4.5 19.5 L6 18 M18 6 L19.5 4.5"/></g></symbol>
   <symbol id="ic-logout" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17 L20 12 L15 7"/><line x1="20" y1="12" x2="10" y2="12"/><path d="M10 4 H6 A2 2 0 0 0 4 6 V18 A2 2 0 0 0 6 20 H10"/></g></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20"/><path d="M9 7 V5 A2 2 0 0 1 11 3 H13 A2 2 0 0 1 15 5 V7"/><path d="M6 7 V19 A2 2 0 0 0 8 21 H16 A2 2 0 0 0 18 19 V7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g></symbol>
 </svg>
 
 <!-- 液态玻璃 SVG 滤镜定义（不可见） -->
@@ -968,6 +975,7 @@
     <li><a class="nav-link" data-v="chronic" onclick="go('chronic')"><span class="nm-s">慢病</span><span class="nm-f">慢性病管理</span></a></li>
     <li><a class="nav-link" data-v="more" onclick="go('hospital')"><span class="nm-s">医院</span><span class="nm-f">找医院</span></a></li>
     <li><a class="nav-link" data-v="account" onclick="go('account')">账户</a></li>
+    <li><a class="nav-link" data-v="admin" id="navAdminBtn" style="display:none;" onclick="go('admin')">管理</a></li>
   </ul>
   <button class="nav-icon-btn" id="btnTheme" onclick="toggleTheme()" aria-label="切换深色模式"><svg class="icn"><use href="#ic-moon"/></svg></button>
   <button class="nav-mode-btn" id="modeToggle" onclick="toggleMode()">关怀模式</button>
@@ -1072,6 +1080,47 @@
           <button class="btn block warn" onclick="doLogout()">退出登录</button>
           <button class="btn block ghost" onclick="go('welcome'); openAuth();">切换账号</button>
           <button class="btn block ghost" onclick="go('home')">返回首页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 管理端页面（仅管理员可访问） -->
+  <div class="view" id="view-admin">
+    <h1 id="adminTitle">管理控制台</h1>
+    <p class="lead" id="adminLead">管理用户、数据库和全局设置。</p>
+    <div class="card" style="margin-bottom:12px;">
+      <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
+    </div>
+    <div class="card" id="adminForbidden" style="display:none;">
+      <h2><svg class="icn"><use href="#ic-lock"/></svg> 无权限</h2>
+      <p class="sub">该页面仅管理员可访问。</p>
+      <div class="gap6">
+        <button class="btn block" onclick="go('welcome'); openAuth();">登录管理员账号</button>
+        <button class="btn block ghost" onclick="go('home')">返回首页</button>
+      </div>
+    </div>
+    <div id="adminRoot" style="display:none;">
+      <div class="card" id="adminStatsCard">
+        <h2><svg class="icn"><use href="#ic-chart"/></svg> 数据库概况</h2>
+        <div class="gap6" id="adminStats">加载中...</div>
+      </div>
+      <div class="card" style="margin-top:12px;background:var(--surface-danger);border:1px solid var(--danger-15);">
+        <h2 style="color:var(--danger);"><svg class="icn"><use href="#ic-alert"/></svg> 清理测试账号</h2>
+        <p class="sub">一键清理数据库中所有 <b>id 以 test_ 前缀开头</b> 的账号及其级联数据（慢性档案、指标、用药、提醒、事件、家属绑定）。</p>
+        <p class="hint" style="margin-top:4px;">管理员账号本身绝对不会被删除，放心使用。</p>
+        <div class="gap6" style="margin-top:8px;">
+          <button class="btn block danger" onclick="purgeTestAccounts()"><svg class="icn"><use href="#ic-trash"/></svg> 清理所有 test_ 前缀测试账号</button>
+          <div id="purgeTestResult" class="sub" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2);"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <h2><svg class="icn"><use href="#ic-gear"/></svg> 其他管理能力</h2>
+        <div class="gap6">
+          <button class="btn block ghost" onclick="toast('后续上线：用户列表、重置密码、切换管理员')">用户管理（开发中）</button>
+          <button class="btn block ghost" onclick="toast('后续上线：系统公告、全局广播')">系统公告（开发中）</button>
+          <button class="btn block ghost" onclick="go('account')">返回账户功能页 →</button>
+          <button class="btn block ghost" onclick="go('home')">返回首页 →</button>
         </div>
       </div>
     </div>
@@ -2682,6 +2731,7 @@ function isValidUsername(u){
   if(u.length > 30) return {ok:false, msg:'账号不能超过30位'};
   if(/[<>'"";\\]/.test(u)) return {ok:false, msg:'账号包含非法字符'};
   if(/^\s|\s$/.test(u)) return {ok:false, msg:'账号不能以空格开头或结尾'};
+  if(u.indexOf('test_') === 0) return {ok:false, msg:'账号不能以 test_ 开头，test_ 前缀仅用于测试账号'};
   return {ok:true};
 }
 function isValidPassword(p){
@@ -3081,6 +3131,9 @@ function speakCurrent(){
     'view-chronic':'慢性病管理。可以创建慢病档案、录入血压血糖等指标、查看趋势图表、管理用药依从性和复诊提醒。',
     'view-hospital':'找附近医院。点击获取我的位置，或输入小区、街道和地标名称，推荐离您最近的医院。',
     'view-account':'账户功能。可以修改用户名、修改密码、绑定邮箱，家属账号还可以查看已绑定的老人。',
+    'view-admin': isAdmin
+      ? '管理控制台。可以查看数据库概况，一键清理所有 test_ 开头的测试账号及其业务数据，或进入其他管理能力。'
+      : '管理控制台。该页面仅管理员可访问，请使用管理员账号登录。',
     'view-family': myRole === 'family'
       ? '查看亲属。输入老人端的邀请码，即可实时查看老人的症状自查、用药情况和前往医院记录。'
       : '绑定家人。把屏幕上的邀请码告诉家人，家人就可以在手机上查看您的健康动态。'
@@ -3492,6 +3545,9 @@ async function go(view){
   if(view === 'account'){
     updateUserUI();
   }
+  if(view === 'admin'){
+    updateAdminUI();
+  }
   if(view === 'chronic'){
     renderChronicList();
   }
@@ -3529,6 +3585,7 @@ async function sbFetch(path, opts){
 
 /* ==================== 登录 / 注册 ==================== */
 let myRole = localStorage.getItem('med_role') || 'elder';
+let isAdmin = localStorage.getItem('med_is_admin') === '1';
 let pickedRole = myRole;
 function pickRole(r){
   pickedRole = r;
@@ -3725,7 +3782,7 @@ async function doLogin(){
   if(cloudUsable()){
     try{
       const h = await hashPass(p);
-      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes,email,email_remind&id=eq.' + encodeURIComponent(u));
+      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes,email,email_remind,is_admin&id=eq.' + encodeURIComponent(u));
       if(res.ok){
         const rows = await res.json();
         if(rows.length){
@@ -3737,7 +3794,8 @@ async function doLogin(){
             if(Array.isArray(bc) && bc.length){ boundElder = bc; }
             else if(bs){ boundElder = [bs]; }
             else { boundElder = null; }
-            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCodes:boundElder, email:rows[0].email||null, emailRemind:!!rows[0].email_remind, created:Date.now()});
+            if(typeof rows[0].is_admin === 'boolean'){ isAdmin = rows[0].is_admin; }
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCodes:boundElder, email:rows[0].email||null, emailRemind:!!rows[0].email_remind, isAdmin:isAdmin, created:Date.now()});
           } else { wrongPass = true; }
         }
       } else if(res.status === 400){
@@ -3823,6 +3881,8 @@ async function afterLogin(){
   // 0. 切换账号时先清空旧数据
   familyBinds = [];
   currentViewBind = '';
+  // 0b. 同步管理员权限到内存 + localStorage
+  localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
   // 1. 从 IndexedDB 读取本地缓存
   try{
     const r = await DB.get('users', currentUser);
@@ -3908,6 +3968,8 @@ async function doLogout(){
   if(!currentUser){ toast('您还未登录'); return; }
   currentUser = null;
   localStorage.removeItem('med_user');
+  localStorage.removeItem('med_is_admin');
+  isAdmin = false;
   bumpRenderToken('doLogout：登出清账号');
   try{ purgeSharedUserCache(); }catch(e){}
   await resetAppState();
@@ -3940,6 +4002,9 @@ function updateUserUI(){
   // 首页底部入口：登录后展示「账户设置 →」按钮
   var entry = $('homeAccountEntry');
   if(entry) entry.style.display = currentUser ? '' : 'none';
+  // 导航栏「管理」：仅管理员可见
+  var navBtn = $('navAdminBtn');
+  if(navBtn) navBtn.style.display = (currentUser && isAdmin) ? '' : 'none';
   renderAccountSection();
 }
 function updateFamilyView(){
@@ -6718,6 +6783,108 @@ async function renderChronicAlerts(){
     }catch(e){}
   }
   $('chronicAlertList').innerHTML = '<p class="hint">暂无预警记录</p>';
+}
+
+/* ==================== 管理员功能 ==================== */
+async function updateAdminUI(){
+  const root = $('adminRoot'), forbid = $('adminForbidden');
+  if(!root || !forbid) return;
+  if(!currentUser || !isAdmin){
+    forbid.style.display = '';
+    root.style.display = 'none';
+    return;
+  }
+  forbid.style.display = 'none';
+  root.style.display = '';
+  // 加载数据库概况
+  const statsEl = $('adminStats');
+  if(statsEl){
+    statsEl.textContent = '加载中...';
+    if(cloudUsable()){
+      try{
+        const tables = ['users','chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
+        const labels = {users:'用户账号',chronic_profiles:'慢病档案',chronic_alerts:'慢病预警',health_metrics:'健康指标',medication_logs:'用药日志',follow_ups:'复诊提醒',events:'就医事件',family_bindings:'家属绑定'};
+        const counts = {};
+        for(const t of tables){
+          try{
+            const r = await sbFetch(t + '?limit=1&select=id');
+            if(r.ok){
+              const rows = await r.json();
+              // 取真实数据行数 count：简单 limit1 只判断空与否，再用 header count
+              const cr = await sbFetch(t + '?select=count', {headers:{'Prefer':'count=exact'}});
+              const cnt = cr.headers.get('content-range');
+              counts[t] = (cnt && cnt.indexOf('/') >= 0) ? parseInt(cnt.split('/')[1],10) : (Array.isArray(rows)?rows.length:0);
+            } else {
+              counts[t] = '—';
+            }
+          }catch(e){ counts[t] = '—'; }
+        }
+        statsEl.innerHTML = '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
+          + tables.map(t => {
+            const isTest = (t === 'users') ? ('<div class="sub" style="margin-top:2px;color:var(--muted);">test_ 前缀的将被清理</div>') : '';
+            return '<div class="bp-icon" style="background:var(--surface-2);border-radius:var(--radius-lg);padding:12px 14px;">'
+              + '<div class="cs-ic" style="font-size:22px;font-weight:800;color:var(--primary);">' + (Number.isFinite(counts[t]) ? counts[t] : counts[t]) + '</div>'
+              + '<div class="sym-chip" style="font-size:14px;color:var(--ink);margin-top:2px;">' + labels[t] + '</div>'
+              + isTest
+              + '</div>';
+          }).join('') + '</div>';
+      }catch(e){
+        statsEl.textContent = '加载失败：' + (e && e.message ? e.message : '网络错误');
+      }
+    } else {
+      statsEl.textContent = '当前浏览器不支持云端接口';
+    }
+  }
+  // 清理结果提示区重置
+  var pt = $('purgeTestResult');
+  if(pt){ pt.style.display = 'none'; pt.textContent = ''; }
+}
+
+async function purgeTestAccounts(){
+  if(!currentUser || !isAdmin){ toast('仅管理员可执行该操作'); return; }
+  if(!confirm('确认要清理数据库中所有 test_ 前缀的账号吗？该操作不可恢复！\n管理员账号本身不会被删除。')) return;
+  var pt = $('purgeTestResult');
+  if(pt){ pt.style.display = ''; pt.textContent = '正在清理...'; }
+  if(!cloudUsable()){ if(pt) pt.textContent = '当前浏览器不支持云端接口'; return; }
+  try{
+    // 方式：调用 Supabase REST RPC
+    const rpcRes = await fetch(SB_URL + '/rest/v1/rpc/purge_test_accounts', {
+      method:'POST',
+      headers:{
+        apikey: SB_KEY,
+        Authorization: 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+    if(!rpcRes.ok){
+      const txt = await rpcRes.text();
+      if(pt) pt.textContent = '清理失败（' + rpcRes.status + '）：' + (txt || rpcRes.statusText);
+      toast('清理失败');
+      return;
+    }
+    const data = await rpcRes.json().catch(() => null);
+    const delUsers = (data && typeof data.deleted_users === 'number') ? data.deleted_users : 0;
+    const detail = data && data.deleted ? data.deleted : {};
+    const parts = [];
+    const labelMap = {chronic_profiles:'慢病档案',chronic_alerts:'慢病预警',health_metrics:'健康指标',medication_logs:'用药日志',follow_ups:'复诊提醒',events:'就医事件',family_bindings:'家属绑定'};
+    for(var k in labelMap){
+      if(detail[k]) parts.push(labelMap[k] + ' ' + detail[k] + ' 条');
+    }
+    if(pt){
+      pt.innerHTML = '<div style="font-weight:800;color:var(--ok);margin-bottom:4px;">✓ 清理完成：删除测试账号 ' + delUsers + ' 个</div>'
+        + (parts.length ? ('<div>' + parts.join('；') + '</div>') : '<div style="color:var(--muted);">暂无其他级联数据</div>');
+      pt.style.background = 'var(--primary-soft)';
+      pt.style.border = '1px solid var(--primary-soft)';
+      pt.style.borderRadius = 'var(--radius)';
+    }
+    toast('已清理 ' + delUsers + ' 个测试账号');
+    await updateAdminUI();
+  }catch(e){
+    if(pt) pt.textContent = '清理出错：' + (e && e.message ? e.message : '未知错误');
+    toast('清理出错');
+  }
 }
 
 /* ==================== 初始化 ==================== */
