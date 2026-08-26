@@ -947,7 +947,7 @@
 <body>
 
 <!-- 全站顶部公告条（有公告才显示；滚动轮播） -->
-<div id="siteAnnBar" style="display:none;background:linear-gradient(180deg,var(--primary-soft),var(--surface-2));border-bottom:1px solid var(--primary-soft);">
+<div id="siteAnnBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:60;background:linear-gradient(180deg,var(--primary-soft),var(--surface-2));border-bottom:1px solid var(--primary-soft);">
   <div class="site-ann-inner" style="max-width:1080px;margin:0 auto;padding:8px 16px;font-size:14px;color:var(--ink);display:flex;gap:10px;align-items:center;">
     <svg class="icn" style="color:var(--primary);flex:0 0 auto;"><use href="#ic-ann"/></svg>
     <div class="site-ann-track" id="siteAnnTrack" style="flex:1 1 auto;overflow:hidden;white-space:nowrap;"></div>
@@ -3711,6 +3711,7 @@ function toggleMode(){
   const nowCare = document.body.classList.contains('care');
   autoSpeak(nowCare ? '已开启关怀模式，字体更大更清晰' : '已切换为标准模式');
   toast(nowCare ? '已开启关怀模式' : '已切换为标准模式');
+  setTimeout(_syncAnnBarLayout, 50);
 }
 function enableCare(){
   localStorage.setItem('med_mode', 'care');
@@ -8121,19 +8122,27 @@ const ADM_ANN_HIDE = 'adm_ann_hide_day';
 function hideSiteAnnBar(){
   const bar = $('siteAnnBar');
   if(bar) bar.style.display = 'none';
+  _syncAnnBarLayout();
   const key = beijingYMD(new Date());
   try{ localStorage.setItem(ADM_ANN_HIDE, key); }catch(e){}
+}
+function _syncAnnBarLayout(){
+  const bar = $('siteAnnBar');
+  const nb  = document.getElementById('navbar');
+  const main = document.querySelector('main');
+  const h = (bar && bar.style.display !== 'none') ? bar.offsetHeight : 0;
+  if(nb)  nb.style.top = (18 + h) + 'px';
+  if(main) main.style.paddingTop = (76 + h) + 'px';
 }
 function renderSiteAnnBar(forceShow){
   const bar = $('siteAnnBar'), track = $('siteAnnTrack');
   if(!bar || !track) return;
-  const list = annGetActive(); // 只取当前时段内生效
-  if(list.length === 0){ bar.style.display = 'none'; track.innerHTML = ''; return; }
+  const list = annGetActive();
+  if(list.length === 0){ bar.style.display = 'none'; track.innerHTML = ''; _syncAnnBarLayout(); return; }
   const todayKey = beijingYMD(new Date());
   const hiddenKey = (()=>{ try{ return localStorage.getItem(ADM_ANN_HIDE) || ''; }catch(e){ return ''; }})();
-  // 紧急公告或置顶公告：不允许用户"今日不再提示"关闭
   const hasForce = list.some(x => x.level==='urgent' || x.pin);
-  if(!forceShow && !hasForce && hiddenKey === todayKey){ bar.style.display = 'none'; return; }
+  if(!forceShow && !hasForce && hiddenKey === todayKey){ bar.style.display = 'none'; _syncAnnBarLayout(); return; }
   const parts = list.map(a => {
     const lv = a.level === 'urgent' ? '【紧急】' : (a.level === 'important' ? '【重要】' : '');
     const t = (a.title || '公告').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
@@ -8145,7 +8154,6 @@ function renderSiteAnnBar(forceShow){
   const one = parts.join('');
   track.innerHTML = '<span class="site-ann-placeholder">' + one + one + '</span>';
   bar.style.display = '';
-  // urgent 级别：让 bar 底色变红
   if(hasForce && list[0].level === 'urgent'){
     bar.style.background = 'linear-gradient(90deg,#b71c1c,#e53935,#b71c1c)';
     bar.style.color = '#fff';
@@ -8155,6 +8163,7 @@ function renderSiteAnnBar(forceShow){
   } else {
     bar.style.background = ''; bar.style.color = '';
   }
+  _syncAnnBarLayout();
 }
 
 /* ==================== 初始化 ==================== */
