@@ -1122,6 +1122,7 @@
   <symbol id="ic-bandage" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></g></symbol>
   <symbol id="ic-heart" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20 C10 18 5 14 5 9 C5 6.5 7 5 9 5 C10.5 5 12 6.5 12 6.5 C12 6.5 13.5 5 15 5 C17 5 19 6.5 19 9 C19 14 14 18 12 20 Z"/></g></symbol>
   <symbol id="ic-volume" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9 H8 L13 5 V19 L8 15 H4 Z"/><path d="M16 9 A3 3 0 0 1 16 15"/><path d="M18.5 6.5 A6 6 0 0 1 18.5 17.5"/></g></symbol>
+  <symbol id="ic-edit" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 L20 20" stroke-width="2.2"/><path d="M6 20 L6 16 L16 6 L20 10 L10 20 L6 20 Z"/></g></symbol>
   <symbol id="ic-link" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15 L15 9"/><path d="M7 12 L5 14 A3.5 3.5 0 0 0 10 19 L12 17"/><path d="M12 7 L14 5 A3.5 3.5 0 0 1 19 10 L17 12"/></g></symbol>
   <symbol id="ic-thermometer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 a2 2 0 0 1 2 2 v9 a3.5 3.5 0 1 1 -4 0 V5 a2 2 0 0 1 2 -2 Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none"/></g></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g></symbol>
@@ -1137,6 +1138,8 @@
   <symbol id="ic-pin" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4 H14 L18 8 V14 L13 19 V14 L7 18 V9 Z"/></g></symbol>
   <symbol id="ic-check" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 L10.5 18 L19 7"/></g></symbol>
   <symbol id="ic-bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16 V11 A6 6 0 0 1 18 11 V16 L20 18 H4 L6 16 Z"/><path d="M10 21 A2 2 0 0 0 14 21"/></g></symbol>
+  <symbol id="ic-skip" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4 L13 12 L5 20"/><path d="M15 5 L19 5 L19 19 L15 19"/></g></symbol>
+  <symbol id="ic-calendar" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></g></symbol>
   <symbol id="ic-mail" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7 L12 14 L21 7"/></g></symbol>
 </svg>
 
@@ -1573,6 +1576,11 @@
           <option value="once">仅一次</option>
         </select>
       </label>
+      <label class="f" style="margin-top:12px;"><svg class="icn"><use href="#ic-calendar"/></svg> 起始日期
+        <input class="inp" type="date" id="medStartDate">
+        <p class="hint" style="margin:4px 0 0;">默认今天。选过去日期：历史日期将显示为灰色补录，不计依从率。</p>
+      </label>
+      <input type="hidden" id="medEditingId" value="">
       <div id="medTimes" style="margin-top:12px;"></div>
       <div id="medAdvice"></div>
       <button class="btn block" onclick="addMed()">保存用药</button>
@@ -4252,6 +4260,9 @@ async function resetAppState(){
   try{ await renderCompliance(); }catch(e){ console.warn('[resetAppState] renderCompliance fail:', e); }
   renderBodyParts();
   renderTimeInputs($('medFreq')?.value || 'daily');
+  // 新增用药默认起始日 = 今天（北京时间）
+  try{ if($('medStartDate')) $('medStartDate').value = beijingYMD(); }catch(_){}
+  try{ if($('medEditingId')) $('medEditingId').value = ''; }catch(_){}
   renderChronicList();
   // 清理旧版设备级个人缓存，避免下个账号看到
   try{ purgeSharedUserCache(); }catch(e){}
@@ -5149,6 +5160,87 @@ function timePoints(med){
   if(med.time) return [med.time];
   return [];
 }
+/* ==================== 用药跳过规则（规则1-6+8A，严格 0 宽限） ==================== */
+/**
+ * 给 med.times 打 skippedReason/skippedAt 元标记。保证幂等：多次调用不改变已判定过的原因。
+ * 规则：
+ *  - startDate > today：所有时段不跳过（未来开始，今天不计计划）
+ *  - startDate < today：仅今天（todayStr）的时段按"严格比较"判定，历史日期（比 startDate 晚且 < today）的由 renderCompliance 动态显示为 backfill 灰色
+ *  - startDate === today 且 freq==='once' 且 (today+time) < now => expired-single
+ *  - startDate === today 且 time < now（严格 0 宽限） => past-at-add
+ *  - 新增的"单独时间点 addSlot"也按同样逻辑（由 updateMed 传入 opts.onlyNewSlots 只打新加入那些）
+ */
+function _applySkipRulesToMed(med, opts){
+  opts = opts || {};
+  if(!med) return;
+  if(!Array.isArray(med.times)) med.times = timePoints(med).slice();
+  // 内部统一用带元信息的结构存，避免每个调用都再推断
+  const structured = [];
+  med.times.forEach((t, idx) => {
+    if(t && typeof t === 'object' && t.time){
+      structured.push({ ...t });
+    }else{
+      structured.push({ time: String(t), skippedReason: null, skippedAt: null });
+    }
+  });
+  // startDate 不存在时按今天补（兼容历史 med 记录）
+  let startDate = med.startDate || beijingYMD();
+  if(typeof startDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)){
+    startDate = beijingYMD();
+  }
+  med.startDate = startDate;
+  const now = nowBeijing();
+  const todayStr = beijingYMD(now);
+  const curMin = now.getHours()*60 + now.getMinutes();
+  const isSingle = String(med.freq || 'daily') === 'once';
+  structured.forEach((s, idx) => {
+    // 幂等：已存在非空 skippedReason 且不是"强制重算"的就不盖
+    if(s.skippedReason && !opts.forceRecalc) return;
+    if(opts.onlyNewIdxs && opts.onlyNewIdxs.indexOf(idx) === -1) return;
+    // 规则4：未来开始
+    if(startDate > todayStr){
+      s.skippedReason = null; s.skippedAt = null; return;
+    }
+    const tm = timeToMin(s.time);
+    // 规则6：单次 + 已过期
+    if(startDate === todayStr && isSingle){
+      if(tm < curMin){ s.skippedReason = 'expired-single'; s.skippedAt = Date.now(); return; }
+      s.skippedReason = null; s.skippedAt = null; return;
+    }
+    // 规则1A：今天的时间点严格 0 宽限比较
+    if(startDate === todayStr){
+      if(tm < curMin){ s.skippedReason = 'past-at-add'; s.skippedAt = Date.now(); }
+      else { s.skippedReason = null; s.skippedAt = null; }
+      return;
+    }
+    // startDate < todayStr：今天之前不在这个函数打标记（由 renderCompliance/历史页按 backfill 灰显示），
+    //   这里只让今天 & 未来都视为"无跳过标记"（到那一天再按到时判定 status = 未服/已服/漏服 正常流程）
+    s.skippedReason = null; s.skippedAt = null;
+  });
+  med.times = structured;
+  if(structured[0]) med.time = structured[0].time; // 兼容老字段
+}
+/** 取出"仅时间字符串数组"（用于纯展示/排序时） */
+function timeStrings(med){
+  if(!med) return [];
+  if(!Array.isArray(med.times)) return timePoints(med);
+  return med.times.map(t => (t && typeof t === 'object') ? t.time : String(t));
+}
+/** 某个 (日期 ymd, 时间段) 的 skipped 类型；null = 正常流程 */
+function getSkippedForSlot(med, ymd, slotObj){
+  if(!med || !ymd || !slotObj) return null;
+  const todayStr = beijingYMD();
+  const start = med.startDate || todayStr;
+  // 比 startDate 早：根本还没开始，不算计划
+  if(ymd < start) return '__not_started';
+  // 历史日期（ymd < today）：补录显示
+  if(ymd < todayStr) return 'historical-backfill';
+  if(ymd > todayStr) return null;
+  // 今天
+  const reason = (slotObj && slotObj.skippedReason) || null;
+  return reason;
+}
+
 
 async function addMed(){
   // ====== [隔离-关键加固] 防止 currentUser 被意外清空（如 resetAppState / closeAuth 时序）导致落到 guest 隔离域 ======
@@ -5156,25 +5248,139 @@ async function addMed(){
     const saved = localStorage.getItem('med_user');
     if(saved){ currentUser = saved; console.warn('[addMed] 恢复丢失的 currentUser =', saved); }
   }
+  const editingIdEl = $('medEditingId');
+  const editingId = editingIdEl ? Number(editingIdEl.value || 0) : 0;
   const name = sanitizeInput($('medName').value, 50);
   const dose = sanitizeInput($('medDose').value, 50);
   const freq = sanitizeInput($('medFreq').value, 20);
   const times = collectTimes();
+  const startDate = ($('medStartDate') && $('medStartDate').value) ? String($('medStartDate').value).slice(0,10) : beijingYMD();
   if(!name){ toast('请填写药品名称'); return; }
   if(times.length === 0){ toast('请至少设置一个提醒时间'); return; }
-  // 强制绑定当前登录用户，避免同机不同账号看到相同用药提醒
-  const med = withUsername({name, dose, freq, times, time: times[0], created:Date.now(), reminded:{}});
-  await DB.put('meds', med);
-  $('medName').value=''; $('medDose').value='';
-  renderTimeInputs(freq);
-  renderMeds();
-  toast('已保存用药：' + name);
-  autoSpeak('已保存用药' + name + '，到点会提醒您。');
-  addEvent('用药', '添加了用药「' + (name.slice(0,1) + '***') + '」，提醒时间 ' + times.length + ' 个时段');
-  if('Notification' in window && Notification.permission !== 'granted'){
-    Notification.requestPermission();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(startDate)){ toast('请选择正确的起始日期'); return; }
+  let med;
+  let isEdit = false;
+  let prev = null;
+  if(editingId){
+    prev = await ensureMine('meds', editingId);
+    if(!prev){ toast('编辑的药品不存在或无权编辑'); return; }
+    isEdit = true;
+    med = { ...prev, name, dose, freq, startDate, updated: Date.now() };
+    // 规则7A 立即生效到今天：用 updateMed 处理时间差（删除今天已被用户去掉的那些、保留状态）
+    const result = await _mergeMedSlots(prev, med, times);
+    med = result.med;
+    await DB.put('meds', med);
+    addEvent('用药', '编辑了用药「' + (name.slice(0,1) + '***') + '」：' + result.summary);
+    toast('已更新：' + name);
+  }else{
+    // 新增：强制绑定当前登录用户，避免同机不同账号看到相同用药提醒
+    med = withUsername({name, dose, freq, times: times.slice(), time: times[0], startDate, created:Date.now(), reminded:{}});
+    _applySkipRulesToMed(med, { forceRecalc: true });
+    await DB.put('meds', med);
+    addEvent('用药', '添加了用药「' + (name.slice(0,1) + '***') + '」，提醒时间 ' + times.length + ' 个时段，起始 ' + startDate);
+    toast('已保存用药：' + name);
+    autoSpeak('已保存用药' + name + '，到点会提醒您。');
+    if('Notification' in window && Notification.permission !== 'granted'){
+      Notification.requestPermission();
+    }
   }
+  // 清空表单 + 复位编辑态 + 重算默认起始日（今天）
+  $('medName').value=''; $('medDose').value='';
+  try{ $('medFreq').value = 'daily'; }catch(_){}
+  renderTimeInputs('daily');
+  if($('medStartDate')) $('medStartDate').value = beijingYMD();
+  if($('medEditingId')) $('medEditingId').value = '';
+  renderMeds();
 }
+/** 合并 prev.med → newMed.times 的差异：
+ *  - 新的但旧没有的：新增时段，按 skipRules 打标记（past-at-add 等）
+ *  - 旧的但新没有的：**立即从今天计划中移除**（规则7A：场景2 漏药消失+分母减1）—— 删除对应今天 medlog 中 未服/漏服/跳过 的 scheduled (status !== 'taken' 且 !== 'late_taken' 的)
+ *  - 时间点相同但从 08:00 → 09:00（等价："旧时段位置 i 的时间改了"）：按新增+删除处理，原 log 对应未服记录删除保留已服记录（已服的仍按原时间记贡献，不能抹用户成绩）
+ * 返回 { med, summary }
+ */
+async function _mergeMedSlots(prev, nextMed, newTimesArr){
+  const now = nowBeijing();
+  const todayStr = beijingYMD(now);
+  const prevSlots = timeStrings(prev); // 仅字符串
+  const oldSet = new Set(prevSlots);
+  const newSet = new Set(newTimesArr);
+  // 被删除的：旧有、新没有
+  const deleted = prevSlots.filter(t => !newSet.has(t));
+  // 新增的：新有、旧没有
+  const added = newTimesArr.filter(t => !oldSet.has(t));
+  // 未变的
+  const kept = newTimesArr.filter(t => oldSet.has(t));
+  const todayLogs = await _loadTodayLogs(prev.id, todayStr);
+  // 删除旧"未完成"的今天日志（已服/补服保留，不抹用户成绩）
+  const deletableStatuses = { skipped:true, __pending:true };
+  let removedTodayCnt = 0;
+  for(const t of deleted){
+    const log = todayLogs.get(t);
+    if(log && (log.status === 'skipped' || !log.status || log.status === '__pending')){
+      try{ await DB.del('medlog', log.id); removedTodayCnt++; }catch(_){}
+    }
+  }
+  // 时间点改时间（等价于删旧+加新）：已服旧时间的保留，不做额外处理——它会成为今天依从率里原有的 taken 项，但今天计划中不再存在 newTimesArr 对应的旧时间；
+  //   为避免分母-分子不一致（taken 算入分子但计划无对应），这里把旧已服时间记为贡献 1 次，分母不包含这次已删除时间（因为用户改了时间点）。
+  //   => 最稳妥：如果 deleted 里某时间今天是 taken/late_taken，就把它作为"非 skip 但已结束"的时段保留在 med 里，同时加一个字段 mergedTaken=true，避免渲染新 chip 但仍然算入依从率。
+  const mergedExtra = [];
+  for(const t of deleted){
+    const log = todayLogs.get(t);
+    if(log && (log.status === 'taken' || log.status === 'late_taken')){
+      mergedExtra.push({ time: t, skippedReason: '__merged_taken', _mergedStatus: log.status, _mergedActual: log.actual_hhmm || null });
+    }
+  }
+  // 构建新结构：先把 kept 的旧 meta 保留下来（从 prev.times 里查对应）
+  const prevMeta = new Map();
+  (prev.times || []).forEach(tt => {
+    if(tt && typeof tt === 'object') prevMeta.set(tt.time, tt);
+    else prevMeta.set(String(tt), { time: String(tt), skippedReason: null, skippedAt: null });
+  });
+  const slots = [];
+  kept.forEach(t => {
+    const m = prevMeta.get(t) || { time: t, skippedReason: null, skippedAt: null };
+    slots.push({ time: t, skippedReason: m.skippedReason || null, skippedAt: m.skippedAt || null });
+  });
+  added.forEach(t => slots.push({ time: t, skippedReason: null, skippedAt: null }));
+  slots.push(...mergedExtra);
+  nextMed.times = slots;
+  if(slots[0]) nextMed.time = slots[0].time;
+  // 对 added 的 slots 单独跑 skipRules：标记今天已过的（规则2A 新增时段也遵循跳过）
+  const addedIdxs = [];
+  slots.forEach((s, i) => { if(added.indexOf(s.time) !== -1) addedIdxs.push(i); });
+  _applySkipRulesToMed(nextMed, { onlyNewIdxs: addedIdxs });
+  const parts = [];
+  if(kept.length) parts.push('保留 ' + kept.length + ' 项');
+  if(added.length) parts.push('新增 ' + added.length + ' 项');
+  if(deleted.length) parts.push('删除 ' + deleted.length + ' 项' + (removedTodayCnt ? '（今天计划移除 ' + removedTodayCnt + ' 条未服）' : ''));
+  return { med: nextMed, summary: parts.join('，') || '无变化' };
+}
+async function _loadTodayLogs(medId, todayStr){
+  const logs = await allMine('medlog');
+  const map = new Map();
+  logs.forEach(l => {
+    if(String(l.med_id) !== String(medId)) return;
+    if(String(l.scheduled_date || '').slice(0,10) !== todayStr) return;
+    map.set(String(l.scheduled_time || '').slice(0,5), l);
+  });
+  return map;
+}
+/** 编辑入口：把某药品数据填回"添加用药"表单，便于修改保存（复用 addMed 作为更新） */
+async function openEditMed(id){
+  const own = await ensureMine('meds', id);
+  if(!own){ toast('无权编辑'); return; }
+  try{
+    $('medName').value = String(own.name || '');
+    $('medDose').value = String(own.dose || '');
+    $('medFreq').value = String(own.freq || 'daily');
+    $('medEditingId').value = String(own.id || '');
+    if($('medStartDate')) $('medStartDate').value = own.startDate || beijingYMD();
+    renderTimeInputs(String(own.freq || 'daily'), timeStrings(own));
+    document.getElementById('medName').scrollIntoView({ behavior:'smooth', block:'center' });
+    toast('已载入编辑：' + own.name + '（保存即更新）');
+  }catch(e){ console.warn('[openEditMed]', e); toast('打开编辑失败'); }
+}
+
 async function renderMeds(){
   if(!DB.db){ $('medList').innerHTML = ''; return; }
   // 刷新通知方式状态（邮箱状态徽章 / 绑定邮箱链接文字）
@@ -5228,51 +5434,93 @@ async function renderMeds(){
   const allLogs = await allMine('medlog'); // 自己的 medlog 用来判断今日每个时间段状态
   const freqLabel = {daily:'每天1次', twice:'每天2次', thrice:'每天3次', once:'仅一次'};
   meds.forEach(m=>{
+    // 先把历史 med 的 times 升级成带 skippedReason 的结构化数组（幂等，补 startDate）
+    if(!m.startDate || !Array.isArray(m.times) || m.times.some(x => typeof x !== 'object' || !x || !x.time)){
+      _applySkipRulesToMed(m, { forceRecalc: true });
+      // 升级一次就写回 DB（防止下次仍重算把用户手动补记 taken 的 expired-single 再盖回去）
+      DB.put('meds', m).catch(()=>{});
+    }
     const drug = matchDrug(m.name);
-    const times = timePoints(m);
+    const slots = Array.isArray(m.times) ? m.times.slice() : timePoints(m).map(tt => ({ time: String(tt), skippedReason: null }));
     const d = document.createElement('div');
     d.className = 'med-item';
-    // ====== 修复：CSS 中 .med-item 默认 display:flex 方向 row，导致 topRow 与 chipsWrap 横排挤压左文字 → 强制改为纵向堆叠 ======
     d.style.flexDirection = 'column';
     d.style.alignItems = 'stretch';
-    // 第一行：左 .t（药名/频率/AI建议 独占主体 flex:1）+ 右删除按钮
+    // 第一行：左 .t（药名/频率/AI建议 + 起始日期 + 编辑入口） + 右 删除
     const topRow = document.createElement('div');
     topRow.style.cssText = 'display:flex;align-items:flex-start;gap:10px;width:100%;';
     const t = document.createElement('div');
     t.className = 't';
     t.style.cssText = 'flex:1;min-width:0;word-break:normal;overflow-wrap:anywhere;';
+    const startBadge = (m.startDate && m.startDate !== todayStr)
+      ? '<div class="tm" style="color:var(--muted);">' + ic('ic-calendar') + ' 起始日：' + String(m.startDate) + (m.startDate < todayStr ? '（历史补录）' : '（未来开始）') + '</div>'
+      : '';
     t.innerHTML = '<div class="nm">'+ic('ic-pill')+' ' + m.name + '</div>' +
       '<div class="tm">' + (m.dose||'') + ' · ' + freqLabel[m.freq] + '</div>' +
+      startBadge +
       (drug ? '<div class="tm" style="color:var(--primary-deep);">'+ic('ic-bulb')+' ' + drug.advice + '</div>' : '');
+    const rightCol = document.createElement('div');
+    rightCol.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn sm line';
+    editBtn.innerHTML = ic('ic-edit') + ' 编辑';
+    editBtn.addEventListener('click', () => openEditMed(m.id));
+    rightCol.appendChild(editBtn);
     const delBtn = document.createElement('button');
     delBtn.className = 'btn sm line';
     delBtn.textContent = '删除';
     delBtn.addEventListener('click', () => delMed(m.id));
+    rightCol.appendChild(delBtn);
     topRow.appendChild(t);
-    topRow.appendChild(delBtn);
+    topRow.appendChild(rightCol);
     d.appendChild(topRow);
 
-    // 第二行：时间 chips 卡片容器（独占一整行，用 flex-wrap 自适应每列宽度）
+    // 第二行：时间 chips 卡片容器
     const chipsWrap = document.createElement('div');
     chipsWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;width:100%;margin-top:2px;';
-    times.forEach(t => {
-      const tm = timeToMin(t);
-      const log = allLogs.find(l => l.med_id === m.id && l.scheduled_date === todayStr && l.scheduled_time === t);
+    slots.forEach(slot => {
+      if(slot.skippedReason === '__merged_taken'){
+        // 编辑改时间后保留的已服成绩，不渲染新的 chip，只在依从率算分子
+        return;
+      }
+      const tStr = String(slot.time);
+      const skipReason = getSkippedForSlot(m, todayStr, slot);
+      // 未来开始：今天根本不渲染 chip（规则4B 的未来起始日）
+      if(skipReason === '__not_started'){
+        return;
+      }
+      const tm = timeToMin(tStr);
+      const log = allLogs.find(l => String(l.med_id) === String(m.id) && String(l.scheduled_date || '').slice(0,10) === todayStr && String(l.scheduled_time || '').slice(0,5) === tStr);
       const status = log ? log.status : null;
-      const diffMin = curMin - tm; // 正数=已过提醒点
-      // ===== 每个时间点用"小卡片"包裹：pill + 条件按钮（都在自己小卡片里，不溢出挤压外面布局）=====
+      const diffMin = curMin - tm;
       const chipCard = document.createElement('div');
       chipCard.style.cssText = 'flex:1 1 calc(33.33% - 10px);min-width:240px;max-width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);transition:border .2s, box-shadow .2s, background .2s;';
-      // ====== 用于点击后重新定位高亮：用 dataset 标识 (med_id + date + time_slot) ======
-      chipCard.dataset.medChip = String(m.id) + '|' + todayStr + '|' + t;
-      // badge 渲染 —— 时间显示修复：使用 actual_hhmm（北京时间 HH:MM），老数据兼容从 actual_time 解析
+      chipCard.dataset.medChip = String(m.id) + '|' + todayStr + '|' + tStr;
+      // ===== 跳过/免罚样式：灰色横线 + ic-skip + 右侧小字说明（规则3B / 规则5B / 规则6B）=====
+      const isSkipGray = !!skipReason && skipReason !== 'expired-single'; // expired-single 另走"已过期 + 补记按钮"
+      if(isSkipGray){
+        chipCard.style.background = '#f8fafc';
+        chipCard.style.borderColor = '#e2e8f0';
+        chipCard.style.opacity = '0.88';
+        const explain = (skipReason === 'past-at-add') ? '新增时已过' :
+                        (skipReason === 'historical-backfill') ? '补录（不计依从率）' : '跳过';
+        const pillLine = document.createElement('div');
+        pillLine.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#94a3b8;';
+        pillLine.innerHTML = '<span class="pill" style="background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;text-decoration:line-through;text-decoration-color:#cbd5e1;">'
+          + ic('ic-skip') + ' ' + tStr + '</span>'
+          + '<span class="badge" style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;">免罚 · ' + explain + '</span>';
+        chipCard.appendChild(pillLine);
+        chipsWrap.appendChild(chipCard);
+        return;
+      }
+      // badge 渲染
       let badgeHtml = '';
       function displayHHMM(rec){
         if(rec && rec.actual_hhmm) return String(rec.actual_hhmm);
         if(rec && rec.actual_time){
           try{
-            const d = new Date(rec.actual_time);
-            if(!isNaN(d.getTime())) return beijingHHMM(d);
+            const dd = new Date(rec.actual_time);
+            if(!isNaN(dd.getTime())) return beijingHHMM(dd);
           }catch(_){}
           return String(rec.actual_time).slice(11,16);
         }
@@ -5285,6 +5533,9 @@ async function renderMeds(){
         badgeHtml = '<span class="badge" style="margin-left:4px;background:#fb923c;color:#fff;">'+ic('ic-alert')+' 已补用' + (tmTxt ? '（'+tmTxt+'，晚'+Math.round((log && log.late_minutes)||0)+'分钟）':'') + '</span>';
       } else if(status === 'skipped'){
         badgeHtml = '<span class="badge" style="margin-left:4px;background:#ef4444;color:#fff;">'+ic('ic-x')+' 今日已跳过（漏服）</span>';
+      } else if(skipReason === 'expired-single'){
+        // 规则6B：单次过期显示已过期灰色徽章 + 补记按钮（不画默认的 diffMin 已过 badge）
+        badgeHtml = '<span class="badge" style="margin-left:4px;background:#e2e8f0;color:#475569;border:1px solid #cbd5e1;">'+ic('ic-skip')+' 单次已过期</span>';
       } else if(diffMin >= 10){
         badgeHtml = '<span class="badge" style="margin-left:4px;background:#fde68a;color:#92400e;">'+ic('ic-clock')+' 已过 ' + Math.floor(diffMin) + ' 分钟</span>';
       } else if(diffMin >= 0){
@@ -5294,43 +5545,58 @@ async function renderMeds(){
       }
       const pillLine = document.createElement('div');
       pillLine.style.cssText = 'display:flex;align-items:center;gap:4px;flex-wrap:wrap;';
-      pillLine.innerHTML = '<span class="pill">' + t + badgeHtml + '</span>';
+      pillLine.innerHTML = '<span class="pill">' + tStr + badgeHtml + '</span>';
       chipCard.appendChild(pillLine);
 
-      // ====== 修复 2：按钮点没反应 —— 彻底不用 HTML onclick 字符串传参（引号/转义坑），改用 data-attr + 全局 body.click 委托 ======
-      if(!status && diffMin >= -0){
-        const isLate = diffMin >= 10;
-        const takeLabel = isLate ? '已补用' : '已服用';
-        const takeBg = isLate ? 'background:#fb923c;' : 'background:#22c55e;';
-        const takeStatus = isLate ? 'late_taken' : 'taken';
-        const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
-        const btnTake = document.createElement('button');
-        btnTake.className = 'btn sm';
-        btnTake.style.cssText = takeBg + 'color:#fff;border:none;';
-        btnTake.textContent = takeLabel;
-        btnTake.dataset.medAction = takeStatus;
-        btnTake.dataset.medId = String(m.id);
-        btnTake.dataset.date = todayStr;
-        btnTake.dataset.time = encodeURIComponent(t); // 用 URL 编码保存 HH:MM，全局委托里 decodeURIComponent 还原
-        const btnSkip = document.createElement('button');
-        btnSkip.className = 'btn sm line';
-        btnSkip.style.cssText = 'border-color:#ef4444;color:#ef4444;';
-        btnSkip.textContent = '跳过今天';
-        btnSkip.dataset.medAction = 'skipped';
-        btnSkip.dataset.medId = String(m.id);
-        btnSkip.dataset.date = todayStr;
-        btnSkip.dataset.time = encodeURIComponent(t);
-        btnRow.appendChild(btnTake);
-        btnRow.appendChild(btnSkip);
-        chipCard.appendChild(btnRow);
+      // 已服/已跳（含 expired-single 已被用户改成已服的）=> 不画操作按钮
+      if(!status){
+        // 规则6B：单次过期 — 只给"我已服用（补记）"按钮，不给跳过今天
+        if(skipReason === 'expired-single'){
+          const btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
+          const btnTake = document.createElement('button');
+          btnTake.className = 'btn sm';
+          btnTake.style.cssText = 'background:#64748b;color:#fff;border:none;';
+          btnTake.textContent = '我已服用（补记）';
+          btnTake.dataset.medAction = 'expired_makeup';
+          btnTake.dataset.medId = String(m.id);
+          btnTake.dataset.date = todayStr;
+          btnTake.dataset.time = encodeURIComponent(tStr);
+          btnRow.appendChild(btnTake);
+          chipCard.appendChild(btnRow);
+        } else if(diffMin >= 0){
+          const isLate = diffMin >= 10;
+          const takeLabel = isLate ? '已补用' : '已服用';
+          const takeBg = isLate ? 'background:#fb923c;' : 'background:#22c55e;';
+          const takeStatus = isLate ? 'late_taken' : 'taken';
+          const btnRow = document.createElement('div');
+          btnRow.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px;';
+          const btnTake = document.createElement('button');
+          btnTake.className = 'btn sm';
+          btnTake.style.cssText = takeBg + 'color:#fff;border:none;';
+          btnTake.textContent = takeLabel;
+          btnTake.dataset.medAction = takeStatus;
+          btnTake.dataset.medId = String(m.id);
+          btnTake.dataset.date = todayStr;
+          btnTake.dataset.time = encodeURIComponent(tStr);
+          const btnSkip = document.createElement('button');
+          btnSkip.className = 'btn sm line';
+          btnSkip.style.cssText = 'border-color:#ef4444;color:#ef4444;';
+          btnSkip.textContent = '跳过今天';
+          btnSkip.dataset.medAction = 'skipped';
+          btnSkip.dataset.medId = String(m.id);
+          btnSkip.dataset.date = todayStr;
+          btnSkip.dataset.time = encodeURIComponent(tStr);
+          btnRow.appendChild(btnTake);
+          btnRow.appendChild(btnSkip);
+          chipCard.appendChild(btnRow);
+        }
       }
       chipsWrap.appendChild(chipCard);
     });
     d.appendChild(chipsWrap);
     el.appendChild(d);
   });
-  // ====== 修复 3：依从性看不见 —— 不再按 myRole === 'family' 拦截（即使老人误设角色也必须渲染自己的依从性）======
   renderCompliance();
 }
 async function delMed(id){
@@ -5358,7 +5624,7 @@ function registerMedActionDelegation(){
       const medId = Number(btn.dataset.medId);
       const date = String(btn.dataset.date || '').trim();
       const timeSlot = decodeURIComponent(String(btn.dataset.time || '').trim());
-      if(!medId || !date || !timeSlot || !/^taken|late_taken|skipped$/.test(action)){
+      if(!medId || !date || !timeSlot || !/^taken|late_taken|skipped|expired_makeup$/.test(action)){
         toast('按钮参数异常，请刷新页面重试'); return;
       }
       // ====== 强反馈 #1：点击瞬间 — 禁用 + 脉冲动画 + 文字变"处理中"加深色背景，让老人立刻知道点到了 ======
@@ -5373,7 +5639,11 @@ function registerMedActionDelegation(){
       }catch(err){ /* ignore */ }
 
       // 执行核心逻辑（含 await renderMeds/renderCompliance，以及 DOM 稳定后的 chip 闪烁 + inline toast —— 在 markMedTaken 内部统一处理更可靠）
-      await markMedTaken(medId, date, timeSlot, action);
+      if(action === 'expired_makeup'){
+        await markExpiredSingleMakeup(medId, date, timeSlot);
+      }else{
+        await markMedTaken(medId, date, timeSlot, action);
+      }
 
       // ====== 强反馈 #4：语音播报 —— 老人端全程自动出声（遵循项目约束：家属端不自动出声，仅用视觉）======
       if(myRole === 'elder'){
@@ -5381,6 +5651,7 @@ function registerMedActionDelegation(){
           let spoken;
           if(action === 'taken') spoken = '已记录服药，好样的。';
           else if(action === 'late_taken') spoken = '已记录补服，下次记得准时吃药哦。';
+          else if(action === 'expired_makeup') spoken = '已补记为已服用。';
           else spoken = '已记录跳过，下次别忘了吃药。';
           autoSpeak(spoken);
         }catch(_){}
@@ -7222,57 +7493,135 @@ async function renderCompliance(targetUser, statsId, calId){
       return;
     }
     myLogs = myLogs.map(l => ({ ...l, status: String(l.status || 'taken').trim() }));
-    const total = myLogs.length || 1;
-    const onTime = myLogs.filter(l => l.status === 'taken').length;
-    const late   = myLogs.filter(l => l.status === 'late_taken').length;
-    const skip   = myLogs.filter(l => l.status === 'skipped').length;
+    // ====== [新增：规则3B/5B] 构建 30 天计划基础层，剔除被跳过（不计分母）的时段 ======
+    //  同时补齐：编辑时的 merged_taken（用户改点前 已服的那顿 保留分子贡献）
+    const planMap = new Map(); // key = date|time|med_id -> { date, time, medId, countTowardTotal:true }
+    const medsBase = (targetUser === (currentUser || 'guest')) ? (await allMine('meds')) : [];
+    const nowBJ = nowBeijing();
+    const todayStr = beijingYMD(nowBJ);
+    for(let k = 0; k < 30; k++){
+      const d = new Date(nowBJ.getTime() - (29 - k) * 86400000);
+      const ds = beijingYMD(d);
+      medsBase.forEach(m => {
+        const start = m.startDate || todayStr;
+        if(ds < start) return; // 比起始日还早 → 根本无计划，不算
+        const slots = Array.isArray(m.times) ? m.times : [];
+        slots.forEach(slot => {
+          if(!slot || typeof slot !== 'object' || !slot.time) return;
+          // 编辑改点后保留的"已服旧时段"：计入分子但不画 chip、也不加入分母（避免 taken 算分子但计划中没有的那顿不一致）—— 它有 _mergedStatus
+          if(slot.skippedReason === '__merged_taken'){
+            // 这种合成时段：如果今天及之前（30 天窗口内）的那天是"编辑操作发生的当天"最保守，这里简单地只对窗口里 scheduled_date=todayStr 的贡献
+            //   更精确做法是读取 _mergedActual，但因为我们只记了 slot._mergedActual（没有日期字段），保守方案：只在今天合成一次
+            if(ds === todayStr && (slot._mergedStatus === 'taken' || slot._mergedStatus === 'late_taken')){
+              const kk = ds + '|' + slot.time + '|' + String(m.id) + '|__m';
+              planMap.set(kk, { date: ds, time: slot.time, medId: m.id, countTowardTotal:false, syntheticTaken: slot._mergedStatus });
+            }
+            return;
+          }
+          const skipKind = getSkippedForSlot(m, ds, slot);
+          if(skipKind === '__not_started') return;
+          if(skipKind === 'past-at-add' || skipKind === 'historical-backfill' || skipKind === 'expired-single'){
+            // 规则3B / 5B / 6B：这些不计入分母
+            return;
+          }
+          // freq==='once' 的除了今天之外过去日期也不再出现（避免 once 天天都在计划里）
+          if(String(m.freq || '') === 'once' && ds !== String(m.startDate || todayStr)){
+            return;
+          }
+          const kk = ds + '|' + slot.time + '|' + String(m.id);
+          if(!planMap.has(kk)){
+            planMap.set(kk, { date: ds, time: slot.time, medId: m.id, countTowardTotal: true });
+          }
+        });
+      });
+    }
+    // 合并：logs 的 status 作为真值（taken/late_taken/skipped）覆盖计划层
+    const logKey = l => String(l.scheduled_date).slice(0,10) + '|' + String(l.scheduled_time || '').slice(0,5) + '|' + String(l.med_id);
+    const logsByKey = new Map();
+    myLogs.forEach(l => {
+      const k = logKey(l);
+      // 若有多条（少见），取最新（status != taken 优先或按 created，但这里简化：后者覆盖前者）
+      logsByKey.set(k, l);
+    });
+    // 最终合成 rows（依从率统计的基础）
+    const rows = [];
+    // 1) 计划中的项
+    planMap.forEach((v, k) => {
+      const keyNoM = k.replace(/\|__m$/, '');
+      const log = logsByKey.get(keyNoM); // 合成项可能也没对应 log，但 syntheticTaken 自带 status
+      if(v.syntheticTaken){
+        // 合成已服成绩：按 syntheticTaken（taken/late_taken）算入分子，不计分母
+        rows.push({ scheduled_date: v.date, scheduled_time: v.time, med_id: v.medId, status: v.syntheticTaken, _excludeFromTotal: true });
+        logsByKey.delete(keyNoM); // 避免下方"额外日志"再重复算
+        return;
+      }
+      const status = (log && log.status) ? String(log.status) : '__pending';
+      rows.push({ scheduled_date: v.date, scheduled_time: v.time, med_id: v.medId, status, _excludeFromTotal: !v.countTowardTotal });
+      logsByKey.delete(keyNoM);
+    });
+    // 2) 剩余 logs（历史 meds 已被删除/迁移 导致没对应计划项）：保守方案——仍然保留，但不计入分母（避免"漏服"惩罚用户删药后老记录）—— 只有 taken/late_taken 的保留进分子
+    logsByKey.forEach(l => {
+      if(l.status === 'taken' || l.status === 'late_taken'){
+        rows.push({ scheduled_date: String(l.scheduled_date).slice(0,10), scheduled_time: String(l.scheduled_time||'').slice(0,5), med_id: l.med_id, status: l.status, _excludeFromTotal: true });
+      }
+      // skipped / 其他：删掉后不再显示（避免"老漏服"永远挂着）
+    });
+
+    // 统计（分母 = rows 里非 _excludeFromTotal 的数量；分子 = taken + late_taken 的所有，包括不计分母的合成项以保证成绩不丢失）
+    const allTotal = rows.filter(r => !r._excludeFromTotal).length;
+    const onTime = rows.filter(r => r.status === 'taken').length;
+    const late   = rows.filter(r => r.status === 'late_taken').length;
+    const skip   = rows.filter(r => r.status === 'skipped').length;
     const served = onTime + late;
-    const rate = myLogs.length === 0 ? 0 : Math.round(served / total * 100);
+    const denom = allTotal || 0;
+    const rate = denom === 0 ? 0 : Math.round(served / denom * 100);
     sEl.innerHTML = '<div>' +
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
-        '<div style="font-size:32px;font-weight:700;color:' + (rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + rate + '%</div>' +
-        '<div class="hint">近30天用药依从率<br>已服 ' + served + ' / 应服 ' + (myLogs.length || 0) + ' 次</div>' +
+        '<div style="font-size:32px;font-weight:700;color:' + (denom === 0 ? '#64748b' : rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + (denom === 0 ? '—' : rate + '%') + '</div>' +
+        '<div class="hint">近30天用药依从率<br>已服 ' + served + ' / 应服 ' + denom + ' 次' + (denom === 0 && (onTime+late+skip)===0 ? '（新增时段已过的今日不计入，只记未来时段成绩）' : '') + '</div>' +
       '</div>' +
-      (myLogs.length === 0 ? '<div class="hint" style="margin-top:6px;color:var(--primary-deep);">'+ic('ic-pencil')+' 暂无服药记录，到点后点击「已服用」即可开始统计。</div>' : '') +
+      (denom === 0 && rows.length === 0 ? '<div class="hint" style="margin-top:6px;color:var(--primary-deep);">'+ic('ic-pencil')+' 暂无服药记录，到点后点击「已服用」即可开始统计。</div>' : '') +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">' +
         '<span class="badge green">'+ic('ic-check')+' 按时 ' + onTime + '</span>' +
         '<span class="badge" style="background:#fb923c;color:#fff;">'+ic('ic-alert')+' 补服 ' + late + '</span>' +
         '<span class="badge" style="background:#ef4444;color:#fff;">'+ic('ic-x')+' 漏服 ' + skip + '</span>' +
       '</div>' +
     '</div>';
-    // ====== 日历 30 天格子：日期计算 & scheduled_date 匹配统一走北京时间（防止 UTC→本地差 1 天导致"26 号格子对 25 号数据"）======
-    const now = nowBeijing();
+    // ====== 日历 30 天格子：日期计算 & scheduled_date 匹配统一走北京时间 ======
     const days = [];
     for(let i = 29; i >= 0; i--){
-      const d = new Date(now.getTime() - i * 86400000);
-      // 关键：ds 必须是北京时间 YYYY-MM-DD，因为 markMedTaken 存 scheduled_date 用的是 beijingYMD
+      const d = new Date(nowBJ.getTime() - i * 86400000);
       const ds = beijingYMD(d);
-      const dayLogs = myLogs.filter(l => String(l.scheduled_date).slice(0,10) === ds);
-      const dayTotal = dayLogs.length;
-      // 标签同样按北京月/日显示，保证与 ds 对齐
+      const dayRows = rows.filter(r => r.scheduled_date === ds);
+      // 分母只算"非 _excludeFromTotal 的"（就是今天应服的次数）
+      const dayTotal = dayRows.filter(r => !r._excludeFromTotal).length;
       const bm = d.getMonth() + 1;
       const bd = d.getDate();
-      if(dayTotal <= 0){
+      // 无应服次数 且 没有额外成绩 → 显示灰色空
+      if(dayTotal === 0 && dayRows.length === 0){
         days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;" title="' + ds + '（无记录）">'
           + '<div style="width:24px;height:24px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border);"></div>'
           + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + bm + '/' + bd + '</div>'
           + '</div>');
         continue;
       }
-      const dOn = dayLogs.filter(l => l.status === 'taken').length;
-      const dLate = dayLogs.filter(l => l.status === 'late_taken').length;
-      const dSkip = dayLogs.filter(l => l.status === 'skipped').length;
+      const dOn = dayRows.filter(r => r.status === 'taken').length;
+      const dLate = dayRows.filter(r => r.status === 'late_taken').length;
+      const dSkip = dayRows.filter(r => r.status === 'skipped').length;
+      // 当 dayTotal === 0（当天应服为 0）但有合成的 taken 或 late_taken（已服成绩从旧时间迁移来）→ 显示浅绿（无漏服状态，因为这天不用吃药）
       let bg;
-      if(dSkip === 0 && dLate === 0){
-        bg = '#22c55e';
+      if(dayTotal === 0){
+        bg = (dOn + dLate) > 0 ? '#bbf7d0' : '#f1f5f9';
+      } else if(dSkip === 0 && dLate === 0){
+        bg = (dOn === dayTotal) ? '#22c55e' : '#eab308'; // 理论上 dayTotal=0 已经 continue，这里不会触发 dOn=dayTotal 的 else，但保险
       } else if(dSkip === 0 && dLate > 0){
-        bg = '#fb923c';
+        bg = (dOn + dLate === dayTotal) ? '#fb923c' : '#eab308';
       } else if(dSkip > 0 && (dOn + dLate) === 0){
         bg = '#ef4444';
       } else {
         bg = '#eab308';
       }
-      const title = ds + '：按时' + dOn + ' / 补服' + dLate + ' / 漏服' + dSkip + '（共' + dayTotal + '）';
+      const title = ds + '：按时' + dOn + ' / 补服' + dLate + ' / 漏服' + dSkip + '（应服' + dayTotal + '）';
       days.push('<div style="display:inline-flex;flex-direction:column;align-items:center;width:28px;margin:1px;" title="' + title + '">'
         + '<div style="width:24px;height:24px;border-radius:6px;background:' + bg + ';"></div>'
         + '<div style="font-size:9px;color:var(--muted);margin-top:2px;">' + bm + '/' + bd + '</div>'
@@ -7284,6 +7633,7 @@ async function renderCompliance(targetUser, statsId, calId){
       + '<span style="color:#fb923c;">■</span> 含补服（无漏服）&emsp;'
       + '<span style="color:#eab308;">■</span> 部分漏服&emsp;'
       + '<span style="color:#ef4444;">■</span> 全部漏服&emsp;'
+      + '<span style="color:#bbf7d0;border:1px solid #86efac;display:inline-block;width:10px;height:10px;vertical-align:-1px;"></span> 当日无应服但有补记成绩&emsp;'
       + '<span style="color:var(--surface-2);border:1px solid var(--border);display:inline-block;width:10px;height:10px;vertical-align:-1px;"></span> 无记录'
       + '</div>';
   }catch(err){
@@ -7453,6 +7803,78 @@ async function markMedTaken(medId, date, timeSlot, status){
       else localToast.textContent = '已记录今日跳过（漏服），下次请记得服药';
       targetChip.appendChild(localToast);
       setTimeout(()=>{ try{ localToast.style.transition='opacity .4s'; localToast.style.opacity='0'; setTimeout(()=>{ try{ localToast.remove(); }catch(_){} }, 450); }catch(_){} }, 4200);
+    }
+  }catch(_){}
+}
+
+/** 单次过期补记（规则6B：用户点"我已服用（补记）"）：
+ *  - 清 slot.skippedReason（不再是 expired-single，下次 renderMeds 走正常 taken）
+ *  - 写入 medlog：status = late_taken，late_minutes = 实际晚多少分钟
+ *  - 不触发跳过灰色 UI，依从率计入分子分母（补记有效完成，用户选择记成绩）
+ */
+async function markExpiredSingleMakeup(medId, date, timeSlot){
+  const u = currentUser || 'guest';
+  const medOwn = await ensureMine('meds', medId);
+  if(!medOwn){ toast('无权操作该用药'); return; }
+  // 清 skippedReason 标记（expired-single → null），写入后下次渲染走正常 taken/late_taken 徽章
+  let dirty = false;
+  if(Array.isArray(medOwn.times)){
+    medOwn.times.forEach(s => {
+      if(s && typeof s === 'object' && s.time === timeSlot && s.skippedReason === 'expired-single'){
+        s.skippedReason = null; s.skippedAt = null; dirty = true;
+      }
+    });
+  }
+  if(dirty) await DB.put('meds', medOwn).catch(()=>{});
+  // 写 log：late_taken，late_minutes = 当前 vs 计划差
+  const now = nowBeijing();
+  const curMin = now.getHours()*60 + now.getMinutes();
+  const plannedMin = timeToMin(String(timeSlot || '00:00'));
+  const lateMin = Math.max(0, curMin - plannedMin);
+  const actualTimeISO = now.toISOString();
+  const actualHHMM = beijingHHMM(now);
+  const logs = await allMine('medlog');
+  const existing = logs.find(l => String(l.med_id) === String(medId) && String(l.scheduled_date || '').slice(0,10) === date && String(l.scheduled_time || '').slice(0,5) === timeSlot);
+  const payload = {
+    med_id: medId, username: u,
+    scheduled_date: date, scheduled_time: timeSlot,
+    status: 'late_taken',
+    actual_time: actualTimeISO, actual_hhmm: actualHHMM,
+    late_minutes: lateMin, reminded_count: 0
+  };
+  if(existing){ Object.assign(existing, payload); await DB.put('medlog', withUsername(existing)); }
+  else { await DB.put('medlog', withUsername(payload)); }
+  // 脱敏同步云端（同 markMedTaken）
+  if(currentUser && cloudUsable()){
+    try{
+      const medRef = _hash8(currentUser + ':' + String(medId) + ':med_ref_v1');
+      const medDisplay = (medOwn && medOwn.name) ? (String(medOwn.name).trim().slice(0,1) + '****') : '药*';
+      const cloudRec = {
+        username: currentUser, med_ref: medRef, med_name: medDisplay,
+        scheduled_date: date, scheduled_time: timeSlot,
+        status: 'late_taken',
+        actual_time: actualTimeISO, actual_hhmm: actualHHMM,
+        late_minutes: lateMin, reminded_count: 0
+      };
+      sbFetch('medication_logs?on_conflict=username,med_ref,scheduled_date,scheduled_time', {
+        method:'POST',
+        headers:{'Prefer':'return=minimal','Resolution':'merge-duplicates'},
+        body: JSON.stringify(cloudRec)
+      }).catch(()=>{});
+    }catch(_){}
+  }
+  toast('补记成功（晚' + lateMin + '分钟）');
+  addEvent('用药依从性', '补记过期单次服药：晚' + lateMin + '分钟，时间段 ' + date + ' ' + timeSlot);
+  await renderMeds();
+  await renderCompliance();
+  // 闪烁绿边（按补服语义成功色）
+  try{
+    const chipKey = String(medId) + '|' + date + '|' + timeSlot;
+    const targetChip = document.querySelector(`[data-med-chip="${chipKey}"]`);
+    if(targetChip){
+      targetChip.classList.remove('chip-success-flash','chip-skip-flash');
+      void targetChip.offsetWidth;
+      targetChip.classList.add('chip-success-flash');
     }
   }catch(_){}
 }
