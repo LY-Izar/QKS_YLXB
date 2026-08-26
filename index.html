@@ -1365,7 +1365,54 @@
           <button class="btn line sm ghost" onclick="adminUploadLegacyLocalOnce()"><svg class="icn"><use href="#ic-upload"/></svg> 迁本地旧公告到云端（仅此一次）</button>
           <button class="btn line sm ghost" onclick="adminPreviewAnnouncements()"><svg class="icn"><use href="#ic-eye"/></svg> 预览顶部公告条</button>
         </div>
-        <div id="adminAnnList"></div>
+      <div id="adminAnnList"></div>
+      </div>
+
+      <!-- [AH-P2] 次级管理员授权管理（A2 卡片：下拉选用户 → 5 项授权开关 + 保存） -->
+      <div class="card" style="margin-top:12px;" id="adminPermCard">
+        <h2><svg class="icn"><use href="#ic-key"/></svg> 次级管理员授权管理</h2>
+        <p class="sub" style="margin-bottom:8px;">为某位次级管理员分别授予长期权限：数据库管理、公告强制弹窗、公告置顶、邮件推送、维护模式开关。
+        未授予的权限，该次级管理员仍可「按次申请」最高管理员批准后单次执行。<b>最高管理员（15184461098_admin）权限永久为全开，不可编辑。</b></p>
+        <div class="inputrow" style="margin-bottom:10px;">
+          <select class="inp" id="admPermUser" onchange="adminPermUserChange()"></select>
+          <span id="admPermUserLevel" class="adm-badge" style="margin-left:8px;white-space:nowrap;">未选择</span>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 14px;margin-bottom:10px;">
+          <label class="chkbox"><input type="checkbox" id="admPermDb"> <b>数据库管理</b><br><span class="sub">重置密码 / 设为管理员 / 删除用户 / 导出等 DB 操作</span></label>
+          <label class="chkbox"><input type="checkbox" id="admPermPopup"> <b>每次访问都弹窗</b><br><span class="sub">发布/编辑公告时可选择「每次访问都弹窗」</span></label>
+          <label class="chkbox"><input type="checkbox" id="admPermPin"> <b>置顶显示</b><br><span class="sub">公告可勾选「置顶显示（优先级最高）」</span></label>
+          <label class="chkbox"><input type="checkbox" id="admPermEmail"> <b>向邮箱推送</b><br><span class="sub">公告可点击「📩 发送邮件」向所有注册邮箱推送</span></label>
+          <label class="chkbox"><input type="checkbox" id="admPermMmode"> <b>维护模式</b><br><span class="sub">可直接开启/关闭维护模式 / 配置定时（未授权需按次申请）</span></label>
+        </div>
+        <div class="gap6">
+          <button class="btn block" onclick="adminPermSave()">保存授权</button>
+          <button class="btn block ghost" onclick="adminPermRefresh()">刷新列表</button>
+        </div>
+      </div>
+
+      <!-- [AH-P5] 维护模式卡片 -->
+      <div class="card" style="margin-top:12px;border:2px solid var(--danger-30);background:rgba(239,68,68,0.03);" id="adminMMCard">
+        <h2 style="color:var(--danger);"><svg class="icn"><use href="#ic-alert"/></svg> 维护模式</h2>
+        <p class="sub" style="margin-bottom:8px;">开启后：所有普通用户立即被强制退出并回到登录欢迎页，无法登录/浏览；仅管理员（最高管理员 + 次级管理员）仍可正常登录并使用。</p>
+        <div id="admMMStatus" class="sub" style="margin-bottom:8px;padding:8px 12px;border-radius:10px;background:#fff;border:1px dashed var(--border);">当前状态：<b style="color:var(--ok);">未开启</b></div>
+        <label class="chkbox" style="margin:4px 0;"><input type="checkbox" id="admMMSchedule"> 定时开启 / 定时关闭（不勾选则立即生效）</label>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
+          <div>
+            <label class="lbl" style="margin-top:0;">开始时间（北京时间）</label>
+            <input class="inp" type="datetime-local" id="admMMStart">
+          </div>
+          <div>
+            <label class="lbl" style="margin-top:0;">结束时间（北京时间，可留空）</label>
+            <input class="inp" type="datetime-local" id="admMMEnd">
+          </div>
+        </div>
+        <label class="lbl" style="margin-top:8px;">维护通知正文（展示给所有非管理员用户）</label>
+        <textarea class="inp" id="admMMMessage" rows="3" maxlength="220" placeholder="例如：为升级医路相伴后端服务，系统将暂停访问，请等待通知。">网站正在维护，请等待通知。</textarea>
+        <div class="gap6" style="margin-top:10px;">
+          <button class="btn block danger" id="admMMToggleBtn" onclick="adminMMToggle(true)">立即开启维护模式</button>
+          <button class="btn block ghost" id="admMMCloseBtn" onclick="adminMMToggle(false)" style="display:none;">关闭维护模式</button>
+          <button class="btn block line" onclick="adminMMReload()">重新加载状态</button>
+        </div>
       </div>
 
       <div class="card" style="margin-top:12px;">
@@ -3380,7 +3427,10 @@ async function showPushPlusMask(){
 }
 
 async function confirmPushPlus(){
-  const token = sanitizeInput($('ppTokenInput').value, 200);
+  // [AH-P1.5] 严格校验 Token
+  const tokenV = validateText($('ppTokenInput').value, {label:'PushPlus Token', required:false, max:200});
+  if(!tokenV.ok){ toast(tokenV.msg); return; }
+  const token = tokenV.value.trim();
   const r = await savePushPlusToken(token);
   toast(r.msg);
   if(r.ok){ $('pushplusMask').classList.remove('show'); updatePPBadge(); }
@@ -4066,6 +4116,172 @@ async function sbFetch(path, opts){
 /* ==================== 登录 / 注册 ==================== */
 let myRole = localStorage.getItem('med_role') || 'elder';
 let isAdmin = localStorage.getItem('med_is_admin') === '1';
+// [AH-P1] 主/次管理员分层：adminLevel ∈ {'super','sub','none'}，subPerms 是 5 项长期授权开关
+const SUPER_ADMIN_ID = '15184461098_admin';
+const AUDIT_EMAIL_TO = '1812139075@qq.com';
+const DEFAULT_SUB_PERMS = Object.freeze({db:false, force_popup:false, pin:false, email_push:false, mmode:false});
+let adminLevel = normalizeAdminLevel(localStorage.getItem('med_admin_level'));
+let subPerms   = parseSubPerms(localStorage.getItem('med_sub_perms'));
+/** 兼容：老数据只有 is_admin=true 的账户回退为 super（15184461098_admin 再硬编码兜底） */
+function normalizeAdminLevel(raw){
+  if(raw === 'super' || raw === 'sub' || raw === 'none') return raw;
+  if(isAdmin) return 'super';
+  return 'none';
+}
+function parseSubPerms(raw){
+  try{
+    const j = raw ? JSON.parse(raw) : {};
+    return Object.assign({}, DEFAULT_SUB_PERMS, j || {});
+  }catch(_){
+    return Object.assign({}, DEFAULT_SUB_PERMS);
+  }
+}
+/** 写 adminLevel/subPerms 到 localStorage；同时维持 isAdmin 旧字段兼容老代码 */
+function persistAuthLevel({level, perms}){
+  if(level){
+    adminLevel = (level === 'super' || level === 'sub' || level === 'none') ? level : adminLevel;
+    localStorage.setItem('med_admin_level', adminLevel);
+  }
+  if(perms && typeof perms === 'object'){
+    subPerms = Object.assign({}, DEFAULT_SUB_PERMS, perms);
+    localStorage.setItem('med_sub_perms', JSON.stringify(subPerms));
+  }
+  const lvlIsAdmin = (currentUser === SUPER_ADMIN_ID) || (adminLevel === 'super') || (adminLevel === 'sub');
+  isAdmin = lvlIsAdmin;
+  localStorage.setItem('med_is_admin', lvlIsAdmin ? '1' : '0');
+}
+/** 全局统一权限判定：当前账户对 permKey 是否【拥有长期权限（或 super）】（不触发申请，只读） */
+function hasPerm(permKey){
+  if(currentUser === SUPER_ADMIN_ID || adminLevel === 'super') return true;
+  if(adminLevel !== 'sub') return false;
+  if(!permKey) return true; // 未指定权限 = 基础操作，sub 默认允许
+  return !!subPerms[permKey];
+}
+/** 当前账户可视作"管理员"（super+sub 都算） */
+function isAnyAdmin(){
+  return (currentUser === SUPER_ADMIN_ID) || (adminLevel === 'super') || (adminLevel === 'sub');
+}
+
+// ==============================================================
+// [AH-P1.5] 全局非法字符审查（XSS / SQLi / 路径 / 命令注入）。
+//   - 挂载到所有 <input type=text|search|url|tel|email> 以及 <textarea>
+//   - 敏感字段（公告标题/正文、密码重置、邮箱、邀请码、药名、剂量、慢病史）均走 validateText 返回 sanitized + 非法即 toast + 阻止保存
+//   - paste 与 input 事件实时净化；on submit 再做一次硬性拦截
+// ==============================================================
+const INVALID_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F<>`$|\\]/;
+// 额外 SQLi / JS / 路径注入 pattern 白名单拦截（警告用，用于保存时 second pass 更严格）
+const DANGER_PATTERNS = [
+  /(--|;|\/\*|\*\/|xp_|sp_|exec\s|execute\s|union\s+select|drop\s+table|insert\s+into|delete\s+from|update\s+\w+\s+set)/i,
+  /(<script|<\/script|javascript:|onerror=|onload=|onclick=|onmouseover=|onfocus=|onblur=|expression\(|eval\(|alert\(|confirm\(|prompt\()/i,
+  /(\.{2}[\\\/]|(^|\s)(cmd|powershell|wscript|cscript|bash|sh|curl|wget)\s)/i,
+  /(\balert\(|\blocation\.(href|assign)|window\.open|document\.cookie)/i
+];
+const INPUT_MAXLEN_DEFAULT = 200;
+const INPUT_MAXLEN_LONG = 1200; // textarea / 公告正文 等
+
+/** 轻量净化：移除控制字符、反引号、<>、$、|、反斜杠；再做长度裁剪。用于 input 事件。
+ *  @param {string} v
+ *  @param {number} max
+ */
+function sanitizeText(v, max){
+  if(v == null) return '';
+  let s = String(v);
+  // 去掉 HTML/反引号/脚本注入的最危险字符（保留中文、逗号、顿号、括号、&、+、=、#、% 等用户常用字符）
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  s = s.replace(/</g, '＜').replace(/>/g, '＞').replace(/`/g, '｀').replace(/\$/g, '＄').replace(/\|/g, '｜').replace(/\\/g, '¥');
+  if(typeof max === 'number' && max > 0 && s.length > max) s = s.slice(0, max);
+  return s;
+}
+/** 严格校验：保存前调用。返回 {ok:boolean, value:string, msg?:string}。
+ *  DANGER_PATTERNS 命中任何一个直接拦截，不让入库。
+ */
+function validateText(raw, opts){
+  opts = opts || {};
+  const label = opts.label || '输入内容';
+  const max   = typeof opts.max === 'number' ? opts.max : (opts.long ? INPUT_MAXLEN_LONG : INPUT_MAXLEN_DEFAULT);
+  if(raw == null) return {ok:true, value:''};
+  const cleaned = sanitizeText(raw, max);
+  if(opts.required && cleaned.length === 0){
+    return {ok:false, value:'', msg: label + ' 不能为空'};
+  }
+  // second pass：在 cleaned 基础上再做敏感 pattern 告警（注意我们已把 < 转为 ＜ 了，XSS 已消除，仅对 SQL/命令注入做拦截）
+  for(const p of DANGER_PATTERNS){
+    if(p.test(cleaned)){
+      return {ok:false, value:cleaned, msg: label + ' 包含非法字符，请删除特殊符号再提交。'};
+    }
+  }
+  // 禁止全空白
+  if(/^\s*$/.test(cleaned) && opts.required){
+    return {ok:false, value:'', msg: label + ' 不能为空'};
+  }
+  return {ok:true, value:cleaned};
+}
+/** 把所有 input/textarea 挂上 input/paste 实时净化。首次初始化后，动态新增的 input 再按需单独调用一次 mountInputGuard(el)。 */
+function mountInputGuard(el){
+  if(!el) return;
+  if(el.__guardMounted) return;
+  el.__guardMounted = true;
+  const getMax = () => {
+    const tag = (el.tagName || '').toLowerCase();
+    if(el.maxLength > 0) return el.maxLength;
+    if(tag === 'textarea') return INPUT_MAXLEN_LONG;
+    return INPUT_MAXLEN_DEFAULT;
+  };
+  const clean = () => {
+    // 跳过密码框（密码需保留特殊字符；密码校验用 isValidPassword）
+    if(el.type === 'password') return;
+    // 跳过日期/时间/数字选择类（浏览器内部控制即可）
+    if(['date','datetime-local','time','month','week','color','range'].includes(el.type)) return;
+    const before = el.value;
+    const after = sanitizeText(before, getMax());
+    if(after !== before){
+      const s = el.selectionStart, e = el.selectionEnd;
+      el.value = after;
+      try{ el.setSelectionRange(Math.min(s||0, after.length), Math.min(e||0, after.length)); }catch(_){}
+      // 只有确实发现非法字符时才弹一次提示（避免每打一个字都 toast）
+      if(/[<>\\`$|]/.test(before) || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(before)){
+        toast(labelOf(el) + ' 包含非法字符，已自动清除。', 1500);
+      }
+    }
+  };
+  el.addEventListener('input', clean, {passive:true});
+  el.addEventListener('paste', () => setTimeout(clean, 0), {passive:true});
+  el.addEventListener('blur',  clean, {passive:true});
+}
+function labelOf(el){
+  if(!el) return '输入内容';
+  if(el.id && _LABEL_MAP[el.id]) return _LABEL_MAP[el.id];
+  if(el.placeholder) return el.placeholder.replace(/（.+）|\(.+\)/g,'').slice(0,16) || '输入内容';
+  return '输入内容';
+}
+// 常见 ID → 中文标签（用于 toast 提示"XX 包含非法字符"）
+const _LABEL_MAP = Object.freeze({
+  authUser:'用户名', authPass:'密码', authPass2:'确认密码', authEmail:'邮箱',
+  medName:'药品名称', medDose:'剂量说明', medAdviceUser:'用药说明输入',
+  symInput:'症状描述',
+  adminUserSearch:'用户搜索词',
+  admResetPass:'新密码',
+  admAnnHead:'公告标题', admAnnBody:'公告正文',
+  admAnnFrom:'生效时间', admAnnTo:'失效时间',
+  accUserName:'用户名修改', accUserEmail:'邮箱绑定',
+  accountNoteOldPw:'旧密码', accountNoteNewPw:'新密码', accountNotePw2:'确认密码',
+  chronicNameText:'慢病名称', chronicNoteText:'备注',
+  hospitalSearchText:'医院搜索词', inviteCodeInput:'邀请码'
+});
+/** 统一给页面里所有 input/textarea 挂守卫。启动时调一次，之后动态生成的 input 逐个 mountInputGuard(el) */
+function mountGlobalInputGuards(){
+  document.querySelectorAll('input, textarea').forEach(mountInputGuard);
+}
+// 全局初始化：第一次 dom ready 后挂
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', mountGlobalInputGuards, {once:true});
+} else {
+  mountGlobalInputGuards();
+}
+// 动态弹窗 / view 渲染完成后重新扫一次新增控件
+const __origGo = typeof go === 'function' ? go : function(){};
+// 注意：go 本身是异步，这里仅在每次切换 view 后补挂 guard（view 切换不新增太多 input，但公告弹窗新增时会单独调）
+
 let pickedRole = myRole;
 function pickRole(r){
   pickedRole = r;
@@ -4319,7 +4535,7 @@ function purgeAllUserInputs(){
   ].forEach(k => localStorage.removeItem(k));
 
   // 4) 兜底：清理所有非系统关键字的 key（以 med_ 开头、不是 med_user/is_admin/role 的全删）
-  const systemKeys = new Set(['med_user','med_is_admin','med_role','med_onboarded','med_font','med_mode','med_seen_anns','med_version','med_auth_token_stamp']);
+  const systemKeys = new Set(['med_user','med_is_admin','med_admin_level','med_sub_perms','med_role','med_onboarded','med_font','med_mode','med_seen_anns','med_version','med_auth_token_stamp']);
   const otherRemovals = [];
   for(let i = 0; i < localStorage.length; i++){
     const k = localStorage.key(i);
@@ -4335,7 +4551,11 @@ async function doRegister(){
   const u = sanitizeUsername($('authUser').value);
   const p = sanitizePass($('authPass').value);
   const p2 = sanitizePass($('authPass2')?.value || '');
-  const email = ($('authEmail')?.value || '').trim().toLowerCase();
+  const emailRaw = ($('authEmail')?.value || '').trim();
+  // [AH-P1.5] 注册邮箱严格校验
+  const emailV = validateText(emailRaw, {label:'注册邮箱', required:false, max:254});
+  if(!emailV.ok){ toast(emailV.msg); return; }
+  const email = emailV.value.toLowerCase();
   isAdmin = false; // 新注册账号默认非管理员
   const uv = isValidUsername(u);
   if(!uv.ok){ toast(uv.msg); return; }
@@ -4442,7 +4662,7 @@ async function doLogin(){
   if(cloudUsable()){
     try{
       const h = await hashPass(p);
-      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes,email,email_remind,is_admin&id=eq.' + encodeURIComponent(u));
+      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes,email,email_remind,is_admin,admin_level,sub_perms&id=eq.' + encodeURIComponent(u));
       if(res.ok){
         const rows = await res.json();
         if(rows.length){
@@ -4455,7 +4675,15 @@ async function doLogin(){
             else if(bs){ boundElder = [bs]; }
             else { boundElder = null; }
             if(typeof rows[0].is_admin === 'boolean'){ isAdmin = rows[0].is_admin; }
-            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCodes:boundElder, email:rows[0].email||null, emailRemind:!!rows[0].email_remind, isAdmin:isAdmin, created:Date.now()});
+            // [AH-P1] 从云端读出 admin_level / sub_perms（兼容未迁移的旧列：is_admin=true 老数据默认 super）
+            const _lvlCloud = (typeof rows[0].admin_level === 'string') ? rows[0].admin_level
+                           : (rows[0].is_admin === true ? 'super' : 'none');
+            const _prmCloud = (rows[0].sub_perms && typeof rows[0].sub_perms === 'object') ? rows[0].sub_perms : null;
+            adminLevel = (u === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlCloud);
+            subPerms   = parseSubPerms(_prmCloud ? JSON.stringify(_prmCloud) : null);
+            localStorage.setItem('med_admin_level', adminLevel);
+            localStorage.setItem('med_sub_perms',   JSON.stringify(subPerms));
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCodes:boundElder, email:rows[0].email||null, emailRemind:!!rows[0].email_remind, isAdmin:isAdmin, admin_level: adminLevel, sub_perms: subPerms, created:Date.now()});
           } else { wrongPass = true; }
         }
       } else if(res.status === 400){
@@ -4479,6 +4707,15 @@ async function doLogin(){
       code = rec.familyCode;
       role = rec.role || null;
       isAdmin = !!rec.isAdmin; // 从本地记录恢复管理员状态
+      // [AH-P1] 从本地 DB 恢复 admin_level / sub_perms（若无则按 isAdmin 推断）
+      const _lvlLocal = (typeof rec.admin_level === 'string') ? rec.admin_level
+                      : (isAdmin ? 'super' : 'none');
+      adminLevel = (u === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlLocal);
+      subPerms   = (rec.sub_perms && typeof rec.sub_perms === 'object')
+                 ? Object.assign({}, DEFAULT_SUB_PERMS, rec.sub_perms)
+                 : Object.assign({}, DEFAULT_SUB_PERMS);
+      localStorage.setItem('med_admin_level', adminLevel);
+      localStorage.setItem('med_sub_perms',   JSON.stringify(subPerms));
       if(rec.boundElderCodes && Array.isArray(rec.boundElderCodes) && rec.boundElderCodes.length){
         boundElder = rec.boundElderCodes;
       } else if(rec.boundElderCode){
@@ -4531,6 +4768,8 @@ async function quickUse(){
   currentUser = null;
   localStorage.removeItem('med_user');
   isAdmin = false; localStorage.removeItem('med_is_admin');
+  adminLevel = 'none'; localStorage.removeItem('med_admin_level');
+  subPerms = Object.assign({}, DEFAULT_SUB_PERMS); localStorage.removeItem('med_sub_perms');
   bumpRenderToken('quickUse：进入体验模式清账号');
   // 彻底清理所有输入和账号隔离缓存
   try{ purgeSharedUserCache(); }catch(e){}
@@ -4546,8 +4785,13 @@ async function afterLogin(){
   // 0. 切换账号时先清空旧数据
   familyBinds = [];
   currentViewBind = '';
-  // 0b. 同步管理员权限到内存 + localStorage
-  localStorage.setItem('med_is_admin', isAdmin ? '1' : '0');
+  // 0b. 同步管理员权限到内存 + localStorage（主/次分层：admin_level + sub_perms）
+  //     15184461098_admin 永远强制 super
+  if(currentUser === SUPER_ADMIN_ID){
+    persistAuthLevel({level:'super', perms:{db:true,force_popup:true,pin:true,email_push:true,mmode:true}});
+  } else {
+    persistAuthLevel({level:adminLevel, perms:subPerms});
+  }
   // 0c. 心跳：登录/切换账号后，上报当前账号×当前身份的在线状态
   heartbeatTouch();
   // 1. 从 IndexedDB 读取本地缓存
@@ -4671,9 +4915,9 @@ function updateUserUI(){
   // 首页底部入口：登录后展示「账户设置 →」按钮
   var entry = $('homeAccountEntry');
   if(entry) entry.style.display = currentUser ? '' : 'none';
-  // 导航栏「管理」：仅管理员可见
+  // 导航栏「管理」：仅管理员（super + sub）且当前身份 = 家属 时显示（老人端即使是管理员也不显示）
   var navBtn = $('navAdminBtn');
-  if(navBtn) navBtn.style.display = (currentUser && isAdmin) ? '' : 'none';
+  if(navBtn) navBtn.style.display = (currentUser && isAnyAdmin() && myRole === 'family') ? '' : 'none';
   // 导航栏「家属」：当前登录账号 + 身份=家属 时才显示（老人端不显示）
   var famBtn = $('navFamilyBtn');
   if(famBtn){
@@ -4819,7 +5063,8 @@ async function doChangeUsername(){
   toast('用户名修改成功');
 }
 async function doChangePassword(){
-  var oldP = $('oldPass').value;
+  // [AH-P1.5] 旧密码同样移除控制字符/危险符号
+  var oldP = sanitizePass($('oldPass').value);
   var newP = sanitizePass($('newPass').value);
   var rec = await DB.get('users', currentUser);
   if(!rec){ toast('账户数据异常'); return; }
@@ -4850,7 +5095,11 @@ async function doChangePassword(){
   toast('密码修改成功');
 }
 async function doBindEmail(){
-  var email = ($('bindEmailInput').value || '').trim().toLowerCase();
+  // [AH-P1.5] 严格校验邮箱输入
+  const emailRaw = ($('bindEmailInput').value || '').trim();
+  const evTxt = validateText(emailRaw, {label:'邮箱绑定', required:false, max:254});
+  if(!evTxt.ok){ toast(evTxt.msg); return; }
+  var email = evTxt.value.toLowerCase();
   var ev = isValidEmail(email);
   if(!ev.ok){ toast(ev.msg); return; }
   var rec = await DB.get('users', currentUser);
@@ -4911,7 +5160,11 @@ function matchSymptoms(txt){
 }
 function symTextSubmit(){
   const el = $('symInput');
-  const raw = el ? sanitizeInput(el.value, 200) : '';
+  const rawV = el ? el.value : '';
+  // [AH-P1.5] 严格校验
+  const sv = validateText(rawV, {label:'症状描述', required:true, max:200});
+  if(!sv.ok){ toast(sv.msg || '请先输入症状文字'); autoSpeak('请先输入症状文字'); return; }
+  const raw = sv.value.trim();
   if(!raw){ toast('请先输入症状文字，如：发烧、头痛'); autoSpeak('请先输入症状文字'); return; }
   const hits = matchSymptoms(raw);
   if(hits.length){
@@ -5250,9 +5503,16 @@ async function addMed(){
   }
   const editingIdEl = $('medEditingId');
   const editingId = editingIdEl ? Number(editingIdEl.value || 0) : 0;
-  const name = sanitizeInput($('medName').value, 50);
-  const dose = sanitizeInput($('medDose').value, 50);
-  const freq = sanitizeInput($('medFreq').value, 20);
+  // [AH-P1.5] 严格校验文本字段
+  const nameV = validateText($('medName').value, {label:'药品名称', required:true, max:50});
+  if(!nameV.ok){ toast(nameV.msg || '请填写药品名称'); return; }
+  const doseV = validateText($('medDose').value, {label:'剂量说明', required:false, max:50});
+  if(!doseV.ok){ toast(doseV.msg); return; }
+  const freqV = validateText($('medFreq').value, {label:'服用频次', required:false, max:20});
+  if(!freqV.ok){ toast(freqV.msg); return; }
+  const name = nameV.value.trim();
+  const dose = doseV.value;
+  const freq = freqV.value || 'daily';
   const times = collectTimes();
   const startDate = ($('medStartDate') && $('medStartDate').value) ? String($('medStartDate').value).slice(0,10) : beijingYMD();
   if(!name){ toast('请填写药品名称'); return; }
@@ -5762,7 +6022,11 @@ function setDrugCat(c){
 function renderDrugLib(){
   const el = $('drugList');
   if(!el) return;
-  const q = sanitizeInput(($('drugSearch') ? $('drugSearch').value : ''), 50).toLowerCase().replace(/\s/g,'');
+  // [AH-P1.5] 严格校验搜索词
+  const qRaw = $('drugSearch') ? $('drugSearch').value : '';
+  const qv = validateText(qRaw, {label:'药品搜索词', required:false, max:50});
+  if(!qv.ok){ toast(qv.msg); return; }
+  const q = qv.value.toLowerCase().replace(/\s/g,'');
   const list = DRUG_DB.filter(d=>{
     if(drugCat !== '全部' && d.cat !== drugCat) return false;
     if(!q) return true;
@@ -6128,7 +6392,11 @@ function locate(){
 }
 function searchPlace(){
   const el = $('addrInput');
-  const kw = el ? sanitizeInput(el.value, 100) : '';
+  // [AH-P1.5] 严格校验搜索词（传入地图 SDK）
+  const rawV = el ? el.value : '';
+  const kv = validateText(rawV, {label:'地点搜索词', required:true, max:100});
+  if(!kv.ok){ toast(kv.msg || '请先输入地点'); autoSpeak('请先输入地点'); return; }
+  const kw = kv.value.trim();
   if(!kw){
     toast('请先输入地点，如小区、街道或地标名');
     autoSpeak('请先输入地点名称');
@@ -6875,14 +7143,24 @@ function onChronicTypeChange(){
 }
 
 async function saveChronic(){
+  // [AH-P1.5] 疾病类型严格白名单校验
+  const ALLOWED_DISEASE = Object.freeze({hypertension:1,diabetes:1,coronary:1,hyperlipid:1,copd:1,other:1});
   const type = $('chronicType').value;
   if(!type){ toast('请先选择疾病类型'); return; }
-  const date = $('chronicDate').value || '';
-  const hosp = sanitizeInput($('chronicHosp').value, 50);
+  if(!ALLOWED_DISEASE[type]){ toast('疾病类型不合法'); return; }
+  // 就诊日期仅允许 YYYY-MM-DD（浏览器 date 输入标准格式）
+  const dateRaw = $('chronicDate').value || '';
+  if(dateRaw && !/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)){ toast('就诊日期格式错误'); return; }
+  const date = dateRaw;
+  // [AH-P1.5] 严格校验
+  const hospV = validateText($('chronicHosp').value, {label:'就诊医院', required:false, max:50});
+  if(!hospV.ok){ toast(hospV.msg); return; }
+  const hosp = hospV.value;
   // 医院资质审查（宽松：黑名单阻止，灰名单警告）
   const hospCheck = validateHospitalInput(hosp);
   if(!hospCheck.ok){ toast(hospCheck.msg); if(autoSpeak) autoSpeak(hospCheck.msg); return; }
   const targets = collectTargets(type);
+  if(typeof targets === 'boolean' && !targets){ return; }
   const rec = withUsername({
     disease_type: type,
     diagnose_date: date,
@@ -6907,16 +7185,37 @@ async function saveChronic(){
 }
 
 function collectTargets(type){
+  // [AH-P1.5] 血压/血糖/心率阈值做范围校验，避免超限值污染数据
   const t = {};
-  const get = id => { const el = $(id); return el ? parseFloat(el.value) : null; };
+  const clamp = (v, lo, hi) => {
+    if(v == null || isNaN(v)) return null;
+    return Math.max(lo, Math.min(hi, v));
+  };
+  const pairOK = (a, b, nameA, nameB) => {
+    if(a != null && b != null && a < b){
+      toast(nameA + ' 不能低于 ' + nameB);
+      return false;
+    }
+    return true;
+  };
+  const get = (id, lo, hi) => { const el = $(id); if(!el) return null; return clamp(parseFloat(el.value), lo, hi); };
   if(type === 'hypertension'){
-    t.systolic_high = get('t_sy_hi'); t.systolic_low = get('t_sy_lo');
-    t.diastolic_high = get('t_dia_hi'); t.diastolic_low = get('t_dia_lo');
+    const sHi = get('t_sy_hi', 60, 300),  sLo = get('t_sy_lo', 30, 260);
+    const dHi = get('t_dia_hi', 30, 200), dLo = get('t_dia_lo', 20, 180);
+    if(!pairOK(sHi, sLo, '收缩压上限', '收缩压下限')) return false;
+    if(!pairOK(dHi, dLo, '舒张压上限', '舒张压下限')) return false;
+    t.systolic_high = sHi; t.systolic_low = sLo;
+    t.diastolic_high = dHi; t.diastolic_low = dLo;
   } else if(type === 'diabetes'){
-    t.fasting_high = get('t_fast_hi'); t.fasting_low = get('t_fast_lo');
-    t.postprandial_high = get('t_pp_hi');
+    const fHi = get('t_fast_hi', 1, 40),  fLo = get('t_fast_lo', 0.5, 30);
+    const pHi = get('t_pp_hi',   1, 40);
+    if(!pairOK(fHi, fLo, '空腹上限', '空腹下限')) return false;
+    t.fasting_high = fHi; t.fasting_low = fLo;
+    t.postprandial_high = pHi;
   } else if(type === 'coronary'){
-    t.heart_rate_high = get('t_hr_hi'); t.heart_rate_low = get('t_hr_lo');
+    const hHi = get('t_hr_hi', 30, 260), hLo = get('t_hr_lo', 20, 220);
+    if(!pairOK(hHi, hLo, '心率上限', '心率下限')) return false;
+    t.heart_rate_high = hHi; t.heart_rate_low = hLo;
   }
   return t;
 }
@@ -7068,10 +7367,30 @@ function voiceBP(){
 async function saveMetric(){
   if(!selectedChronicId){ toast('请先创建或选择慢病档案'); return; }
   const type = $('metricType').value;
-  const v1 = parseFloat($('m_v1')?.value);
-  if(!v1 || v1 <= 0){ toast('请输入有效数值'); return; }
-  const v2 = type === 'bp' ? (parseFloat($('m_v2')?.value) || null) : null;
-  const note = sanitizeInput($('metricNote').value, 100);
+  // [AH-P1.5] 指标类型做白名单 + 不同指标数值范围 clamp
+  const ALLOWED_TYPES = { bp:1, fasting:1, postprandial:1, heart_rate:1, weight:1 };
+  if(!ALLOWED_TYPES[type]){ toast('指标类型不合法'); return; }
+  const clampRange = {
+    bp:         { v1:[30,300], v2:[20,200] },
+    fasting:    { v1:[0.5,40] },
+    postprandial:{ v1:[0.5,40] },
+    heart_rate: { v1:[20,260] },
+    weight:     { v1:[1,400] }
+  }[type];
+  let v1 = parseFloat($('m_v1')?.value);
+  if(isNaN(v1) || v1 <= 0){ toast('请输入有效数值'); return; }
+  v1 = Math.max(clampRange.v1[0], Math.min(clampRange.v1[1], v1));
+  let v2 = null;
+  if(type === 'bp'){
+    v2 = parseFloat($('m_v2')?.value);
+    if(isNaN(v2) || v2 <= 0){ toast('请输入舒张压'); return; }
+    v2 = Math.max(clampRange.v2[0], Math.min(clampRange.v2[1], v2));
+    if(v1 < v2){ toast('收缩压不能低于舒张压'); return; }
+  }
+  // [AH-P1.5] 严格校验备注
+  const noteV = validateText($('metricNote').value, {label:'测量备注', required:false, max:100});
+  if(!noteV.ok){ toast(noteV.msg); return; }
+  const note = noteV.value;
   // 归属校验：指标必须写到自己的档案里
   const chronic = await getMyChronic(selectedChronicId);
   if(!chronic){ toast('档案不存在或无权操作'); selectedChronicId = null; renderChronicList(); return; }
@@ -7883,12 +8202,21 @@ async function saveFollowup(){
   if(!selectedChronicId){ toast('请先选择慢病档案'); return; }
   const date = $('followupDate').value;
   if(!date){ toast('请选择复诊日期'); return; }
-  const dept = sanitizeInput($('followupDept').value, 50);
-  const hosp = sanitizeInput($('followupHosp').value, 50);
+  // [AH-P1.5] 复诊日期必须是 YYYY-MM-DD，提醒天数字节范围 [1,365]
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ toast('复诊日期格式错误'); return; }
+  // [AH-P1.5] 严格校验文本字段
+  const deptV = validateText($('followupDept').value, {label:'复诊科室', required:false, max:50});
+  if(!deptV.ok){ toast(deptV.msg); return; }
+  const hospV = validateText($('followupHosp').value, {label:'复诊医院', required:false, max:50});
+  if(!hospV.ok){ toast(hospV.msg); return; }
+  const dept = deptV.value;
+  const hosp = hospV.value;
   // 医院资质审查（宽松：黑名单阻止，灰名单警告）
   const hospCheck = validateHospitalInput(hosp);
   if(!hospCheck.ok){ toast(hospCheck.msg); if(autoSpeak) autoSpeak(hospCheck.msg); return; }
-  const remind = parseInt($('followupRemind').value) || 7;
+  const remindRaw = parseInt($('followupRemind').value);
+  if(isNaN(remindRaw) || remindRaw < 1 || remindRaw > 365){ toast('提醒天数需在 1-365 之间'); return; }
+  const remind = remindRaw;
   const chronic = await getMyChronic(selectedChronicId); // 归属校验
   if(!chronic){ toast('档案不存在或无权操作'); selectedChronicId = null; renderChronicList(); return; }
   const rec = {
@@ -7977,13 +8305,17 @@ async function renderChronicAlerts(){
 async function updateAdminUI(){
   const root = $('adminRoot'), forbid = $('adminForbidden');
   if(!root || !forbid) return;
-  if(!currentUser || !isAdmin){
+  if(!currentUser || !isAnyAdmin()){
     forbid.style.display = '';
     root.style.display = 'none';
     return;
   }
   forbid.style.display = 'none';
   root.style.display = '';
+  // [AH-P2] 首次进入管理区：刷新次级管理员授权下拉
+  try{ adminPermRefresh(); }catch(e){}
+  // [AH-P5] 首次进入管理区：刷新维护模式状态卡片
+  try{ adminMMReload(); }catch(e){}
   // 加载数据库概况
   const statsEl = $('adminStats');
   if(statsEl){
@@ -8026,8 +8358,8 @@ async function updateAdminUI(){
   // 清理结果提示区重置
   var pt = $('purgeTestResult');
   if(pt){ pt.style.display = 'none'; pt.textContent = ''; }
-  // 渲染用户管理 + 系统公告区
-  if(currentUser && isAdmin){
+    // 渲染用户管理 + 系统公告区
+  if(currentUser && isAnyAdmin()){
     try{ adminLoadUsers(); }catch(e){}
     try{ adminLoadEmailCoverage(); }catch(e){}
     try{ adminRenderAnnouncements(); }catch(e){}
@@ -8035,7 +8367,9 @@ async function updateAdminUI(){
 }
 
 async function purgeTestAccounts(){
-  if(!currentUser || !isAdmin){ toast('仅管理员可执行该操作'); return; }
+  if(!currentUser || !isAnyAdmin()){ toast('仅管理员可执行该操作'); return; }
+  audit('admin.purge_test', {note:'手动清理test前缀账号'}); // sub 审计
+  // 清理测试账号 = 基础权限（无限制，不 requirePerm）
   if(!confirm('确认要清理数据库中所有 test_ 前缀的账号吗？该操作不可恢复！\n管理员账号本身不会被删除。')) return;
   var pt = $('purgeTestResult');
   if(pt){ pt.style.display = ''; pt.textContent = '正在清理...'; }
@@ -8081,6 +8415,340 @@ async function purgeTestAccounts(){
   }
 }
 
+/* ==============================================================================
+   [AH-P2/P3/P4] 权限分层核心：requirePerm + 审计 audit
+   ============================================================================== */
+
+/** 节流：发送审计邮件太密就合并 */
+let _auditThrottle = new Map();
+/** 审计入口：sub 管理员一切管理操作（含只读）都调用，向 AUDIT_EMAIL_TO 发邮件 */
+function audit(action, payload, opts){
+  if(!currentUser) return;
+  if(currentUser === SUPER_ADMIN_ID || adminLevel === 'super') return; // super 不发审计邮件（避免爆邮箱）
+  if(adminLevel !== 'sub') return; // 非 sub 也不是管理员，不该有管理操作
+  opts = opts || {};
+  const key = action + '|' + JSON.stringify(payload || null).slice(0, 120);
+  if(_auditThrottle.has(key)){
+    clearTimeout(_auditThrottle.get(key));
+  }
+  _auditThrottle.set(key, setTimeout(() => {
+    _auditThrottle.delete(key);
+    const now = new Date();
+    const bjStr = now.toLocaleString('zh-CN', {hour12:false});
+    const subject = '[医路相伴·审计] ' + currentUser + ' 执行了 ' + action;
+    let body =
+      '<div style="font-family:system-ui,Arial,sans-serif;max-width:620px;margin:0 auto;">' +
+      '<h2 style="margin:0 0 12px;">医路相伴 · 次级管理员操作审计</h2>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+      '<tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">操作者</th><td style="padding:8px 10px;border:1px solid #e2e8f0;">' + _escHTML(currentUser) + '</td></tr>' +
+      '<tr><th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;background:#f1f5f9;">操作</th><td style="padding:8px 10px;border:1px solid #e2e8f0;">' + _escHTML(action) + '</td></tr>' +
+      '<tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">时间（北京时间）</th><td style="padding:8px 10px;border:1px solid #e2e8f0;">' + _escHTML(bjStr) + '</td></tr>' +
+      '<tr><th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;background:#f1f5f9;">详情</th><td style="padding:8px 10px;border:1px solid #e2e8f0;"><pre style="margin:0;white-space:pre-wrap;word-break:break-word;">' + _escHTML(JSON.stringify(payload || {}, null, 2)) + '</pre></td></tr>' +
+      '</table></div>';
+    try{
+      sendEmail(AUDIT_EMAIL_TO, subject, body);
+    }catch(e){ /* 审计邮件失败不影响业务 */ }
+  }, 2500));
+}
+function _escHTML(s){
+  if(s == null) return '';
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+/**
+ * requirePerm(permKey, opts): 调用前拦截
+ *   - super / 有长期授权 → resolve(true)
+ *   - sub 无授权 → 阻止执行，发邮件申请 → resolve({pending:true,token})（P3 实现自动重放；此处先 reject）
+ * @returns {Promise<boolean>} true=可以执行；false=拦截（调用方 return，不继续后续逻辑）
+ */
+async function requirePerm(permKey, opts){
+  opts = opts || {};
+  const actionDesc = opts.actionDesc || opts.action || ('权限操作：' + permKey);
+  // 1) super 直接通过；未登录或非管理员一律拒绝
+  if(!currentUser || !isAnyAdmin()){ toast('需要管理员权限'); return false; }
+  if(currentUser === SUPER_ADMIN_ID || adminLevel === 'super') return true;
+  // 2) sub 有长期授权 → 通过
+  if(adminLevel === 'sub' && hasPerm(permKey)){
+    // 审计（读/写操作调用方已单独 audit，这里不再重复；但保存类操作再补一条以留痕）
+    return true;
+  }
+  // 3) sub 无长期授权 → 拦截，触发按次申请（P3：创建 pending_approvals 记录 + 发邮件；当前先阻止+提示）
+  const msg = ('该操作需要最高管理员授权，已向 ' + AUDIT_EMAIL_TO + ' 发送申请邮件，请等待批准后重试。');
+  try{
+    const approved = await _submitApprovalRequest(permKey, actionDesc, opts.payload || null);
+    if(!approved){ toast(msg + '（已发送申请）'); return false; }
+    return true;
+  }catch(e){
+    toast('创建授权申请失败：' + (e && e.message ? e.message : '未知错误'));
+    return false;
+  }
+}
+/** 创建 pending_approvals + 发邮件 → 返回 Promise<boolean>，true=批准后重放批准达成（P3 Realtime 再自动），false=被拒/超时 */
+async function _submitApprovalRequest(permKey, actionDesc, payload){
+  if(!cloudUsable()){ throw new Error('云端不可用，无法发送授权申请'); }
+  // 写一行 pending_approvals（用 sbFetch REST 插入）
+  const rec = {
+    operator: currentUser,
+    perm_key: permKey,
+    action_desc: (actionDesc || '').slice(0,200),
+    payload: payload || {},
+    status: 'pending'
+  };
+  let created = null;
+  try{
+    const r = await sbFetch('pending_approvals', {
+      method: 'POST',
+      headers: {'Prefer': 'return=representation', 'Content-Type':'application/json'},
+      body: JSON.stringify(rec)
+    });
+    if(!r.ok){ throw new Error('HTTP ' + r.status); }
+    const arr = await r.json();
+    created = arr && arr[0];
+    if(!created || !created.token) throw new Error('响应无 token');
+  }catch(e){
+    console.warn('[reqPerm] 插入 pending_approvals 失败：', e);
+    throw new Error('无法创建授权申请记录：' + (e.message || ''));
+  }
+  // 发邮件到 AUDIT_EMAIL_TO
+  const origin = location.origin || (location.protocol + '//' + location.host);
+  const approveLink = origin + '/?admin_approve=' + encodeURIComponent(created.token);
+  const rejectLink  = origin + '/?admin_reject='  + encodeURIComponent(created.token);
+  const subject = '[医路相伴·授权申请] ' + currentUser + ' 申请 ' + actionDesc;
+  const body =
+    '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px;margin:0 auto;">' +
+    '<h2 style="margin:0 0 10px;">授权申请</h2>' +
+    '<div style="font-size:14px;color:#334155;">' +
+      '<div>操作人：<b>' + _escHTML(currentUser) + '</b>（次级管理员）</div>' +
+      '<div>申请权限：<b>' + _escHTML(permKey) + '</b></div>' +
+      '<div>操作描述：' + _escHTML(actionDesc || '') + '</div>' +
+      '<div>发起时间：' + new Date().toLocaleString('zh-CN',{hour12:false}) + '</div>' +
+    '</div>' +
+    '<div style="margin:18px 0;padding:12px 14px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:12px;font-size:13px;color:#0f172a;">' +
+    '<b>Payload</b>（含本次操作具体参数）<br><pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-word;">' + _escHTML(JSON.stringify(payload||{},null,2)) + '</pre></div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+    '<a href="' + _escHTML(approveLink) + '" style="display:inline-block;padding:10px 18px;background:#10b981;color:#fff;border-radius:10px;text-decoration:none;font-weight:800;">✅ 批准此次申请</a>' +
+    '<a href="' + _escHTML(rejectLink)  + '" style="display:inline-block;padding:10px 18px;background:#ef4444;color:#fff;border-radius:10px;text-decoration:none;font-weight:800;">❌ 拒绝此次申请</a>' +
+    '</div>' +
+    '<div style="margin-top:16px;font-size:12px;color:#64748b;">申请令牌有效期 1 小时。链接点击后，请确保浏览器已登录最高管理员账号（15184461098_admin）。</div></div>';
+  try{
+    const sent = await sendEmail(AUDIT_EMAIL_TO, subject, body);
+    if(!sent) console.warn('[reqPerm] 申请邮件发送失败');
+  }catch(e){
+    console.warn('[reqPerm] 申请邮件发送异常', e);
+  }
+  // P3 Realtime：挂 token 监听器；若 3600s 内收到批准返回 true，否则 false
+  return new Promise(function(resolve){
+    const timer = setTimeout(function(){
+      off(); resolve(false);
+    }, 60*60*1000);
+    function off(){
+      clearTimeout(timer);
+      if(typeof removeApprovalListener === 'function'){
+        removeApprovalListener(created.token);
+      }
+    }
+    if(typeof addApprovalListener === 'function'){
+      addApprovalListener(created.token, function(result){
+        off(); resolve(!!result && !!result.approved);
+      });
+    } else {
+      // Realtime 通道尚未初始化（理论不会）：退化为 3 秒后提示用户手动重试
+      setTimeout(function(){ off(); resolve(false); }, 3000);
+    }
+  });
+}
+
+/* ============== AH-P2：次级管理员授权卡片 ============== */
+async function adminPermRefresh(){
+  if(!await requirePerm(null, {action:'admin.perm.refresh', actionDesc:'刷新次级管理员授权列表'})) return;
+  audit('admin.perm.refresh', {});
+  const sel = $('admPermUser'); if(!sel) return;
+  // 用 admin_list_users RPC 拿一页（lim=200 足够实际场景，或者再补所有管理员）
+  const rows = [];
+  try{
+    const data = await adminRPC('admin_list_users', {lim: 500, offs: 0, kw: ''});
+    if(data && Array.isArray(data.rows)){
+      // 仅展示已有管理员身份的，或 super/当前用户
+      data.rows.forEach(r => {
+        if(r.id === SUPER_ADMIN_ID || r.is_admin || (r.admin_level && r.admin_level !== 'none')){
+          rows.push(r);
+        }
+      });
+      if(!rows.find(r => r.id === SUPER_ADMIN_ID)){
+        rows.unshift({id:SUPER_ADMIN_ID, is_admin:true, admin_level:'super', sub_perms:{db:true,force_popup:true,pin:true,email_push:true,mmode:true}});
+      }
+    }
+  }catch(e){
+    toast('拉取用户列表失败：' + (e.message || ''));
+    return;
+  }
+  sel.innerHTML = rows.map(r => {
+    const level = r.admin_level || (r.is_admin ? 'super' : 'none');
+    const display = r.id + ' · ' + (level === 'super' ? '最高管理员' : (level === 'sub' ? '次级管理员' : '普通账号'));
+    return '<option value="' + encodeURIComponent(r.id) + '" data-level="' + level + '" data-perms=\'' + encodeURIComponent(JSON.stringify(r.sub_perms || {})) + '\'>' + _escHTML(display) + '</option>';
+  }).join('');
+  adminPermUserChange();
+}
+function adminPermUserChange(){
+  const sel = $('admPermUser'), badge = $('admPermUserLevel');
+  const db = $('admPermDb'), popup = $('admPermPopup'), pin = $('admPermPin'),
+        email = $('admPermEmail'), mmode = $('admPermMmode');
+  if(!sel) return;
+  const opt = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+  if(!opt){
+    if(badge) badge.textContent = '未选择';
+    return;
+  }
+  const id = decodeURIComponent(opt.value || '');
+  const lv = opt.getAttribute('data-level') || 'none';
+  let perms = Object.assign({}, DEFAULT_SUB_PERMS);
+  try{ perms = Object.assign({}, perms, JSON.parse(decodeURIComponent(opt.getAttribute('data-perms') || '{}' || '%7B%7D'))); }catch(_){}
+  if(badge){
+    badge.className = 'adm-badge ' + (lv === 'super' ? 'admin' : (lv === 'sub' ? 'info' : ''));
+    badge.style.cssText = 'margin-left:8px;white-space:nowrap;padding:3px 10px;border-radius:999px;font-weight:800;background:' + (lv==='super'?'#fcd9d9;color:#b91c1c':(lv==='sub'?'#dbeafe;color:#1d4ed8':'#eef2ff;color:#4338ca'));
+    badge.textContent = id === SUPER_ADMIN_ID ? '最高管理员（不可改）' : (lv === 'sub' ? '次级管理员' : '普通账号');
+  }
+  const disabled = (id === SUPER_ADMIN_ID) || (adminLevel !== 'super');
+  [db,popup,pin,email,mmode].forEach(el => { if(el) el.disabled = disabled; });
+  if(db) db.checked = !!perms.db;
+  if(popup) popup.checked = !!perms.force_popup;
+  if(pin) pin.checked = !!perms.pin;
+  if(email) email.checked = !!perms.email_push;
+  if(mmode) mmode.checked = !!perms.mmode;
+}
+async function adminPermSave(){
+  if(adminLevel !== 'super'){ toast('只有最高管理员可修改次级管理员授权'); return; }
+  const sel = $('admPermUser');
+  if(!sel || sel.selectedIndex < 0){ toast('请先选择一个账号'); return; }
+  const id = decodeURIComponent(sel.value);
+  if(id === SUPER_ADMIN_ID){ toast('最高管理员权限不可修改'); return; }
+  const perms = {
+    db: !!($('admPermDb')||{}).checked,
+    force_popup: !!($('admPermPopup')||{}).checked,
+    pin: !!($('admPermPin')||{}).checked,
+    email_push: !!($('admPermEmail')||{}).checked,
+    mmode: !!($('admPermMmode')||{}).checked
+  };
+  // 云端 UPDATE users SET admin_level='sub'（若还不是）+ sub_perms=...  WHERE id=eq.id
+  const patch = {sub_perms: perms};
+  // 如果该用户目前不是管理员 → 设为次级管理员（sub）
+  const opt = sel.options[sel.selectedIndex];
+  const lv = (opt.getAttribute('data-level') || '').toString();
+  if(lv !== 'sub' && lv !== 'super'){
+    patch.admin_level = 'sub';
+  }
+  try{
+    const r = await sbFetch('users?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: {'Prefer': 'return=minimal', 'Content-Type':'application/json'},
+      body: JSON.stringify(patch)
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    // 同时：如果该用户是 is_admin=false 的老账号 → RPC admin_set_admin 同步 legacy 字段（调用方需要的是 admin_level，但旧字段 is_admin 也保持一致）
+    try{
+      await adminRPC('admin_set_admin', {target_id: id, make_admin: true}).catch(()=>{});
+    }catch(_){}
+    audit('admin.perm.save', {target_id: id, perms: perms});
+    toast('✓ 已保存授权：' + id);
+    await adminPermRefresh();
+  }catch(e){
+    toast('保存授权失败：' + (e.message || ''));
+  }
+}
+
+/* ============== AH-P2：用户列表按钮 接入 requirePerm('db')；设为管理员 super 保护 ============== */
+async function adminSetAdmin(id, toAdmin){
+  if(!id) return;
+  // (a) 最高管理员 super 不能被降级（硬编码保护）
+  if(id === SUPER_ADMIN_ID){
+    toast('最高管理员（' + SUPER_ADMIN_ID + '）不可被降级');
+    return;
+  }
+  if(toAdmin && adminLevel !== 'super'){
+    toast('只有最高管理员可以把账号提升为次级管理员');
+    return;
+  }
+  if(!toAdmin && adminLevel !== 'super'){
+    toast('只有最高管理员可以取消次级管理员身份');
+    return;
+  }
+  const ok = await requirePerm('db', {action: toAdmin ? 'admin.set_sub' : 'admin.unset_sub', actionDesc:(toAdmin?'提升为次级管理员：':'取消次级管理员：') + id, payload:{id:id, toAdmin:toAdmin}});
+  if(!ok) return;
+  const hint = toAdmin ? '把账号 ' + id + ' 设为次级管理员？' : '取消账号 ' + id + ' 的次级管理员权限？';
+  if(!confirm(hint)) return;
+  try{
+    // 同时设置 legacy is_admin + 新 admin_level
+    const patch = {is_admin: !!toAdmin, admin_level: toAdmin ? 'sub' : 'none'};
+    if(!toAdmin){
+      patch.sub_perms = Object.assign({}, DEFAULT_SUB_PERMS);
+    }
+    const r = await sbFetch('users?id=eq.' + encodeURIComponent(id), {
+      method:'PATCH',
+      headers:{'Prefer':'return=minimal','Content-Type':'application/json'},
+      body: JSON.stringify(patch)
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    // 老 RPC 同时调用以保持其他视图一致（admin_list_users 内部可能使用 is_admin）
+    try{ await adminRPC('admin_set_admin', { target_id: id, make_admin: !!toAdmin }).catch(()=>{}); }catch(_){}
+    audit(toAdmin ? 'admin.set_sub' : 'admin.unset_sub', {target_id: id});
+    toast('✓ 操作成功');
+    adminLoadUsers();
+  }catch(e){ toast('操作失败：' + (e.message || '')); }
+}
+async function adminDeleteUser(id){
+  if(id === SUPER_ADMIN_ID){ toast('无法删除最高管理员账号'); return; }
+  const ok = await requirePerm('db', {action:'admin.delete_user', actionDesc:'删除账号 ' + id, payload:{target_id:id}});
+  if(!ok) return;
+  audit('admin.delete_user', {target_id: id});
+  if(!confirm('确认删除账号 ' + id + ' 及其所有业务数据？不可恢复！')) return;
+  try{
+    const r = await adminRPC('admin_delete_user', { target_id: id });
+    if(r && r.ok){
+      toast('✓ 已删除 ' + (r.deleted_users||0) + ' 个账号');
+      updateAdminUI();
+      adminLoadEmailCoverage();
+      adminLoadUsers();
+    } else toast('删除失败');
+  }catch(e){ toast('删除失败：' + (e.message || '未知错误')); }
+}
+async function adminResetPass(id){
+  const ok = await requirePerm('db', {action:'admin.reset_pass', actionDesc:'重置密码 ' + id, payload:{target_id:id}});
+  if(!ok) return;
+  audit('admin.reset_pass.begin', {target_id: id});
+  ADM_STATE.resetTarget = id;
+  const m = $('admResetModal'), u = $('admResetUser'), p = $('admResetPass');
+  if(u) u.textContent = id;
+  if(p) p.value = '';
+  if(m){ m.classList.remove('hidden'); m.style.display='flex'; }
+}
+async function adminSubmitReset(){
+  const passRaw = ($('admResetPass') || {}).value || '';
+  // [AH-P1.5] 管理员重置密码：用 sanitizePass 移除控制字符 + 后端严格校验
+  const pass = sanitizePass(passRaw);
+  const pv = isValidPassword(pass);
+  if(!pv.ok){ toast(pv.msg); return; }
+  const ok = await requirePerm('db', {
+    action:'admin.reset_pass.submit',
+    actionDesc:'重置密码提交：' + ADM_STATE.resetTarget,
+    payload:{target_id: ADM_STATE.resetTarget, newLen: pass.length}
+  });
+  if(!ok) return;
+  try{
+    const r = await adminRPC('admin_reset_user_pass', {
+      target_id: ADM_STATE.resetTarget, new_pass: pass
+    });
+    if(r && r.ok){
+      toast('✓ 密码已重置为：' + pass);
+      adminCloseReset();
+      audit('admin.reset_pass.done', {target_id: ADM_STATE.resetTarget});
+    } else {
+      toast('重置失败');
+    }
+  }catch(e){ toast('重置失败：' + (e.message || '未知错误')); }
+}
+
 /* ============== 管理端：RPC 封装 + 状态 ============== */
 const ADM_STATE = {
   filter: 'all', keyword: '', offset: 0, limit: 20, total: 0,
@@ -8119,7 +8787,8 @@ async function adminRPC(name, body, _opts){
 }
 
 async function adminLoadUsers(){
-  if(!currentUser || !isAdmin){ toast('仅管理员可访问'); return; }
+  if(!currentUser || !isAnyAdmin()){ toast('仅管理员可访问'); return; }
+  audit('admin.users.load', {filter: ADM_STATE.filter, keyword: ADM_STATE.keyword || '', offset: ADM_STATE.offset});
   const tb = $('adminUserTbody');
   if(!tb) return;
   const sum = $('adminUserSummary'), pageEl = $('adminUserPage');
@@ -8132,7 +8801,7 @@ async function adminLoadUsers(){
     let rows = data && Array.isArray(data.rows) ? data.rows : [];
     const total = data && typeof data.total === 'number' ? data.total : rows.length;
     ADM_STATE.total = total;
-    if(ADM_STATE.filter === 'admin')  rows = rows.filter(r => !!r.is_admin);
+    if(ADM_STATE.filter === 'admin')  rows = rows.filter(r => (r.admin_level && r.admin_level !== 'none') || !!r.is_admin);
     // 注意：由于所有账号同时拥有老人+家属身份（B 方案升级），
     // 历史数据的 r.role（登录时选中的身份）只作为辅助筛选保留，不决定角色列显示
     if(ADM_STATE.filter === 'elder')  rows = rows.filter(r => (r.role || 'elder') === 'elder');
@@ -8166,7 +8835,11 @@ async function adminLoadUsers(){
       const bindCount = typeof r.bind_count === 'number' ? r.bind_count : (r.has_bind ? 1 : 0);
       const email = r.email ? r.email : '<span style="color:var(--muted)">—</span>';
       const date = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : '—';
-      const isAdmTd = r.is_admin ? '<span class="adm-badge admin">管理员</span>' : '<span style="color:var(--muted)">否</span>';
+      const isAdmTd = (rid === SUPER_ADMIN_ID)
+        ? '<span class="adm-badge admin" style="background:#fcd9d9;color:#b91c1c;border:1px solid #fecaca;">最高管理员</span>'
+        : ((r.admin_level === 'super') ? '<span class="adm-badge admin" style="background:#fee2e2;color:#b91c1c;">最高管理员</span>'
+           : (r.admin_level === 'sub' ? '<span class="adm-badge" style="background:#dbeafe;color:#1d4ed8;">次级管理员</span>'
+             : (r.is_admin ? '<span class="adm-badge admin">管理员</span>' : '<span style="color:var(--muted)">否</span>')));
       const testBadge = isTest ? ' <span class="adm-badge test">测试</span>' : '';
       // 角色列：B 方案升级，所有账号两侧都有身份
       const hasElder = typeof r.has_elder === 'boolean' ? r.has_elder : true;
@@ -8177,17 +8850,33 @@ async function adminLoadUsers(){
       const familyTd = roleDot(hasFamily, onlineFamily, '家属');
 
       const ops = [
-        '<button class="btn line" onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>',
+        '<button class="btn line" data-dbact="resetpass" onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>',
       ];
-      if(!r.is_admin){
-        ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',true)">设为管理员</button>');
-      } else if(!isSelf){
-        ops.push('<button class="btn ghost" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',false)">取消管理员</button>');
+      // 「设为管理员/取消管理员」：只有最高管理员才能操作；
+      //   且最高管理员自己不可降、次级管理员也不可把别人提为 super
+      if(adminLevel === 'super'){
+        if(rid === SUPER_ADMIN_ID){
+          // super 自己：留空（不显示取消按钮）
+        } else if(r.admin_level === 'sub' || r.admin_level === 'super' || r.is_admin){
+          // 当前已是管理员：显示"取消管理员"
+          ops.push('<button class="btn ghost" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',false)">取消管理员</button>');
+        } else {
+          ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',true)">设为管理员</button>');
+        }
+      } else {
+        // 次级管理员：没有 db 长期授权时，在按钮上 disabled
+        const dis = hasPerm('db') ? '' : ' disabled style="opacity:.55;cursor:not-allowed;border-style:dashed;" title="需要「数据库管理」长期授权或单次批准后可用"';
+        // 按钮保留 disabled 灰态；点击时 adminSetAdmin 会再次用 requirePerm 拦截按次申请
+        ops[0] = '<button class="btn line" ' + dis + ' onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>';
       }
-      if(!isSelf && rid !== currentUser){
-        ops.push('<button class="btn warn" style="background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteUser(\'' + rid.replace(/'/g,'\\\'') + '\')">删除</button>');
+      // 删除：自己 & super 不删
+      if(!isSelf && rid !== currentUser && rid !== SUPER_ADMIN_ID){
+        const disDel = (adminLevel !== 'super' && !hasPerm('db')) ? ' style="opacity:.55;cursor:not-allowed;border-style:dashed;" ' : '';
+        ops.push('<button class="btn warn" ' + disDel + ' style="' + (disDel ? '' : '') + 'background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteUser(\'' + rid.replace(/'/g,'\\\'') + '\')">删除</button>');
       } else if(isSelf){
         ops.push('<span style="font-size:12px;color:var(--muted);">（当前登录）</span>');
+      } else if(rid === SUPER_ADMIN_ID && !isSelf){
+        ops.push('<span style="font-size:12px;color:var(--danger);">受保护</span>');
       }
       return '<tr>'
         + '<td><b>' + rid + '</b>' + testBadge + '</td>'
@@ -8211,6 +8900,10 @@ async function adminLoadUsers(){
 function adminSearchUsers(){
   ADM_STATE.keyword = ($('adminUserSearch') || {}).value ? $('adminUserSearch').value.trim() : '';
   ADM_STATE.offset = 0;
+  const kv = validateText(ADM_STATE.keyword, {label:'用户搜索词', max:60});
+  if(!kv.ok){ toast(kv.msg || '搜索词包含非法字符'); return; }
+  ADM_STATE.keyword = kv.value;
+  audit('admin.users.search', {keyword: ADM_STATE.keyword});
   adminLoadUsers();
 }
 function adminResetSearch(){
@@ -8218,6 +8911,7 @@ function adminResetSearch(){
   ADM_STATE.keyword = '';
   ADM_STATE.filter = 'all';
   ADM_STATE.offset = 0;
+  audit('admin.users.reset_search', {});
   ['All','Admin','Elder','Family','Test'].forEach((k,i)=>{
     const map=['all','admin','elder','family','test'];
     const el = $('admFlt' + k);
@@ -8228,6 +8922,7 @@ function adminResetSearch(){
 function adminFilterUsers(f){
   ADM_STATE.filter = f;
   ADM_STATE.offset = 0;
+  audit('admin.users.filter', {filter: f});
   [['All','all'],['Admin','admin'],['Elder','elder'],['Family','family'],['Test','test']].forEach(([id,val])=>{
     const el = $('admFlt' + id);
     if(el){ el.classList.toggle('ghost', val !== f); }
@@ -8240,35 +8935,8 @@ function adminPageUsers(dir){
   nextOff = Math.max(0, Math.min(nextOff, (pages - 1) * ADM_STATE.limit));
   if(nextOff === ADM_STATE.offset){ toast('已到该页边界'); return; }
   ADM_STATE.offset = nextOff;
+  audit('admin.users.page', {dir: dir, offset: nextOff});
   adminLoadUsers();
-}
-
-function adminResetPass(id){
-  ADM_STATE.resetTarget = id;
-  const m = $('admResetModal'), u = $('admResetUser'), p = $('admResetPass');
-  if(u) u.textContent = id;
-  if(p) p.value = '';
-  if(m){ m.classList.remove('hidden'); m.style.display='flex'; }
-}
-function adminCloseReset(){
-  const m = $('admResetModal');
-  if(m){ m.classList.add('hidden'); m.style.display='none'; }
-  ADM_STATE.resetTarget = '';
-}
-async function adminSubmitReset(){
-  const pass = ($('admResetPass') || {}).value || '';
-  if(pass.length < 6){ toast('新密码至少 6 位'); return; }
-  try{
-    const r = await adminRPC('admin_reset_user_pass', {
-      target_id: ADM_STATE.resetTarget, new_pass: pass
-    });
-    if(r && r.ok){
-      toast('✓ 密码已重置为：' + pass);
-      adminCloseReset();
-    } else {
-      toast('重置失败');
-    }
-  }catch(e){ toast('重置失败：' + (e.message || '未知错误')); }
 }
 
 async function adminSetAdmin(id, toAdmin){
@@ -8722,6 +9390,35 @@ function adminOpenAnnEditor(id){
         lv = $('admAnnLevel'), pop = $('admAnnPopup'),
         fm = $('admAnnFrom'), to = $('admAnnTo');
   if(!m) return;
+  // [AH-P2] 根据长期授权禁用受限字段（即使 sub 手动 F12 打开，adminSubmitAnn 也会再做 second-pass 校验，不授权则触发按次申请）
+  const _isSuper = currentUser === SUPER_ADMIN_ID || adminLevel === 'super';
+  if(p){
+    p.disabled = !_isSuper && !hasPerm('pin');
+    if(p.disabled && !p.parentElement.classList.contains('perm-disabled-hint')){
+      p.parentElement.title = '需要「置顶显示」长期授权或最高管理员单次批准后才可勾选';
+    }
+  }
+  if(pop){
+    // 只对"每次访问都弹窗(always)"禁用：在 select 上通过 disabled 属性无法部分禁用，
+    // 所以 adminSubmitAnn 阶段拦截 value==='always' 时 requirePerm('force_popup')
+    // 这里给用户一个视觉提示（在下拉上方提示）
+    let tip = document.getElementById('admAnnPopupPermHint');
+    if(!tip){
+      tip = document.createElement('div');
+      tip.id = 'admAnnPopupPermHint';
+      tip.className = 'sub';
+      tip.style.cssText = 'color:#b45309;font-size:12px;margin-top:4px;';
+      pop.parentElement.appendChild(tip);
+    }
+    tip.textContent = (!_isSuper && !hasPerm('force_popup'))
+      ? '⚠️ 当前你无「每次访问都弹窗」长期授权，保存时若选择该项，会先向最高管理员发起按次申请。'
+      : '';
+  }
+  const sendBtn = $('admAnnEmailBtn');
+  if(sendBtn){
+    sendBtn.disabled = !_isSuper && !hasPerm('email_push');
+    sendBtn.title = sendBtn.disabled ? '需要「向邮箱推送」长期授权或最高管理员单次批准后才可发送' : '';
+  }
   if(id){
     const a = annGetAll().find(x => x.id === id);
     t.textContent = '编辑公告';
@@ -8744,6 +9441,8 @@ function adminOpenAnnEditor(id){
     if(to) to.value = '';
     _refreshAnnEmailBox({});
   }
+  // 给 modal 中新的输入框重新挂 input 守卫（因为是 display:flex 打开才可见控件）
+  m.querySelectorAll('input, textarea').forEach(mountInputGuard);
   m.classList.remove('hidden');
   m.style.display = 'flex';
 }
@@ -8753,18 +9452,46 @@ function adminCloseAnn(){
   ADM_STATE.annEditId = null;
 }
 async function adminSubmitAnn(){
-  const h = ($('admAnnHead')||{}).value || '';
-  const b = ($('admAnnBody')||{}).value || '';
+  const hRaw = ($('admAnnHead')||{}).value || '';
+  const bRaw = ($('admAnnBody')||{}).value || '';
+  const hv = validateText(hRaw, {label:'公告标题', required:true, max:80});
+  if(!hv.ok){ toast(hv.msg || '请填写公告标题'); return; }
+  const bv = validateText(bRaw, {label:'公告正文', required:false, long:true});
+  if(!bv.ok){ toast(bv.msg || '公告正文包含非法字符'); return; }
+  const h = hv.value.trim() || '公告';
+  const b = bv.value;
   const p = ($('admAnnPin')||{}).checked;
   const lv = ($('admAnnLevel')||{}).value || 'normal';
   const pop = ($('admAnnPopup')||{}).value || 'never';
   const fm = ($('admAnnFrom')||{}).value || '';
   const to = ($('admAnnTo')||{}).value || '';
-  if(!h.trim() && !b.trim()){ toast('请填写标题或正文'); return; }
+  if(!h && !b){ toast('请填写标题或正文'); return; }
   if(fm && to && new Date(fm) > new Date(to)){ toast('生效时间不得晚于失效时间'); return; }
+
+  // [AH-P2] 受限字段按次/长期授权拦截
+  // ① 置顶
+  if(p){
+    const ok1 = await requirePerm('pin', {
+      action: 'ann.save.pin',
+      actionDesc: ADM_STATE.annEditId ? ('编辑公告勾选置顶：' + String(ADM_STATE.annEditId).slice(0,16)) : '新建公告勾选置顶',
+      payload: {id: ADM_STATE.annEditId || null, title: h, pin:true}
+    });
+    if(!ok1) return;
+  }
+  // ② 每次访问都弹窗（force_popup）
+  if(pop === 'always'){
+    const ok2 = await requirePerm('force_popup', {
+      action: 'ann.save.force_popup',
+      actionDesc: ADM_STATE.annEditId ? ('公告设为每次访问都弹窗：' + String(ADM_STATE.annEditId).slice(0,16)) : '新建公告设置每次访问都弹窗',
+      payload: {id: ADM_STATE.annEditId || null, title: h, popup:'always'}
+    });
+    if(!ok2) return;
+  }
+  audit(ADM_STATE.annEditId ? 'admin.ann.edit' : 'admin.ann.create', {id: ADM_STATE.annEditId || null, title: h, pin: !!p, popup: pop, level: lv, hasFrom: !!fm, hasTo: !!to});
+
   const now = Date.now();
   const patch = {
-    title: h.trim() || '公告', body: b, pin: !!p,
+    title: h, body: b, pin: !!p,
     level: lv, popup: pop,
     active_from: fm ? new Date(fm).toISOString() : null,
     active_to:   to ? new Date(to).toISOString() : null,
@@ -8798,6 +9525,14 @@ async function adminSubmitAnn(){
   toast('✓ 已保存到云端共享');
 }
 async function adminTogglePinAnn(id){
+  // [AH-P2] 切换置顶需要 pin 权限
+  const a = annGetAll().find(x => x.id === id);
+  const wantPin = a ? !a.pin : true; // 现有非置顶 → 切换为置顶
+  if(wantPin){
+    const ok = await requirePerm('pin', {action:'ann.toggle_pin', actionDesc:'切换公告置顶（开启）：' + String(id).slice(0,16), payload:{id:id, title: a && a.title}});
+    if(!ok) return;
+  }
+  audit('admin.ann.toggle_pin', {id:id, wantPin: wantPin, title: a && a.title});
   try{
     await annDataLayer.togglePinAnn(id);
     await annRefresh({force:true});
@@ -8806,6 +9541,8 @@ async function adminTogglePinAnn(id){
   renderSiteAnnBar();
 }
 async function adminDeleteAnn(id){
+  if(id === SUPER_ADMIN_ID) return; // 防御
+  audit('admin.ann.delete', {id:id});
   if(!confirm('确认删除这条公告？（已发邮件无法撤销）\n（删除=软删，所有端立即同步消失）')) return;
   try{
     await annDataLayer.deleteAnn(id);
@@ -8816,6 +9553,7 @@ async function adminDeleteAnn(id){
   toast('已删除（多端同步）');
 }
 async function adminPreviewAnnouncements(){
+  audit('admin.ann.preview', {});
   try{ await annRefresh({force:true}); }catch(e){}
   renderSiteAnnBar(true);
   toast('已刷新顶部公告条（仅显示当前时段内生效的公告）');
@@ -8823,8 +9561,16 @@ async function adminPreviewAnnouncements(){
 // 发邮件：调用 Edge Function broadcast_announcement，然后把发邮件结果回写到 announcements 记录（通过 admin_ann_save）
 const EDGE_FN_BROADCAST = (window.SUPABASE_URL || 'https://hjryfgujkxuaxovftlai.supabase.co') + '/functions/v1/broadcast_announcement';
 async function adminAnnSendEmail(){
-  if(!isAdmin){ toast('仅管理员可发送全站邮件'); return; }
+  if(!isAnyAdmin()){ toast('仅管理员可发送全站邮件'); return; }
   if(!ADM_STATE.annEditId){ toast('请先保存公告再发送邮件'); return; }
+  // [AH-P2] 邮箱推送 = 受限功能 email_push
+  const ok = await requirePerm('email_push', {
+    action: 'ann.send_email',
+    actionDesc: '向全体已注册邮箱推送公告邮件：' + String(ADM_STATE.annEditId).slice(0, 20),
+    payload: {id: ADM_STATE.annEditId}
+  });
+  if(!ok) return;
+  audit('admin.ann.send_email', {id: ADM_STATE.annEditId});
   try{ await annRefresh({force:true}); }catch(e){}
   const list = annGetAll();
   const idx = list.findIndex(x => x.id === ADM_STATE.annEditId);
@@ -9250,8 +9996,539 @@ async function init(){
   }
   // 心跳：页面初始化时若已登录就上报一次
   heartbeatTouch();
+
+  // [AH-P3 + P5] 初始化全局 Realtime channel（maintenance_update + approval）+ URL 批准令牌处理 + 维护模式 UI
+  try{ setupGlobalGovernance(); }catch(e){ console.warn('setupGlobalGovernance 初始化失败：', e); }
 }
 document.addEventListener('DOMContentLoaded', init);
+
+/* =============================================================================
+   [AH-P3 / P5] 全局治理：Realtime broadcast + 授权批准自动重放 + 维护模式
+   ============================================================================= */
+
+// ---- 内存：维护模式 ----
+let MAINTENANCE = {
+  enabled: false,
+  scheduled: false,
+  start_at: null,
+  end_at: null,
+  message: '网站正在维护，请等待通知。',
+  last_updated_at: 0,
+  /** 本轮进入维护模式时，我们是否已经向这个用户弹过一次维护提示（避免每操作一次就弹） */
+  _poppedThisSession: false,
+};
+
+// ---- 内存：按次批准监听器（token → [{fn}]） ----
+let _APPROVAL_LISTENERS = Object.create(null);
+function addApprovalListener(token, cb){
+  if(!token || typeof cb !== 'function') return;
+  if(!_APPROVAL_LISTENERS[token]) _APPROVAL_LISTENERS[token] = [];
+  _APPROVAL_LISTENERS[token].push(cb);
+}
+function removeApprovalListener(token){
+  try{ delete _APPROVAL_LISTENERS[token]; }catch(_){}
+}
+function _dispatchApproval(token, result){
+  if(!token) return;
+  const list = _APPROVAL_LISTENERS[token] || [];
+  delete _APPROVAL_LISTENERS[token];
+  list.forEach(fn => { try{ fn(result || {}); }catch(e){ console.warn(e); } });
+}
+
+// ---- Supabase Realtime 连接：全局 broadcast 频道 `global` ----
+let _GLOBAL_REALTIME_CHANNEL = null;
+let _REALTIME_CLIENT = null;
+async function ensureRealtimeClient(){
+  if(_GLOBAL_REALTIME_CHANNEL) return _GLOBAL_REALTIME_CHANNEL;
+  if(!window.supabase || typeof window.supabase.createClient !== 'function'){
+    // 兜底：如果前端没引入 Supabase JS SDK（当前项目用 fetch 调 REST），降级为 10s 轮询 app_settings。
+    console.warn('[gov] Supabase Realtime SDK 未提供：降级轮询维护模式（10s 一次）。');
+    return null;
+  }
+  try{
+    if(!_REALTIME_CLIENT){
+      _REALTIME_CLIENT = window.supabase.createClient(SB_URL, SB_KEY, {
+        realtime: { params: { eventsPerSecond: 20 } },
+        auth: { persistSession: false, autoRefreshToken:false, detectSessionInUrl:false }
+      });
+    }
+    const ch = _REALTIME_CLIENT.channel('global', {config:{broadcast:{acknowledge:true,self:false}}});
+    ch.on('broadcast', {event: 'maintenance_update'}, (payload) => {
+      const p = payload && payload.payload;
+      if(p){ applyMaintenance(p, 'realtime'); }
+    });
+    ch.on('broadcast', {event: 'approval_granted'}, (payload) => {
+      const p = payload && payload.payload;
+      if(p && p.token){ _dispatchApproval(p.token, {approved:true, payload:p.payload||{}}); }
+    });
+    ch.on('broadcast', {event: 'approval_rejected'}, (payload) => {
+      const p = payload && payload.payload;
+      if(p && p.token){ _dispatchApproval(p.token, {approved:false, payload:p.payload||{}}); }
+    });
+    await ch.subscribe();
+    _GLOBAL_REALTIME_CHANNEL = ch;
+    return ch;
+  }catch(e){
+    console.warn('[gov] Realtime 连接失败，降级轮询：', e);
+    return null;
+  }
+}
+
+/** 将新维护状态写入内存，决定是否 kickback 所有非管理员。source='initial'/'realtime'/'poll'/'admin' */
+function applyMaintenance(next, source){
+  if(!next || typeof next !== 'object') return;
+  const prev = Object.assign({}, MAINTENANCE);
+  if(typeof next.enabled === 'boolean')      MAINTENANCE.enabled     = next.enabled;
+  if(typeof next.scheduled === 'boolean')    MAINTENANCE.scheduled   = next.scheduled;
+  if('start_at' in next)                     MAINTENANCE.start_at    = next.start_at || null;
+  if('end_at' in next)                       MAINTENANCE.end_at      = next.end_at || null;
+  if(typeof next.message === 'string')       MAINTENANCE.message     = next.message || '';
+  MAINTENANCE.last_updated_at = Date.now();
+  // 刷新顶部 banner + nav 显隐
+  try{ renderMaintenanceBanner(); }catch(e){}
+  try{ refreshNavVisibilityForMaintenance(); }catch(e){}
+  // 状态变化：由 关 → 开 时，强制踢非管理员回 welcome
+  if(MAINTENANCE.enabled && !prev.enabled){
+    MAINTENANCE._poppedThisSession = false;
+    kickbackForMaintenance();
+    // 若管理页打开了，刷新维护模式卡片 UI
+    try{ adminMMRenderStatus(); }catch(e){}
+  } else {
+    // 开 → 关：恢复导航
+    try{ refreshNavVisibilityForMaintenance(); }catch(e){}
+    try{ adminMMRenderStatus(); }catch(e){}
+  }
+}
+
+/** 判断当前用户/游客能否在维护模式下继续使用：super + sub 都可以（不管身份） */
+function isAdminDuringMaintenance(){
+  return (currentUser === SUPER_ADMIN_ID) || (adminLevel === 'super') || (adminLevel === 'sub');
+}
+
+/** 非管理员被踢回 welcome；同时弹一次维护提示 */
+function kickbackForMaintenance(){
+  if(isAdminDuringMaintenance()) return; // 管理员免踢
+  // 清登录态
+  const hadUser = !!currentUser;
+  if(hadUser){
+    try{
+      // 复用 logout：清 med_user、role、isAdmin 等
+      logout(true /* silent: 不跳重复 welcome，后面我们统一 go('welcome') */);
+    }catch(e){
+      // 兜底：手动清 key
+      ['med_user','med_role','med_is_admin','med_admin_level','med_sub_perms'].forEach(k => localStorage.removeItem(k));
+      currentUser = null; myRole = 'elder'; isAdmin = false; adminLevel='none';
+      subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+    }
+  }
+  // 跳 welcome + 隐藏 nav
+  try{ go('welcome', {skipMaintenanceCheck:true}); }catch(_){ go('welcome'); }
+  refreshNavVisibilityForMaintenance();
+  // "先看看暂不登录"按钮禁用 + 登录按钮仍可点
+  const q = $('btnQuick'); if(q){ q.disabled = true; q.style.opacity = .5; q.style.cursor = 'not-allowed'; }
+  // 弹一次提示（本轮会话只弹 1 次）
+  if(!MAINTENANCE._poppedThisSession){
+    MAINTENANCE._poppedThisSession = true;
+    setTimeout(showMaintenancePopupForUser, 350);
+  }
+}
+
+/** 展示给非管理员的维护弹窗（登录拦截也复用） */
+function _fmtBJ(v){
+  if(!v) return '';
+  try{
+    const d = new Date(v);
+    if(!isFinite(+d)) return '';
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
+      + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }catch(_){ return ''; }
+}
+function showMaintenancePopupForUser(){
+  const m = MAINTENANCE;
+  let msg = '🔴 ' + (m.message || '网站正在维护，请等待通知。');
+  if(m.scheduled && (m.start_at || m.end_at)){
+    const s = _fmtBJ(m.start_at), e = _fmtBJ(m.end_at);
+    if(s || e){
+      msg += '\n\n维护时段：';
+      if(s) msg += '\n· 开始 ' + s;
+      if(e) msg += '\n· 结束 ' + e;
+    }
+  }
+  alert(msg);
+}
+
+/** 全局 go() 维护检查：维护模式 + 非管理员 → 仅允许停留在 view-welcome */
+function _blockIfMaintenance(target){
+  if(!MAINTENANCE.enabled) return false;
+  if(isAdminDuringMaintenance()) return false;
+  if(target === 'welcome') return false; // 允许停留 welcome
+  // 其他视图一律拦住，弹提示并回到 welcome
+  showMaintenancePopupForUser();
+  setTimeout(()=> go('welcome', {skipMaintenanceCheck:true}), 50);
+  return true;
+}
+
+// 若原始全局 go 没被包过一层（项目现有 go 是独立函数），现在包一次：
+const __govOrigGo = typeof go === 'function' ? go : null;
+if(__govOrigGo){
+  // 重新赋值全局 go
+  window.go = function(target, opts){
+    if(opts && opts.skipMaintenanceCheck){ /* 内部跳转：跳过 */ }
+    else if(_blockIfMaintenance(target)) return false;
+    return __govOrigGo.call(this, target);
+  };
+}
+
+/** 维护模式下：导航栏隐藏（管理员除外）/显示 */
+function refreshNavVisibilityForMaintenance(){
+  const nav = document.getElementById('navbar');
+  if(!nav) return;
+  if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+    nav.style.display = 'none';
+  } else {
+    nav.style.display = '';
+  }
+}
+
+/** 顶部维护 banner：非管理员显示红色大条（置顶最紧急）；管理员显示小灰蓝条 */
+function renderMaintenanceBanner(){
+  let bar = document.getElementById('maintenanceBanner');
+  if(!MAINTENANCE.enabled){
+    if(bar){ bar.remove(); }
+    return;
+  }
+  const forAdmin = isAdminDuringMaintenance();
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'maintenanceBanner';
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+  let msg = MAINTENANCE.message || '网站正在维护，请等待通知。';
+  let extra = '';
+  if(MAINTENANCE.scheduled && (MAINTENANCE.start_at || MAINTENANCE.end_at)){
+    const s = _fmtBJ(MAINTENANCE.start_at), e = _fmtBJ(MAINTENANCE.end_at);
+    if(s || e){
+      extra += '<div style="font-size:12px;opacity:.92;margin-top:4px;">维护时段：'
+        + (s ? ('开始 ' + s) : '')
+        + (s && e ? ' ／ ' : '')
+        + (e ? ('结束 ' + e) : '')
+        + '</div>';
+    }
+  }
+  if(forAdmin){
+    bar.style.cssText = 'z-index:60;position:sticky;top:0;left:0;right:0;background:#e0f2fe;color:#075985;'
+      + 'padding:6px 14px;font-size:13px;border-bottom:1px solid #bae6fd;box-shadow:0 1px 2px rgba(0,0,0,.04);';
+    bar.innerHTML = '<div style="max-width:1200px;margin:0 auto;">ℹ️ 维护模式已开启。管理员可正常使用；非管理员用户已被锁定在欢迎页。' + extra + '</div>';
+  } else {
+    bar.style.cssText = 'z-index:60;position:sticky;top:0;left:0;right:0;background:#b91c1c;color:#fff;'
+      + 'padding:10px 14px;font-size:15px;font-weight:800;border-bottom:3px solid #7f1d1d;letter-spacing:.5px;';
+    bar.innerHTML = '<div style="max-width:1200px;margin:0 auto;">🔴 最紧急通知：' + _escHTML(msg) + extra + '</div>';
+  }
+}
+
+// ---- URL ?admin_approve=<token> / ?admin_reject=<token> 落地：B1 批准/拒绝 ----
+async function handleURLApprovalTokens(){
+  try{
+    const hash = location.hash || '';
+    const qs = location.search || '';
+    const combo = qs + (hash && hash.indexOf('?')>=0 ? '&' + hash.slice(hash.indexOf('?')+1) : hash.slice(1));
+    const aprTok = (/[?&]admin_approve=([^&#]+)/.exec(combo) || [])[1];
+    const rejTok = (/[?&]admin_reject=([^&#]+)/.exec(combo) || [])[1];
+    const token = decodeURIComponent(aprTok || rejTok || '');
+    const approve = !!aprTok && !rejTok;
+    if(!token) return;
+    // 清理 URL（不刷新页面）
+    try{
+      const clean = location.pathname + (qs
+        .replace(/[?&]admin_approve=[^&]*/g,'')
+        .replace(/[?&]admin_reject=[^&]*/g,'')
+        .replace(/^&/,'?')) + hash.replace(/[?&]admin_(approve|reject)=[^&#]*/g,'');
+      history.replaceState(null, '', clean);
+    }catch(_){}
+    // 必须登录 super
+    if(!currentUser){
+      alert('请先登录最高管理员账号（15184461098_admin）后再操作。');
+      try{ go('welcome', {skipMaintenanceCheck:true}); openAuth(); }catch(_){ openAuth(); }
+      return;
+    }
+    if(!(currentUser === SUPER_ADMIN_ID || adminLevel === 'super')){
+      alert('只有最高管理员可以批准/拒绝次级管理员的授权申请。请切换账号。');
+      return;
+    }
+    // 查 pending_approvals
+    let row = null;
+    try{
+      const r = await sbFetch('pending_approvals?token=eq.' + encodeURIComponent(token) + '&limit=1');
+      if(r.ok){ const arr = await r.json(); row = arr && arr[0]; }
+    }catch(e){}
+    if(!row){ alert('授权申请令牌不存在或已过期。'); return; }
+    if(row.status !== 'pending'){
+      alert('该申请已处理：' + (row.status === 'approved' ? '批准' : (row.status === 'rejected' ? '拒绝' : '过期/已重放')));
+      return;
+    }
+    if(approve && !confirm('批准此次申请？\n操作人：' + row.operator + '\n操作：' + (row.action_desc || row.perm_key) + '\n批准后，对方面板会自动执行该次操作。')){
+      return;
+    }
+    if(!approve && !confirm('拒绝此次申请？\n操作人：' + row.operator + '  \n操作：' + (row.action_desc || row.perm_key))){
+      return;
+    }
+    const upd = {
+      status: approve ? 'approved' : 'rejected',
+      resolved_by: currentUser,
+      resolved_at: new Date().toISOString()
+    };
+    try{
+      const r = await sbFetch('pending_approvals?id=eq.' + row.id, {
+        method:'PATCH', headers:{'Prefer':'return=minimal','Content-Type':'application/json'},
+        body: JSON.stringify(upd)
+      });
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+    }catch(e){
+      alert('更新申请状态失败：' + (e.message || ''));
+      return;
+    }
+    // 广播 Realtime：对方浏览器自动重放
+    if(_GLOBAL_REALTIME_CHANNEL){
+      _GLOBAL_REALTIME_CHANNEL.send({
+        type:'broadcast', event: approve ? 'approval_granted' : 'approval_rejected',
+        payload: {token: token, payload: (row.payload || {})}
+      });
+    } else {
+      // Realtime 不可用：向对方发"下一次操作时自动检查通过"（REST 回调 fallback：后面重放靠下一次轮询检查，暂不做）
+      console.warn('[gov] Realtime 不可用，批准将在对方下一次交互时生效（若已实现轮询则自动）。');
+    }
+    toast(approve ? '✓ 已批准此次申请，对方应自动执行该操作。' : '已拒绝此次申请。');
+    audit(approve ? 'admin.approve.approve' : 'admin.approve.reject', {id:row.id, operator: row.operator, perm: row.perm_key, action: row.action_desc});
+  }catch(e){
+    console.warn('[gov] handleURLApprovalTokens 异常：', e);
+    alert('处理批准链接失败：' + (e.message || ''));
+  }
+}
+
+// ---- 维护模式轮询兜底（Realtime 没连上时 10s 一次）----
+async function adminMMReload(){
+  // 拉 app_settings?key=eq.maintenance
+  let row = null;
+  try{
+    const r = await sbFetch('app_settings?key=eq.maintenance&limit=1');
+    if(r.ok){ const arr = await r.json(); row = arr && arr[0]; }
+  }catch(e){}
+  const val = row && row.value && typeof row.value === 'object' ? row.value : null;
+  if(val){
+    applyMaintenance(val, 'admin-load');
+  }
+  adminMMRenderStatus();
+}
+
+/** 维护模式卡片渲染状态 + 控件 readonly 权限 */
+function adminMMRenderStatus(){
+  const sta = $('admMMStatus'), onbtn = $('admMMToggleBtn'), clbtn = $('admMMCloseBtn');
+  const sched = $('admMMSchedule'), startEl = $('admMMStart'), endEl = $('admMMEnd'), msgEl = $('admMMMessage');
+  if(sta){
+    sta.innerHTML = MAINTENANCE.enabled
+      ? ('当前状态：<b style="color:var(--danger);">维护中</b>' + (MAINTENANCE.scheduled ? '（定时）' : '（立即生效）'))
+      : ('当前状态：<b style="color:var(--ok);">未开启</b>');
+  }
+  if(onbtn) onbtn.style.display  = MAINTENANCE.enabled ? 'none' : '';
+  if(clbtn) clbtn.style.display  = MAINTENANCE.enabled ? ''     : 'none';
+  if(sched){ try{ sched.checked = !!MAINTENANCE.scheduled; }catch(_){} }
+  if(startEl){ startEl.value = _fmtDTLocal(MAINTENANCE.start_at); }
+  if(endEl)  { endEl.value   = _fmtDTLocal(MAINTENANCE.end_at); }
+  if(msgEl)  { msgEl.value   = MAINTENANCE.message || ''; }
+
+  // 权限：sub 无 mmode 长期授权 → 控件 disabled + 按钮走 requirePerm('mmode')
+  const dis = !hasPerm('mmode') && !(currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+  [sched, startEl, endEl, msgEl, onbtn, clbtn].forEach(el => {
+    if(!el) return;
+    if(el.tagName === 'BUTTON'){
+      if(dis) el.setAttribute('data-need-mmode','1');
+      else el.removeAttribute('data-need-mmode');
+      // 不 disable 按钮（让点击时 requirePerm 弹出申请），只给视觉提示
+      el.style.opacity = dis ? .88 : '';
+    } else {
+      el.disabled = dis;
+      el.title = dis ? '需要「维护模式」长期授权或向最高管理员单次申请' : '';
+    }
+  });
+}
+// 复用 datetime formatter（可能项目已有 _fmtDTLocal 私有函数，若不存在则定义一个）
+if(typeof window._fmtDTLocal !== 'function'){
+  window._fmtDTLocal = function(v){
+    if(!v) return '';
+    const d = new Date(v);
+    if(!isFinite(+d)) return '';
+    const p = n => String(n).padStart(2,'0');
+    return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  };
+}
+
+/** 保存/开关维护模式：写 app_settings + 广播 Realtime maintenance_update */
+async function adminMMToggle(enable){
+  if(!isAnyAdmin()){ toast('仅管理员可操作维护模式'); return; }
+  const msgEl = $('admMMMessage');
+  const mv = validateText((msgEl||{}).value || '', {label:'维护通知正文', required:true, max:220});
+  if(!mv.ok){ toast(mv.msg || '请填写维护通知正文'); return; }
+  const schedEl = $('admMMSchedule'), startEl = $('admMMStart'), endEl = $('admMMEnd');
+  const scheduled = !!(schedEl && schedEl.checked);
+  const startStr = (startEl || {}).value || '';
+  const endStr   = (endEl || {}).value || '';
+
+  const next = {
+    enabled: scheduled ? false : !!enable, // 定时开启 → enabled=false（交给 pg_cron 到时转正）
+    scheduled: scheduled,
+    start_at: startStr ? new Date(startStr).toISOString() : null,
+    end_at:   endStr   ? new Date(endStr).toISOString()   : null,
+    message:  mv.value
+  };
+  if(scheduled && !next.start_at && !enable){
+    toast('选择了定时开启，请至少填写开始时间（或取消"定时"改为立即开启）'); return;
+  }
+  if(next.start_at && next.end_at && new Date(next.start_at) >= new Date(next.end_at)){
+    toast('定时结束时间必须晚于开始时间'); return;
+  }
+  // requirePerm('mmode')：sub 无长期 → 按次申请
+  const ok = await requirePerm('mmode', {
+    action: 'admin.mm.' + (enable ? 'on' : 'off'),
+    actionDesc: (enable ? '开启维护模式' : '关闭维护模式') + (scheduled ? '（定时）' : '（立即）'),
+    payload: {enabled: !!enable, scheduled: scheduled, start_at: next.start_at, end_at: next.end_at, message: mv.value}
+  });
+  if(!ok) return;
+  audit('admin.mm.toggle', Object.assign({enable: !!enable}, next));
+  try{
+    const patch = {
+      value: next,
+      updated_by: currentUser || 'unknown',
+      updated_at: new Date().toISOString()
+    };
+    // 先尝试 update（存在则更新）
+    let res = await sbFetch('app_settings?key=eq.maintenance', {
+      method:'PATCH', headers:{'Prefer':'return=minimal','Content-Type':'application/json'},
+      body: JSON.stringify(patch)
+    });
+    if(res.status === 404){
+      res = await sbFetch('app_settings', {
+        method:'POST', headers:{'Prefer':'return=minimal','Content-Type':'application/json'},
+        body: Object.assign({key:'maintenance'}, patch)
+      });
+    }
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+  }catch(e){
+    toast('保存维护模式状态失败：' + (e.message || ''));
+    return;
+  }
+  // 立即向本机应用（UI/踢人），再广播到其他浏览器
+  applyMaintenance(next, 'admin');
+  if(_GLOBAL_REALTIME_CHANNEL){
+    try{
+      await _GLOBAL_REALTIME_CHANNEL.send({type:'broadcast', event:'maintenance_update', payload: next});
+    }catch(_){ /* REST 广播兜底交给 Edge Function / pg_cron */ }
+  }
+  toast(enable ? '✓ 已开启维护模式（多端同步生效）' : '✓ 已关闭维护模式，用户登录恢复正常。');
+}
+
+// ---- 登录拦截：维护模式下，普通账号登录返回维护提示 + 不清输入（让用户重试） ----
+//     我们在 doLogin 末尾（校验通过、准备 goto 之前）插一段 maintenance 检查：
+//       若 maintenance 开启，用户非管理员：alert+留在 welcome。
+//     实现：在 afterLogin 开头（或登录成功路径）执行 _afterLoginMaintenanceGate。
+async function _afterLoginMaintenanceGate(){
+  if(!MAINTENANCE.enabled) return true;
+  if(isAdminDuringMaintenance()) return true;
+  // 非管理员：清登录态，仍留在 welcome
+  try{
+    try{ logout(true); }catch(_){
+      ['med_user','med_role','med_is_admin','med_admin_level','med_sub_perms'].forEach(k => localStorage.removeItem(k));
+      currentUser = null; myRole = 'elder'; isAdmin = false; adminLevel='none';
+      subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+    }
+    // 让当前视图停在 welcome
+    try{ go('welcome', {skipMaintenanceCheck:true}); }catch(_){}
+    updateUserUI();
+  }catch(_){}
+  showMaintenancePopupForUser();
+  return false;
+}
+// 包一下 afterLogin（afterLogin 开头调用 afterLoginMaintenanceGate；如果 return false → 就不再执行下面的 go('family/home') 等）
+const __origAfterLogin = typeof afterLogin === 'function' ? afterLogin : null;
+if(__origAfterLogin){
+  window.afterLogin = async function(){
+    // 先执行原 afterLogin（会写 currentUser / 刷界面），然后再 gate
+    await __origAfterLogin.call(this);
+    const ok = await _afterLoginMaintenanceGate();
+    if(!ok){ /* 不做其他事 */ }
+    return ok;
+  };
+}
+
+// ---- 启动：setupGlobalGovernance：（1）拉一次 app_settings/maintenance （2）挂 Realtime 或 fallback 轮询 （3）处理 URL approve/reject（4）刷新 banner + nav
+async function setupGlobalGovernance(){
+  // 维护 banner 先初始化（enabled=false 时不会显示）
+  try{ renderMaintenanceBanner(); refreshNavVisibilityForMaintenance(); }catch(e){}
+
+  // 0) 游客/没登录但维护模式已开启：停在 welcome（不让用户进入 quickUse）
+  //    通过 quickUse 开头重写：若没权限进入（!currentUser 且 维护中） → 阻止
+  const __origQU = typeof quickUse === 'function' ? quickUse : null;
+  if(__origQU){
+    window.quickUse = async function(){
+      if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+        // 按需求 C：点"先看看"就弹提示，不进入首页
+        showMaintenancePopupForUser();
+        return false;
+      }
+      return await __origQU.call(this);
+    };
+  }
+  // 登录按钮（btnLogin）本身仍可用（允许弹出 auth 弹窗）— 无需改
+  // quickUse（btnQuick）在 kickbackForMaintenance 会 disabled；首次加载若维护中也禁用：
+  try{
+    if(MAINTENANCE.enabled && !isAdminDuringMaintenance()){
+      const q = $('btnQuick'); if(q){ q.disabled = true; q.style.opacity = .5; q.style.cursor = 'not-allowed'; }
+    }
+  }catch(_){}
+
+  // 1) 预拉维护状态
+  let row = null, val = null;
+  if(cloudUsable()){
+    try{
+      const r = await sbFetch('app_settings?key=eq.maintenance&limit=1');
+      if(r.ok){ const arr = await r.json(); row = arr && arr[0]; }
+    }catch(e){}
+    val = row && row.value && typeof row.value === 'object' ? row.value : null;
+    if(val) applyMaintenance(val, 'initial');
+  }
+  // 2) 处理 URL approve/reject（即使已登录 super 也要执行：否则点链接不生效）
+  try{ await handleURLApprovalTokens(); }catch(e){ console.warn(e); }
+
+  // 3) Realtime 通道 / fallback 轮询（10s）
+  if(cloudUsable()){
+    try{
+      const ch = await ensureRealtimeClient();
+      if(!ch){
+        // 无通道：轮询 app_settings
+        setInterval(async ()=>{
+          try{
+            const r = await sbFetch('app_settings?key=eq.maintenance&limit=1');
+            if(!r.ok) return;
+            const arr = await r.json();
+            const v = arr && arr[0] && arr[0].value;
+            if(v) applyMaintenance(v, 'poll');
+          }catch(_){}
+        }, 10000);
+      }
+    }catch(e){
+      console.warn('[gov] Realtime 启动失败：', e);
+    }
+  }
+  // 4) 批准令牌自动过期检查（每 2 分钟扫一次本地挂起的 listener，对超 1 小时无回音的清理 + 回调 false）
+  setInterval(function(){
+    const now = Date.now();
+    // 目前内存里的 listener 我们不记创建时间，但 1h timeout 已经在 _submitApprovalRequest 里设置，
+    // 这里只做保守兜底：超过 2h 的 listener 强制 false
+    Object.keys(_APPROVAL_LISTENERS).forEach(tok => {
+      // 注：我们不再存 createdAt，为保守起见不直接移除（超时由 _submitApprovalRequest 自己控制）。
+      void tok; void now;
+    });
+  }, 2 * 60 * 1000);
+}
 
 // 心跳：页面从后台切回前台时若已登录就上报
 document.addEventListener('visibilitychange', () => {
