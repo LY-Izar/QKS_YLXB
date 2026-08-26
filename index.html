@@ -138,7 +138,7 @@
     --lg-my:50%;
     position:fixed;
     top:18px;left:24px;right:24px;z-index:55;
-    max-width:760px;margin:0 auto;
+    max-width:none;margin:0 auto;
     padding:10px 18px;
     display:flex;align-items:center;gap:8px;
     border-radius:32px;
@@ -514,7 +514,7 @@
   }
 
   /* ===== 内容区 ===== */
-  main{max-width:640px;margin:0 auto;padding:92px 16px 44px;min-height:calc(100vh - 150px);}
+  main{max-width:1600px;margin:0 auto;padding:92px 24px 44px;min-height:calc(100vh - 150px);}
   .view{display:none;animation:fade .25s ease;background:transparent;}
   .view.active{display:block;}
   body.dark main{background:var(--bg);}
@@ -567,7 +567,7 @@
   .btn:disabled{opacity:.5;cursor:not-allowed;}
 
   /* ===== 宫格 ===== */
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
   .tile{
     background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
     padding:20px 16px;text-align:left;box-shadow:var(--shadow);transition:.18s;
@@ -952,7 +952,7 @@
 
 <!-- 全站顶部公告条（有公告才显示；滚动轮播） -->
 <div id="siteAnnBar" style="display:none;position:fixed;top:0;left:0;right:0;z-index:60;background:linear-gradient(180deg,var(--primary-soft),var(--surface-2));border-bottom:1px solid var(--primary-soft);">
-  <div class="site-ann-inner" style="max-width:1080px;margin:0 auto;padding:8px 16px;font-size:14px;color:var(--ink);display:flex;gap:10px;align-items:center;">
+  <div class="site-ann-inner" style="max-width:1600px;margin:0 auto;padding:8px 24px;font-size:14px;color:var(--ink);display:flex;gap:10px;align-items:center;">
     <svg class="icn" style="color:var(--primary);flex:0 0 auto;"><use href="#ic-ann"/></svg>
     <div class="site-ann-track" id="siteAnnTrack" style="flex:1 1 auto;overflow:hidden;white-space:nowrap;"></div>
     <button class="btn line sm" style="flex:0 0 auto;padding:4px 10px;font-size:13px;" onclick="hideSiteAnnBar()" title="暂时隐藏今日公告">知道了</button>
