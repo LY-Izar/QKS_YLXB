@@ -986,11 +986,6 @@
         <button class="btn block ghost" id="btnQuick" onclick="quickUse()">先看看，暂不登录</button>
       </div>
     </div>
-    <div class="card feature">
-      <h2><svg class="icn"><use href="#ic-user"/></svg> 建议开启「关怀模式」</h2>
-      <p class="sub">字体更大、按钮更醒目、颜色更柔和，并自动语音播报，专为长辈优化。</p>
-      <button class="btn block warn" onclick="enableCare()">一键开启关怀模式</button>
-    </div>
     <p class="hint center">本平台提供的信息仅供健康参考，不能替代专业医生诊断。急重症请立即拨打 120。</p>
   </div>
 
@@ -1009,6 +1004,40 @@
       <button class="tile" onclick="go('druglib')"><span class="ic"><svg class="icn"><use href="#ic-book"/></svg></span><span class="nm">药品库</span><span class="ds">查药名 · 看注意事项</span></button>
       <button class="tile" onclick="go('hospital')"><span class="ic"><svg class="icn"><use href="#ic-hospital"/></svg></span><span class="nm">找医院</span><span class="ds">定位附近最近医院</span></button>
       <button class="tile" onclick="go('family')"><span class="ic" id="tileFamilyIc"><svg class="icn"><use href="#ic-users"/></svg></span><span class="nm" id="tileFamilyNm">绑定家人</span><span class="ds" id="tileFamilyDs">让家人随时看到我的健康动态</span></button>
+    </div>
+    <div id="accountSection" style="display:none;">
+      <div class="card" style="margin-top:14px;">
+        <h2><svg class="icn"><use href="#ic-gear"/></svg> 账户管理</h2>
+        <div class="gap6">
+          <button class="btn block ghost" onclick="toggleAcctPanel('changeUser')">修改用户名</button>
+          <div id="acctChangeUser" style="display:none;margin-top:8px;">
+            <input class="inp" id="newUsername" placeholder="新用户名 (3-30位)" maxlength="30" autocomplete="off">
+            <button class="btn block" style="margin-top:8px;" onclick="doChangeUsername()">确认修改</button>
+            <p class="hint" style="margin-top:4px;">修改后所有数据将自动关联到新用户名。</p>
+          </div>
+          <button class="btn block ghost" onclick="toggleAcctPanel('changePass')">修改密码</button>
+          <div id="acctChangePass" style="display:none;margin-top:8px;">
+            <input class="inp" id="oldPass" type="password" placeholder="当前密码" maxlength="128" autocomplete="current-password">
+            <input class="inp" id="newPass" type="password" placeholder="新密码 (至少6位)" maxlength="128" oninput="checkPassStrength(this.value)" autocomplete="new-password" style="margin-top:8px;">
+            <div id="passStrengthAcct" style="display:none;margin:4px 0;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;">
+              <div id="passStrengthBarAcct" style="height:100%;width:0%;background:#ef4444;border-radius:2px;transition:all .2s;"></div>
+            </div>
+            <button class="btn block" style="margin-top:8px;" onclick="doChangePassword()">确认修改</button>
+          </div>
+          <button class="btn block ghost" onclick="toggleAcctPanel('bindEmail')">邮箱绑定</button>
+          <div id="acctBindEmail" style="display:none;margin-top:8px;">
+            <p class="hint" id="currentEmailHint" style="margin-bottom:6px;"></p>
+            <input class="inp" id="bindEmailInput" type="email" placeholder="输入邮箱地址" maxlength="254" autocomplete="email">
+            <button class="btn block" style="margin-top:8px;" onclick="doBindEmail()">确认绑定</button>
+          </div>
+          <div id="acctBoundElderSection" style="display:none;">
+            <button class="btn block ghost" onclick="toggleAcctPanel('viewElder')">查看已绑定老人</button>
+            <div id="acctViewElder" style="display:none;margin-top:8px;">
+              <div id="boundElderList" style="display:flex;flex-direction:column;gap:6px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1068,6 +1097,10 @@
     <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
       <span class="badge" id="timeOffsetBadge" style="background:#e6f4ea;color:#1a7a3a;">时间校准中…</span>
       <span id="beijingTime" style="font-size:20px;font-weight:700;color:var(--primary);font-variant-numeric:tabular-nums;">--:--:--</span>
+      <label style="margin-left:auto;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+        <input type="checkbox" id="emailRemindToggle" onchange="toggleEmailRemind(this.checked)">
+        邮箱提醒
+      </label>
     </div>
     <div class="card">
       <h2>＋ 添加用药</h2>
@@ -1354,6 +1387,9 @@
     </div>
     <label class="f" id="confirmPassLabel" style="display:none;">确认密码
       <input class="inp" id="authPass2" type="password" placeholder="请再次输入密码" maxlength="128" autocomplete="new-password">
+    </label>
+    <label class="f" id="emailLabel" style="display:none;">邮箱（可选，用于用药提醒）
+      <input class="inp" id="authEmail" type="email" placeholder="选填，如 example@mail.com" maxlength="254" autocomplete="email">
     </label>
     <div style="font-size:13px;display:flex;gap:6px;margin-bottom:4px;">
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
@@ -3484,6 +3520,7 @@ function switchAuthMode(){
   if(isReg){
     title.textContent = '注册新账号';
     confirmLabel.style.display = '';
+    $('emailLabel').style.display = '';
     submitBtn.style.display = 'none';
     regBtn.style.display = '';
     strength.style.display = '';
@@ -3491,6 +3528,7 @@ function switchAuthMode(){
   } else {
     title.textContent = currentUser ? '切换账号' : '登录';
     confirmLabel.style.display = 'none';
+    $('emailLabel').style.display = 'none';
     submitBtn.style.display = '';
     regBtn.style.display = 'none';
     strength.style.display = 'none';
@@ -3578,12 +3616,14 @@ async function doRegister(){
   const u = sanitizeUsername($('authUser').value);
   const p = sanitizePass($('authPass').value);
   const p2 = sanitizePass($('authPass2')?.value || '');
+  const email = ($('authEmail')?.value || '').trim().toLowerCase();
   const uv = isValidUsername(u);
   if(!uv.ok){ toast(uv.msg); return; }
   const pv = isValidPassword(p);
   if(!pv.ok){ toast(pv.msg); return; }
   if(!p2){ toast('请再次输入密码'); return; }
   if(p !== p2){ toast('两次密码输入不一致'); return; }
+  if(email){ const ev = isValidEmail(email); if(!ev.ok){ toast(ev.msg); return; } }
   if(await DB.get('users', u)){ toast('该账号已存在，请直接登录'); return; }
   const code = String(Math.floor(100000 + Math.random()*900000));
   let h = null, note = '已保存本机';
@@ -3595,13 +3635,13 @@ async function doRegister(){
       let res = await sbFetch('users', {
         method: 'POST',
         headers: {'Prefer': 'return=minimal'},
-        body: JSON.stringify({id:u, pass_hash:h, family_code:code, role:pickedRole})
+        body: JSON.stringify({id:u, pass_hash:h, family_code:code, role:pickedRole, email:email||null, email_remind:false})
       });
       if(!res.ok && res.status === 400){
         res = await sbFetch('users', {
           method: 'POST',
           headers: {'Prefer': 'return=minimal'},
-          body: JSON.stringify({id:u, pass_hash:h, family_code:code})
+          body: JSON.stringify({id:u, pass_hash:h, family_code:code, email:email||null})
         });
       }
       if(res.ok){
@@ -3614,7 +3654,7 @@ async function doRegister(){
       }
     }catch(e){ note = '已保存本机（云端连接失败）'; }
   }
-  await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, role:pickedRole, created:Date.now()});
+  await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, role:pickedRole, email:email||null, emailRemind:false, created:Date.now()});
   currentUser = u; localStorage.setItem('med_user', u);
   bumpRenderToken('doRegister：新账号写入 currentUser');
   await resetAppState();
@@ -3622,6 +3662,9 @@ async function doRegister(){
   setRole(pickedRole);
   toast('注册成功，' + note);
   closeAuth(); await afterLogin();
+  if(email){
+    sendEmail(email, '医路相伴 · 欢迎注册', '<h2>欢迎使用医路相伴</h2><p>您的账号已注册成功。到点用药时将收到邮件提醒。</p><p>祝您健康！</p>');
+  }
 }
 async function localVerify(rec, p){
   if(!rec) return false;
@@ -3642,7 +3685,7 @@ async function doLogin(){
   if(cloudUsable()){
     try{
       const h = await hashPass(p);
-      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes&id=eq.' + encodeURIComponent(u));
+      let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes,email,email_remind&id=eq.' + encodeURIComponent(u));
       if(res.ok){
         const rows = await res.json();
         if(rows.length){
@@ -3654,7 +3697,7 @@ async function doLogin(){
             if(Array.isArray(bc) && bc.length){ boundElder = bc; }
             else if(bs){ boundElder = [bs]; }
             else { boundElder = null; }
-            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCodes:boundElder, created:Date.now()});
+            await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, boundElderCodes:boundElder, email:rows[0].email||null, emailRemind:!!rows[0].email_remind, created:Date.now()});
           } else { wrongPass = true; }
         }
       } else if(res.status === 400){
@@ -3833,6 +3876,7 @@ function updateUserUI(){
   }
   $('familyCode').textContent = currentUser ? (myFamilyCode || '—') : '请先登录获取';
   updateFamilyView();
+  renderAccountSection();
 }
 function updateFamilyView(){
   const elder = myRole !== 'family';
@@ -3851,6 +3895,186 @@ function updateFamilyView(){
     ? '让家人随时看到我的健康动态'
     : '查看老人的自查 · 用药 · 就医动态';
   if(tileIc) tileIc.innerHTML = elder ? ic('ic-users') : ic('ic-clipboard');
+}
+
+/* ==================== 账户管理 ==================== */
+function isValidEmail(email){
+  if(!email) return {ok:true};
+  var re = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if(!re.test(email)) return {ok:false, msg:'邮箱格式不正确'};
+  if(email.length > 254) return {ok:false, msg:'邮箱地址过长'};
+  return {ok:true};
+}
+var SB_EDGE_EMAIL = 'https://hjryfgujkxuaxovftlai.supabase.co/functions/v1/send-email';
+async function sendEmail(to, subject, body){
+  if(!to || !isValidEmail(to).ok) return false;
+  try{
+    var res = await fetch(SB_EDGE_EMAIL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer ' + SB_KEY},
+      body: JSON.stringify({to:to, subject:subject, body:body})
+    });
+    return res.ok;
+  }catch(e){ return false; }
+}
+function renderAccountSection(){
+  var sec = $('accountSection');
+  if(!sec) return;
+  if(currentUser){
+    sec.style.display = '';
+    var elderSec = $('acctBoundElderSection');
+    if(elderSec) elderSec.style.display = (myRole === 'family') ? '' : 'none';
+    var rec = null;
+    DB.get('users', currentUser).then(function(r){
+      if(!r) return;
+      var hint = $('currentEmailHint');
+      if(hint) hint.textContent = r.email ? ('当前邮箱：' + r.email) : '尚未绑定邮箱';
+      var toggle = $('emailRemindToggle');
+      if(toggle) toggle.checked = !!r.emailRemind;
+    });
+    if(myRole === 'family' && familyBinds.length){
+      renderBoundElderList();
+    }
+  } else {
+    sec.style.display = 'none';
+  }
+}
+function renderBoundElderList(){
+  var list = $('boundElderList');
+  if(!list) return;
+  list.innerHTML = '';
+  familyBinds.forEach(function(code){
+    var btn = document.createElement('button');
+    btn.className = 'btn block line';
+    btn.textContent = code;
+    btn.onclick = function(){
+      currentViewBind = code;
+      saveFamilyBinds();
+      go('family');
+    };
+    list.appendChild(btn);
+  });
+}
+function toggleAcctPanel(panel){
+  var panels = ['acctChangeUser','acctChangePass','acctBindEmail','acctViewElder'];
+  panels.forEach(function(id){
+    var el = $(id);
+    if(el) el.style.display = (id === 'acct' + panel.charAt(0).toUpperCase() + panel.slice(1)) ? (el.style.display === 'none' ? '' : 'none') : 'none';
+  });
+}
+async function doChangeUsername(){
+  var newU = sanitizeUsername($('newUsername').value);
+  var uv = isValidUsername(newU);
+  if(!uv.ok){ toast(uv.msg); return; }
+  if(newU === currentUser){ toast('新用户名与当前相同'); return; }
+  if(await DB.get('users', newU)){ toast('该用户名已存在'); return; }
+  if(cloudUsable()){
+    try{
+      var existRes = await sbFetch('users?id=eq.' + encodeURIComponent(newU));
+      var existRows = existRes.ok ? await existRes.json() : [];
+      if(existRows.length){ toast('该用户名已被占用'); return; }
+    }catch(e){}
+  }
+  var rec = await DB.get('users', currentUser);
+  if(!rec){ toast('账户数据异常'); return; }
+  var newRec = Object.assign({}, rec, {id:newU});
+  await DB.put('users', newRec);
+  if(cloudUsable()){
+    try{
+      await sbFetch('users', {method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({id:newU, pass_hash:rec.pass_hash, family_code:rec.familyCode, role:rec.role, email:rec.email||null, email_remind:!!rec.emailRemind})});
+      var tables = ['chronic_profiles','chronic_alerts','health_metrics'];
+      for(var i=0; i<tables.length; i++){
+        await sbFetch(tables[i] + '?username=eq.' + encodeURIComponent(currentUser), {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({username:newU})});
+      }
+      await sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {method:'DELETE'});
+    }catch(e){ toast('云端更新部分失败，本机已更新'); }
+  }
+  var storeNames = ['meds','events','chronic','metrics','followups','medlog'];
+  for(var j=0; j<storeNames.length; j++){
+    try{
+      var all = await DB.all(storeNames[j]);
+      for(var k=0; k<all.length; k++){
+        if(all[k].username === currentUser){
+          all[k].username = newU;
+          await DB.put(storeNames[j], all[k]);
+        }
+      }
+    }catch(e){}
+  }
+  currentUser = newU;
+  localStorage.setItem('med_user', newU);
+  bumpRenderToken('doChangeUsername');
+  await resetAppState();
+  await afterLogin();
+  try{ await DB.del('users', rec.id); }catch(e){}
+  toast('用户名修改成功');
+}
+async function doChangePassword(){
+  var oldP = $('oldPass').value;
+  var newP = sanitizePass($('newPass').value);
+  var rec = await DB.get('users', currentUser);
+  if(!rec){ toast('账户数据异常'); return; }
+  var oldHash = null;
+  if(cloudUsable()){
+    try{ oldHash = await hashPass(oldP); }catch(e){ oldHash = null; }
+  }
+  if(oldHash && rec.pass_hash && rec.pass_hash.length === 64){
+    if(oldHash !== rec.pass_hash){ toast('旧密码不正确'); return; }
+  } else if(oldP !== rec.pass_hash){
+    toast('旧密码不正确'); return;
+  }
+  var pv = isValidPassword(newP);
+  if(!pv.ok){ toast(pv.msg); return; }
+  var newHash = null;
+  if(cloudUsable()){
+    try{ newHash = await hashPass(newP); }catch(e){ newHash = null; }
+  }
+  rec.pass_hash = newHash || newP;
+  await DB.put('users', rec);
+  if(cloudUsable() && newHash){
+    try{
+      await sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({pass_hash:newHash})});
+    }catch(e){}
+  }
+  $('oldPass').value = '';
+  $('newPass').value = '';
+  toast('密码修改成功');
+}
+async function doBindEmail(){
+  var email = ($('bindEmailInput').value || '').trim().toLowerCase();
+  var ev = isValidEmail(email);
+  if(!ev.ok){ toast(ev.msg); return; }
+  var rec = await DB.get('users', currentUser);
+  if(!rec){ toast('账户数据异常'); return; }
+  rec.email = email || null;
+  await DB.put('users', rec);
+  if(cloudUsable()){
+    try{
+      await sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({email:email||null})});
+    }catch(e){}
+  }
+  $('currentEmailHint').textContent = email ? ('当前邮箱：' + email) : '尚未绑定邮箱';
+  $('bindEmailInput').value = '';
+  if(email){
+    toast('正在发送欢迎邮件…');
+    var ok = await sendEmail(email, '医路相伴 · 欢迎注册', '<h2>欢迎使用医路相伴</h2><p>您的邮箱已成功绑定。到点用药时将收到邮件提醒。</p><p>祝您健康！</p>');
+    toast(ok ? '邮箱绑定成功，欢迎邮件已发送' : '邮箱绑定成功（邮件发送失败，稍后会重试）');
+  } else {
+    toast('已解除邮箱绑定');
+  }
+}
+async function toggleEmailRemind(on){
+  var rec = await DB.get('users', currentUser);
+  if(!rec){ toast('请先登录'); return; }
+  if(on && !rec.email){ toast('请先在账户管理中绑定邮箱'); $('emailRemindToggle').checked = false; return; }
+  rec.emailRemind = on;
+  await DB.put('users', rec);
+  if(cloudUsable()){
+    try{
+      await sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({email_remind:on})});
+    }catch(e){}
+  }
+  toast(on ? '已开启用药邮箱提醒' : '已关闭用药邮箱提醒');
 }
 
 /* ==================== 症状自查 ==================== */
@@ -4619,6 +4843,12 @@ async function checkMeds(){
       addEvent('用药提醒', (slotIndex ? '重复提醒#'+(slotIndex+1)+'：':'到点提醒：') + '服药「' + med.name + '」' + tp);
       if(swReg){ try{ const sub = await swReg.pushManager.getSubscription(); if(sub) fetch('https://updates.push.services.mozilla.com/wpush/v2/gcm',{method:'POST'}).catch(()=>{}); }catch(e){} }
       sendPushPlus('医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+slotIndex+'次）') : ''), baseMsg + '\n请尽快点「已服用」或「跳过今天」，否则每10分钟重复提醒一次。');
+      try{
+        const userRec = await DB.get('users', currentUser);
+        if(userRec && userRec.email && userRec.emailRemind){
+          sendEmail(userRec.email, '医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+(slotIndex+1)+'次）') : ''), '<h2>用药提醒</h2><p>' + baseMsg + '</p><p>请尽快登录医路相伴，点击「已服用」或「跳过今天」。</p>');
+        }
+      }catch(e){}
       playDidiAlert(10);
       showMedAlertUI(baseMsg, '请尽快点击该时间段下方的「已服用」或「跳过今天」，否则每 10 分钟重复提醒一次。');
     }
