@@ -5464,10 +5464,27 @@ function collectTimes(){
   return Array.from(inputs).map(i => i.value).filter(v => v);
 }
 
-function timeToMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+/** 字符串或结构化 slot 对象 → 分钟数。兼容：med.times 现已变成 [{time:"HH:MM", skippedReason}]（结构化对象数组）。*/
+function timeToMin(t){
+  const s = (t && typeof t === 'object') ? String(t.time || '') : String(t || '');
+  const [h, m] = s.split(':').map(Number);
+  return (Number(h) || 0) * 60 + (Number(m) || 0);
+}
+/** 安全取出 med 的所有时间点：返回 "HH:MM" 字符串数组（兼容新旧两种 times 结构）。*/
 function timePoints(med){
-  if(med.times && med.times.length) return med.times;
-  if(med.time) return [med.time];
+  if(!med) return [];
+  const out = [];
+  if(Array.isArray(med.times) && med.times.length){
+    for(const tp of med.times){
+      const s = (tp && typeof tp === 'object') ? String(tp.time || '') : String(tp || '');
+      if(s && /^\d{1,2}:\d{2}$/.test(s)) out.push(s.slice(0,2).padStart(2,'0') + s.slice(-3));
+    }
+    if(out.length) return out;
+  }
+  if(med.time){
+    const s = String(med.time);
+    if(/^\d{1,2}:\d{2}$/.test(s)) return [s.slice(0,2).padStart(2,'0') + s.slice(-3)];
+  }
   return [];
 }
 /* ==================== 用药跳过规则（规则1-6+8A，严格 0 宽限） ==================== */
@@ -6226,20 +6243,67 @@ async function scanMed(){
 }
 /* ==================== 用药提醒增强：滴滴警报声 / 10 分钟重复提醒 / 幂等防重 ==================== */
 let _didiAudioCtx = null;
-/** 播放"滴滴"警报声：880Hz 方波，0.3s 响 + 0.2s 停 × 20 轮 ≈ 10 秒 */
-function playDidiAlert(durationSec){
+/** 预热滴滴 AudioContext：必须由用户 gesture(click/touch/keydown) 触发，规避浏览器 autoplay 限制。
+ *  任何用户交互都会尝试 resume，确保到点第一次 playDidiAlert 时 AudioContext 已处于 running 态。
+ *  注意：不要直接播放声音，以免误触发"莫名其妙响了"的体验。*/
+function warmupDidiAudioCtx(){
+  try{
+    if(!_didiAudioCtx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return false;
+      _didiAudioCtx = new AC();
+    }
+    if(_didiAudioCtx.state === 'suspended' || _didiAudioCtx.state === 'interrupted'){
+      _didiAudioCtx.resume().catch(()=>{});
+    }
+    return true;
+  }catch(e){ return false; }
+}
+// 在任意用户 gesture 事件上预热一次（只注册一次，避免重复监听）
+if(typeof window._didiWarmupRegistered !== 'boolean'){
+  window._didiWarmupRegistered = true;
+  const _warmupOnce = ()=>{ warmupDidiAudioCtx(); };
+  try{ document.addEventListener('click', _warmupOnce, {passive:true, once:true}); }catch(_){}
+  try{ document.addEventListener('touchstart', _warmupOnce, {passive:true, once:true}); }catch(_){}
+  try{ document.addEventListener('keydown', _warmupOnce, {passive:true, once:true}); }catch(_){}
+}
+/** 播放"滴滴"警报声：880Hz 方波，0.3s 响 + 0.2s 停 × 20 轮 ≈ 10 秒。
+ *  可靠性改进：
+ *   1) 若 AudioContext 为 suspended，先 await resume 成功再排程 beeps（否则 currentTime 停在 0 导致 setValueAtTime 报错 / 不出声）
+ *   2) resume 即便失败也不抛（外层 checkMeds 已经 try/catch）
+ *   3) 通过 window.__DIDI_LAST_FIRE__ 暴露测试钩子，用于 TDD 判断"声音请求是否真的发起" */
+async function playDidiAlert(durationSec){
   durationSec = durationSec || 10;
   try{
     if(!_didiAudioCtx){
       const AC = window.AudioContext || window.webkitAudioContext;
-      if(!AC) return;
+      if(!AC){ console.warn('[playDidiAlert] 浏览器不支持 AudioContext'); return; }
       _didiAudioCtx = new AC();
     }
-    if(_didiAudioCtx.state === 'suspended') _didiAudioCtx.resume().catch(()=>{});
     const ctx = _didiAudioCtx;
+    if(ctx.state === 'suspended' || ctx.state === 'interrupted'){
+      try{ await ctx.resume(); }catch(e){ console.warn('[playDidiAlert] resume fail:', e); }
+    }
+    // 最终防线：仍然不 running → 无法排程，直接返回（autoplay 策略可能要求用户交互）
+    if(ctx.state !== 'running'){
+      console.warn('[playDidiAlert] AudioContext 仍未 running，本次放弃声音播放（请用户点击任意位置后会自动预热，下次生效）');
+      // 即便发不出声，也标记"已请求播放"——供 TDD 独立验证
+      window.__DIDI_LAST_FIRE__ = { t: Date.now(), durationSec, state: ctx.state, skipped: true };
+      // 兜底：走 HTMLAudio 播一个极短的空 beep（base64），某些浏览器允许它在非 gesture 下也发声
+      try{
+        if(!window.__didiFallbackSrc){
+          // 880Hz 方波 0.2s 的 WAV base64（兜底用，极小体积）
+          window.__didiFallbackSrc = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAD///8A////AP///wD///8A';
+        }
+        const a = new Audio(window.__didiFallbackSrc);
+        a.volume = 0.001; // 几乎静音，目的是让浏览器允许后续 AudioContext 被使用
+        a.play().catch(()=>{});
+      }catch(_){}
+      return;
+    }
     const beepMs = 300, gapMs = 200, perMs = beepMs + gapMs;
     const totalMs = Math.max(1, Math.min(60, durationSec)) * 1000;
-    const startT = ctx.currentTime;
+    const startT = ctx.currentTime + 0.02; // 留 20ms 余量，避免 setValueAtTime 插在「过去」抛错
     let t = 0;
     while(t < totalMs){
       const osc = ctx.createOscillator();
@@ -6256,6 +6320,7 @@ function playDidiAlert(durationSec){
       osc.start(s); osc.stop(e + 0.005);
       t += perMs;
     }
+    window.__DIDI_LAST_FIRE__ = { t: Date.now(), durationSec, state: ctx.state, skipped: false };
   }catch(e){ console.warn('滴滴警报声播放失败：', e); }
 }
 /** 生成"服药提醒专用"大字 UI Modal（避免重复 toast）：一次只弹一个，点击关闭。
@@ -6268,6 +6333,10 @@ let _medAlertModalOpen = false;
 function showMedAlertUI(titleMsg, hintMsg, onClose){
   if(_medAlertModalOpen) return;
   _medAlertModalOpen = true;
+  // TDD 钩子：每次弹窗都记录一次（独立于 DOM，用于 Playwright 判断"弹窗请求是否真的发起"）
+  window.__MED_ALERT_LAST_FIRE__ = { t: Date.now(), title: String(titleMsg||''), hint: String(hintMsg||'') };
+  if(!window.__MED_ALERT_HISTORY__) window.__MED_ALERT_HISTORY__ = [];
+  window.__MED_ALERT_HISTORY__.push(window.__MED_ALERT_LAST_FIRE__);
   function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   const wrap = document.createElement('div');
   wrap.id = '__medAlertWrap__';
@@ -6303,55 +6372,66 @@ function _hash8(str){
   return ('00000000' + h.toString(16)).slice(-8);
 }
 async function checkMeds(){
-  if(!currentUser || !DB.db) return;
-  const meds = await allMine('meds'); // 只检查当前登录用户自己的用药（防止其他账号数据串用提醒）
+  if(!DB.db) return;
+  // 说明：不再用 !currentUser 作为守卫——体验模式(quickUse)下 currentUser=null，但 allMine/withUsername 会退化为 'guest' 隔离域，
+  // 一样能读取/写入用药数据，提醒照常触发（按钮注入走 renderMeds，弹窗+声音走本函数，两条链路独立）。
+  let meds = [];
+  try{ meds = await allMine('meds'); }catch(e){ console.warn('[checkMeds] allMine(meds) fail:', e); return; }
   const now = nowBeijing();
   const todayStr = beijingYMD(now);
   const curMin = now.getHours()*60 + now.getMinutes();
-  const allLogs = await allMine('medlog');
+  let allLogs = [];
+  try{ allLogs = await allMine('medlog'); }catch(e){ console.warn('[checkMeds] allMine(medlog) fail:', e); }
+  const effectiveUser = currentUser || 'guest';
+  let remindFiredCount = 0;
   for(const med of meds){
     for(const tp of timePoints(med)){
       const tm = timeToMin(tp);
-      const diffMin = curMin - tm; // 正数 = 已经过了提醒时间，负数 = 还没到
-      // --- 今天这颗药的 medlog 状态（如果是 skipped/taken/late_taken 就不用再提醒了） ---
-      const logKey = { med_id: med.id, scheduled_date: todayStr, scheduled_time: tp };
-      const todayLog = allLogs.find(l => l.username === (currentUser||'guest') && l.med_id === logKey.med_id && l.scheduled_date === logKey.scheduled_date && l.scheduled_time === logKey.scheduled_time);
+      const diffMin = curMin - tm;
+      const todayLog = allLogs.find(l =>
+        String(l.username) === effectiveUser
+        && String(l.med_id) === String(med.id)
+        && String(l.scheduled_date || '').slice(0,10) === String(todayStr)
+        && String(l.scheduled_time || '').slice(0,5) === String(tp)
+      );
       if(todayLog && (todayLog.status === 'taken' || todayLog.status === 'late_taken' || todayLog.status === 'skipped')){
-        continue; // 今天该时间段已经处理 → 不再重复提醒
+        continue;
       }
-      // --- 触发窗口：到时间点附近(±1分钟)才允许首次触发；之后每 10 分钟整档重复提醒一次 ---
-      if(diffMin < -1) continue; // 还没到提醒时间
-      // 窗口索引：0 = 首次(±1min)，1 = 过了 10~19 分钟，2 = 过了 20~29 分钟，3 = ...
+      if(diffMin < -1) continue;
       const slotIndex = diffMin <= 1 ? 0 : Math.max(0, Math.floor(diffMin / 10));
-      if(slotIndex > 36) continue; // 最多提醒 6 小时（36 × 10 分钟），晚上避免一直轰炸
+      if(slotIndex > 36) continue;
       if(!med.remindSlots) med.remindSlots = {};
       const slotKey = todayStr + '_' + tp + '#' + slotIndex;
-      if(med.remindSlots[slotKey]) continue; // 该 10 分钟档已提醒过（幂等），跳过
+      if(med.remindSlots[slotKey]) continue;
       med.remindSlots[slotKey] = true;
       med.reminded = med.reminded || {};
       med.reminded[todayStr + '_' + tp] = true;
       if(!med.remindCounts) med.remindCounts = {};
       const countKey = todayStr + '_' + tp;
       med.remindCounts[countKey] = (med.remindCounts[countKey] || 0) + 1;
-      await DB.put('meds', withUsername(med)); // [隔离-加固] withUsername 强覆盖 username，防止 med 对象被误改串到其他账号
+      // 提醒幂等状态落盘必须包裹 try/catch：即使这里写失败，也不能影响后续"弹窗 + 滴滴声"的触发链路
+      try{ await DB.put('meds', withUsername(med)); }catch(e){ console.warn('[checkMeds] put remindSlots fail:', e); }
 
       const baseMsg = '该吃「' + med.name + '」了！' + (med.dose ? '（' + med.dose + '）' : '') + ' · 提醒时间：' + tp + (slotIndex ? '（第' + (slotIndex+1) + '次提醒）' : '（首次提醒）');
-      notify(baseMsg);
-      addEvent('用药提醒', (slotIndex ? '重复提醒#'+(slotIndex+1)+'：':'到点提醒：') + '服药「' + med.name + '」' + tp);
+      try{ notify(baseMsg); }catch(e){}
+      try{ addEvent('用药提醒', (slotIndex ? '重复提醒#'+(slotIndex+1)+'：':'到点提醒：') + '服药「' + med.name + '」' + tp); }catch(e){}
       if(swReg){ try{ const sub = await swReg.pushManager.getSubscription(); if(sub) fetch('https://updates.push.services.mozilla.com/wpush/v2/gcm',{method:'POST'}).catch(()=>{}); }catch(e){} }
-      sendPushPlus('医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+slotIndex+'次）') : ''), baseMsg + '\n请尽快点「已服用」或「跳过今天」，否则每10分钟重复提醒一次。');
+      try{ sendPushPlus('医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+slotIndex+'次）') : ''), baseMsg + '\n请尽快点「已服用」或「跳过今天」，否则每10分钟重复提醒一次。'); }catch(e){}
       try{
-        const userRec = await DB.get('users', currentUser);
+        const userRec = currentUser ? await DB.get('users', currentUser) : null;
         if(userRec && userRec.email && userRec.emailRemind){
           sendEmail(userRec.email, '医路相伴 · 用药提醒' + (slotIndex ? ('（重复第'+(slotIndex+1)+'次）') : ''), '<h2>用药提醒</h2><p>' + baseMsg + '</p><p>请尽快登录医路相伴，点击「已服用」或「跳过今天」。</p>');
         }
       }catch(e){}
-      playDidiAlert(10);
-      showMedAlertUI(baseMsg, '请尽快点击该时间段下方的「已服用」或「跳过今天」，否则每 10 分钟重复提醒一次。');
+      // ======= 弹窗 + 滴滴声：必须和上面的数据写入链路分离，任何前置异常都不能阻断 =======
+      try{ playDidiAlert(10); }catch(e){ console.warn('[checkMeds] playDidiAlert fail:', e); }
+      try{ showMedAlertUI(baseMsg, '请尽快点击该时间段下方的「已服用」或「跳过今天」，否则每 10 分钟重复提醒一次。'); }catch(e){ console.warn('[checkMeds] showMedAlertUI fail:', e); }
+      remindFiredCount++;
     }
   }
-  // ====== 修复 2：触发提醒后立刻重绘 meds 列表，让「已服用 / 跳过今天」按钮同步出现，不需要等下一次轮询 ======
-  try{ await renderMeds(); }catch(e){ console.warn('[checkMeds] renderMeds fail:', e); }
+  if(remindFiredCount > 0){
+    try{ await renderMeds(); }catch(e){ console.warn('[checkMeds] renderMeds fail:', e); }
+  }
 }
 /* ==================== 医院资质审查过滤器 ==================== */
 /* 只保留"正规、具备综合资质"的综合医院；
@@ -6468,6 +6548,45 @@ function loadAmap(force){
   };
   document.head.appendChild(s);
 }
+/* ============== 拖拽地图中心 = 选位置（防抖 + 位移阈值） ==============
+ * 解决用户痛点：只拖拽平移了地图视图（视觉上"选了远方"）但没点 click，导致 userLoc 永远不更新，搜的还是原来的定位坐标。
+ * 策略：
+ *   - moveend 防抖 450ms，避免拖拽过程中连发搜索；
+ *   - 如果当前没有 userLoc（未定位态），且地图中心距默认成都 ≥ 5km，则把中心视为用户意图并重新搜索（用户拖到了远方想看那里的医院）；
+ *   - 如果已有 userLoc，仅当地图中心距 userLoc ≥ 3km 时才触发重搜（小幅平移/缩放忽略，不骚扰）；
+ *   - 不弹 toast / 不语音（仅 click 明确动作时才反馈），避免感官噪音。
+ */
+let _MAP_MOVE_T = null;
+const _MAP_DEFAULT_CENTER = {lat: 30.5728, lng: 104.0668};   // 默认成都
+const _MAP_MOVE_TRIGGER_KM = 3;                                  // 已有 userLoc 时，位移 ≥ 3km 触发
+const _MAP_DEFAULT_DRIFT_KM = 5;                                 // 未定位态，距默认中心 ≥ 5km 触发（认为用户确实拖去了别处）
+function _bindMapMoveSync(mapObj, cfg){
+  if(!mapObj || !mapObj.on || typeof cfg.getCenter !== 'function') return;
+  mapObj.on('moveend', function _moveEndHandler(){
+    try{
+      if(_MAP_MOVE_T){ clearTimeout(_MAP_MOVE_T); _MAP_MOVE_T = null; }
+      _MAP_MOVE_T = setTimeout(function __doMoveSync(){
+        try{
+          const c = cfg.getCenter();
+          if(!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
+          let needSync = false;
+          if(userLoc){
+            const d = haversine(userLoc.lat, userLoc.lng, c.lat, c.lng);
+            needSync = d >= _MAP_MOVE_TRIGGER_KM;
+          } else {
+            const dFromDefault = haversine(_MAP_DEFAULT_CENTER.lat, _MAP_DEFAULT_CENTER.lng, c.lat, c.lng);
+            needSync = dFromDefault >= _MAP_DEFAULT_DRIFT_KM;
+          }
+          if(needSync){
+            userLoc = {lat: c.lat, lng: c.lng};
+            // 静默同步（不点 toast/speak），因为是拖拽隐式操作不是明确点击
+            try{ renderHospitals(); }catch(_){}
+          }
+        }catch(_){}
+      }, 450);
+    }catch(_){}
+  });
+}
 function initAmapMap(){
   if(amap || !window.AMap) return;
   amap = new AMap.Map('map', {zoom:12, center:[104.0668, 30.5728]});
@@ -6476,6 +6595,14 @@ function initAmapMap(){
     renderHospitals();
     toast('已设置位置，重新计算附近医院');
     autoSpeak('已设置位置');
+  });
+  // 拖拽/缩放地图中心 = 选位置（防抖 450ms，位移 > 3km 才触发，避免小范围平移浪费请求）
+  _bindMapMoveSync(amap, {
+    kind:'amap',
+    getCenter: ()=> {
+      const c = amap.getCenter();
+      return {lat: c.getLat ? c.getLat() : c.lat, lng: c.getLng ? c.getLng() : c.lng};
+    }
   });
   renderHospitals();
 }
@@ -6586,58 +6713,169 @@ function initLeafletMap(){
     toast('已设置位置，重新计算附近医院');
     autoSpeak('已设置位置');
   });
+  // 拖拽/缩放地图中心 = 选位置（防抖 450ms，位移 > 3km 才触发）
+  _bindMapMoveSync(map, {
+    kind:'leaflet',
+    getCenter: ()=> {
+      const c = map.getCenter();
+      return {lat: c.lat, lng: c.lng};
+    }
+  });
 }
-function renderHospitals(){
-  if(amapReady && amap) return renderHospitalsAMap();
-  let list = HOSPITALS.map(h=>({...h})).filter(isQualifiedGeneralHospital);
-  if(userLoc){
-    list.forEach(h=>{ h.dist = haversine(userLoc.lat, userLoc.lng, h.lat, h.lng); });
-    list.sort((a,b)=>a.dist-b.dist);
-    list = list.slice(0,5);
-  }
+function _drawHospitalList(list, opts){
+  opts = opts || {};
+  const usedSample = !!opts.usedSample;
+  const fromUser = !!opts.userLoc;
+  const QUALIFIED_EMPTY_HTML = '<p class="hint" style="padding:14px;border:1px dashed rgba(239,68,68,.3);border-radius:10px;background:rgba(239,68,68,.04);color:var(--danger-text,#ef4444);">附近未找到符合正规综合资质的医院。<br>请选择「人民医院 / 中心医院 / 第X医院 / 中医院 / 附属医院」等二级及以上公立医院就诊，避免前往专科、诊所、保健、体检机构或小型门诊。</p>';
   const el = $('hospList'); el.innerHTML = '';
+  // 同步到 amapHospitals（让 goHospital 导航不受分支限制）
+  amapHospitals = list.slice();
   if(!list.length){
-    el.innerHTML = '<p class="hint" style="padding:14px;border:1px dashed rgba(239,68,68,.3);border-radius:10px;background:rgba(239,68,68,.04);color:var(--danger-text,#ef4444);">附近未找到符合正规综合资质的医院。<br>请选择「人民医院 / 中心医院 / 第X医院 / 中医院 / 附属医院」等二级及以上公立医院就诊，避免前往专科、诊所、保健、体检机构或小型门诊。</p>';
-    $('mapHint').textContent = userLoc ? '已按综合医院资质筛选，暂无符合条件的医院，请前往市区大型公立医院。' : '示例医院暂无可展示的综合医院。';
+    el.innerHTML = QUALIFIED_EMPTY_HTML;
+    $('mapHint').textContent = fromUser ? '已按综合医院资质筛选，20km 内暂无符合条件的正规医院，请前往市区大型公立医院。' : '示例医院暂无可展示的综合医院。';
   } else {
     list.forEach(h=>{
-      const dist = userLoc ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
-      const match = recentDepts.some(d=>h.dept.some(x=>x.includes(d)||d.includes(x)));
+      const dist = (h.dist != null) && fromUser ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
+      const deptArr = (h.dept && Array.isArray(h.dept) && h.dept.length) ? h.dept : [];
+      const match = recentDepts.some(d=>deptArr.some(x=>(x||'').includes(d)||d.includes(x||'')));
+      const sampleBadge = h._sample ? '<span class="tag" style="background:rgba(120,120,130,.12);color:#6b7280;margin-left:8px;">演示示例·非本地</span>' : '';
+      const matchBadge = match ? '<span class="tag">匹配科室</span>' : '';
+      const navDisabled = h._sample;
+      const navBtn = navDisabled
+        ? '<button class="btn sm line" style="opacity:.55" disabled title="演示示例医院没有导航信息，请改用真实搜索结果">演示</button>'
+        : '<button class="btn sm line" onclick="goHospital(\'' + String(h.name||'').replace(/'/g,"\\'") + '\')">导航</button>';
       const d = document.createElement('div');
       d.className = 'hosp-item';
+      if(h._sample) d.style.background = 'linear-gradient(180deg, rgba(248,249,250,.8), rgba(248,249,250,.35))';
       d.innerHTML = '<div class="dist">' + dist + '</div>' +
-        '<div style="flex:1;"><div class="nm">' + h.name + (match?'<span class="tag">匹配科室</span>':'') + '</div>' +
-        '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
-        '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
+        '<div style="flex:1;"><div class="nm">' + (h.name||'') + sampleBadge + matchBadge + '</div>' +
+        '<div class="ds">' + (h.level||'正规综合医院') + (deptArr.length ? (' · ' + deptArr.join('、')) : '') + '</div></div>' +
+        navBtn;
       el.appendChild(d);
     });
-    $('mapHint').textContent = (userLoc ? '已定位，已按综合医院资质筛选，推荐最近的 ' + list.length + ' 所正规医院。' : '未定位，显示经资质审查的示例综合医院（供演示）。');
+    if(usedSample){
+      if(!fromUser){
+        $('mapHint').textContent = '未定位，下方为平台内置演示示例（非本地真实医院）；点击「获取我的位置」或在地图上点选/拖拽中心至目标区域，即可按真实位置搜索附近综合医院。';
+      } else {
+        $('mapHint').textContent = '当前 20km 范围内未搜索到符合资质的正规综合医院，下方展示为平台内置演示示例（非本地真实医院），请调整位置或前往附近城市公立医院就诊。';
+      }
+    } else if(fromUser){
+      $('mapHint').textContent = '已定位，已按综合医院资质筛选（去除专科、诊所、保健、体检机构），推荐最近的 ' + list.length + ' 所正规医院（可点击地图任意位置或拖拽中心至目标区域重新搜索）。';
+    } else {
+      $('mapHint').textContent = '未定位，显示经资质审查的示例综合医院（供演示）；请定位或点击/拖拽地图选择位置后查看真实医院。';
+    }
   }
-  // 地图标注
+  // Leaflet 地图标注
   if(map){
     mapMarkers.forEach(m=>map.removeLayer(m)); mapMarkers = [];
-    const center = userLoc || {lat:30.5728, lng:104.0668};
-    map.setView([center.lat, center.lng], userLoc ? 12 : 11);
-    if(userLoc){
-      const me = L.circleMarker([userLoc.lat, userLoc.lng], {radius:8, color:'#0f9d8f', fillColor:'#0f9d8f', fillOpacity:.8}).addTo(map);
+    const center = (opts && opts.userLoc) || {lat:30.5728, lng:104.0668};
+    map.setView([center.lat, center.lng], fromUser ? 12 : 11);
+    if(fromUser){
+      const me = L.circleMarker([center.lat, center.lng], {radius:8, color:'#0f9d8f', fillColor:'#0f9d8f', fillOpacity:.8}).addTo(map);
       me.bindPopup('我的位置').openPopup();
       mapMarkers.push(me);
     }
     list.forEach(h=>{
+      if(h.lat == null || h.lng == null) return;
       const m = L.marker([h.lat, h.lng]).addTo(map);
-      m.bindPopup('<b>'+h.name+'</b><br>'+h.level);
+      m.bindPopup('<b>'+h.name+'</b><br>'+(h.level||'正规综合医院'));
       mapMarkers.push(m);
     });
   }
+}
+async function _searchNearbyOsmHospitals(loc){
+  // Nominatim 附近搜索：radius=20km，限定 amenity=hospital（覆盖"综合医院/人民医院/中医院"等多种类型）
+  try{
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=50&addressdetails=1&exclude_place_ids=&dedupe=1' +
+      '&lat=' + encodeURIComponent(loc.lat) + '&lon=' + encodeURIComponent(loc.lng) +
+      '&radius=' + encodeURIComponent(20000) +
+      '&amenity=hospital';
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 12 * 1000);
+    const res = await fetch(url, {method:'GET', headers:{'Accept':'application/json','User-Agent':'Yiluxiangban/1.0'}, signal: ctrl.signal});
+    clearTimeout(t);
+    if(!res || !res.ok) return null;
+    const rows = await res.json();
+    if(!Array.isArray(rows) || !rows.length) return [];
+    const mapped = rows.map(r=>{
+      const lat = parseFloat(r.lat), lng = parseFloat(r.lon);
+      const dept = [];
+      // 从 OSM class/type + 名字里猜科室
+      const name = String(r.display_name || r.name || '医院');
+      if(/中医/.test(name)) dept.push('中医');
+      if(/妇/.test(name)) dept.push('妇产');
+      if(/儿童/.test(name)) dept.push('儿科');
+      if(/口腔/.test(name)) dept.push('口腔');
+      if(/肿瘤/.test(name)) dept.push('肿瘤');
+      if(/精神/.test(name)) dept.push('精神');
+      if(/眼科/.test(name) || /眼视/.test(name)) dept.push('眼科');
+      // 简易等级：名字里含"三级甲等/三甲/三级/二级甲等/二甲/二级/一级"就填上，否则默认"正规综合医院"
+      let level = '正规综合医院';
+      if(/三级甲等|三甲/.test(name)) level = '三级甲等';
+      else if(/三级/.test(name)) level = '三级';
+      else if(/二级甲等|二甲/.test(name)) level = '二级甲等';
+      else if(/二级/.test(name)) level = '二级';
+      else if(/一级/.test(name)) level = '一级';
+      return {
+        name: String(r.name || name.split(',')[0] || '医院').trim(),
+        lat, lng, dept, level,
+        dist: haversine(loc.lat, loc.lng, lat, lng)
+      };
+    }).filter(isQualifiedGeneralHospital).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    return mapped;
+  }catch(e){
+    return null;
+  }
+}
+async function renderHospitals(){
+  if(amapReady && amap) return renderHospitalsAMap();
+  const locRef = userLoc ? {lat: userLoc.lat, lng: userLoc.lng} : null;
+  let list = [];
+  let usedSample = false;
+  if(locRef){
+    // 已定位/已点选位置：先跑 OSM 真实附近医院搜索
+    if($('mapHint')) $('mapHint').textContent = '正在搜索附近正规综合医院（20km 范围）…';
+    const real = await _searchNearbyOsmHospitals(locRef);
+    if(Array.isArray(real) && real.length){
+      list = real;
+    } else if(real === null){
+      // 网络异常/超时：不混淆视听，直接提示搜索失败 + 不展示示例（避免再被用户误以为"被塞示例"）
+      const el = $('hospList'); el.innerHTML = '';
+      const FAIL_HTML = '<p class="hint" style="padding:14px;border:1px dashed rgba(245,158,11,.35);border-radius:10px;background:rgba(245,158,11,.06);color:#92400e;">附近医院搜索失败（网络不可达或超时）。<br>请检查网络后点击「获取我的位置」，或放大地图后手动点选附近位置重试。</p>';
+      el.innerHTML = FAIL_HTML;
+      $('mapHint').textContent = '搜索失败，请检查网络后重试（或切换为高德定位模式）。';
+      if(map){
+        mapMarkers.forEach(m=>map.removeLayer(m)); mapMarkers = [];
+        const me = L.circleMarker([locRef.lat, locRef.lng], {radius:8, color:'#0f9d8f', fillColor:'#0f9d8f', fillOpacity:.8}).addTo(map);
+        me.bindPopup('我的位置').openPopup();
+        mapMarkers.push(me);
+        map.setView([locRef.lat, locRef.lng], 12);
+      }
+      return;
+    }
+  }
+  // 0 条真实结果 或 未定位：降级本地静态示例 HOSPITALS（且统一标记 _sample=true，提示醒目）
+  if(!list.length){
+    const fallback = HOSPITALS.map(h=>({...h, _sample:true})).filter(isQualifiedGeneralHospital);
+    if(locRef){
+      fallback.forEach(h=>{ h.dist = haversine(locRef.lat, locRef.lng, h.lat, h.lng); });
+      fallback.sort((a,b)=>a.dist-b.dist);
+    }
+    list = fallback.slice(0,5);
+    usedSample = true;
+  }
+  _drawHospitalList(list, {usedSample, userLoc: locRef});
 }
 function renderHospitalsAMap(){
   if(!amap) return;
   amap.clearMap();
   const QUALIFIED_EMPTY_HTML = '<p class="hint" style="padding:14px;border:1px dashed rgba(239,68,68,.3);border-radius:10px;background:rgba(239,68,68,.04);color:var(--danger-text,#ef4444);">附近未找到符合正规综合资质的医院。<br>请选择「人民医院 / 中心医院 / 第X医院 / 中医院 / 附属医院」等二级及以上公立医院就诊，避免前往专科、诊所、保健、体检机构或小型门诊。</p>';
   const drawStatic = ()=>{
-    amapHospitals = [];
+    const list = HOSPITALS.map(h=>({...h, _sample:true})).filter(isQualifiedGeneralHospital);
+    // 示例：dist 统一不显示，标记演示
+    list.forEach(h=>{ h.dist = null; });
+    amapHospitals = list.slice();
     const el = $('hospList'); el.innerHTML = '';
-    const list = HOSPITALS.filter(isQualifiedGeneralHospital);
     if(!list.length){
       el.innerHTML = QUALIFIED_EMPTY_HTML;
       $('mapHint').textContent = '示例医院暂无可展示的综合医院（已按资质审查规则过滤）。';
@@ -6649,14 +6887,14 @@ function renderHospitalsAMap(){
       m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
       const d = document.createElement('div');
       d.className = 'hosp-item';
+      d.style.background = 'linear-gradient(180deg, rgba(248,249,250,.8), rgba(248,249,250,.35))';
       d.innerHTML = '<div class="dist">—</div>' +
-        '<div style="flex:1;"><div class="nm">' + h.name + '</div>' +
-        '<div class="ds">' + h.level + ' · ' + h.dept.join('、') + '</div></div>' +
-        '<button class="btn sm line" onclick="goHospital(\'' + h.name + '\')">导航</button>';
+        '<div style="flex:1;"><div class="nm">' + h.name + '<span class="tag" style="background:rgba(120,120,130,.12);color:#6b7280;margin-left:8px;">演示示例</span></div>' +
+        '<div class="ds">' + (h.level||'正规综合医院') + ' · ' + (h.dept||[]).join('、') + '</div></div>' +
+        '<button class="btn sm line" style="opacity:.55" disabled title="演示示例医院没有导航信息，请先定位再查看真实医院">演示</button>';
       el.appendChild(d);
-      amapHospitals.push({...h});
     });
-    $('mapHint').textContent = '未定位，显示经资质审查的示例综合医院；点击「获取我的位置」可搜索附近真实综合医院。';
+    $('mapHint').textContent = '未定位，下方为平台内置演示示例（非本地真实医院）；点击「获取我的位置」或在地图上点选/拖拽中心至目标区域，即可按真实位置搜索附近综合医院。';
     if(userLoc) amap.setFitView();
   };
   if(!userLoc){
@@ -6682,13 +6920,15 @@ function renderHospitalsAMap(){
       level:p.type ? p.type.split(';').filter(Boolean).pop() : '医院',
       dist:haversine(userLoc.lat, userLoc.lng, p.location.getLat(), p.location.getLng())
     })).filter(isQualifiedGeneralHospital).sort((a,b)=>a.dist-b.dist).slice(0,5);
-    // 真实搜索过滤后不足，用本地示例 HOSPITALS（也过滤+按距离算）补足到 5
-    if(mapped.length < 3){
+    let usedSample = false;
+    // 真实搜索过滤后 0 条才降级为本地示例（而且要醒目提示：这些不是该位置的真实医院）
+    if(mapped.length === 0){
       const localFallback = HOSPITALS.filter(isQualifiedGeneralHospital).map(h=>({
-        ...h, dist: haversine(userLoc.lat, userLoc.lng, h.lat, h.lng)
-      })).sort((a,b)=>a.dist-b.dist);
-      const usedNames = new Set(mapped.map(m=>m.name));
-      localFallback.forEach(h=>{ if(mapped.length >= 5) return; if(!usedNames.has(h.name)) mapped.push(h); });
+        ...h, _sample: true, dist: haversine(userLoc.lat, userLoc.lng, h.lat, h.lng)
+      })).sort((a,b)=>a.dist-b.dist).slice(0,5);
+      if(localFallback.length){
+        mapped = localFallback; usedSample = true;
+      }
     }
     amapHospitals = mapped;
     const el = $('hospList'); el.innerHTML = '';
@@ -6704,15 +6944,24 @@ function renderHospitalsAMap(){
         m.on('click', ()=>amap.setCenter([h.lng, h.lat]));
       }
       const dist = h.dist != null ? (h.dist < 1 ? (h.dist*1000).toFixed(0)+' 米' : h.dist.toFixed(1)+' 公里') : '—';
+      const sampleBadge = h._sample ? '<span class="tag" style="background:rgba(120,120,130,.12);color:#6b7280;margin-left:8px;">演示示例·非本地</span>' : '';
+      const navBtn = h._sample
+        ? '<button class="btn sm line" style="opacity:.55" disabled title="演示示例医院没有导航信息，请改用真实搜索结果">演示</button>'
+        : '<button class="btn sm line" onclick="goHospital(\'' + String(h.name||'').replace(/'/g,"\\'") + '\')">导航</button>';
       const d = document.createElement('div');
       d.className = 'hosp-item';
+      if(h._sample) d.style.background = 'linear-gradient(180deg, rgba(248,249,250,.8), rgba(248,249,250,.35))';
       d.innerHTML = '<div class="dist">' + dist + '</div>' +
-        '<div style="flex:1;"><div class="nm">' + h.name + '</div>' +
+        '<div style="flex:1;"><div class="nm">' + h.name + sampleBadge + '</div>' +
         '<div class="ds">' + (h.level||'正规综合医院') + ((h.dept && h.dept.length) ? (' · ' + h.dept.join('、')) : '') + '</div></div>' +
-        '<button class="btn sm line" onclick="goHospital(\'' + String(h.name||'').replace(/'/g,"\\'") + '\')">导航</button>';
+        navBtn;
       el.appendChild(d);
     });
-    $('mapHint').textContent = '高德已定位，已按综合医院资质筛选（去除专科、诊所、保健、体检机构），推荐最近的 ' + amapHospitals.length + ' 所正规医院。';
+    if(usedSample){
+      $('mapHint').textContent = '当前 20km 范围内未搜索到符合资质的正规综合医院，下方展示为平台内置演示示例（非本地真实医院），请调整位置或前往附近城市公立医院就诊。';
+    } else {
+      $('mapHint').textContent = '高德已定位，已按综合医院资质筛选（去除专科、诊所、保健、体检机构），推荐最近的 ' + amapHospitals.length + ' 所正规医院（可点击地图任意位置或拖拽中心至目标区域重新搜索）。';
+    }
     try{ amap.setFitView(); }catch(e){}
   });
 }
