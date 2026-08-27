@@ -1919,6 +1919,7 @@
     </label>
     
     <div class="gap6" style="margin-top:8px;">
+      <button class="btn block ghost" id="authCancelBtn" onclick="closeAuth()"><svg class="icn"><use href="#ic-close"/></svg> 取消</button>
       <button class="btn block ghost" id="authSwitchBtn" onclick="switchAuthMode(false)">去注册</button>
       <button class="btn block" id="authSubmitBtn" onclick="onAuthSubmit()">登录</button>
     </div>
@@ -11485,9 +11486,9 @@ async function init(){
       try{
         
         
-        let chk = await sbFetch('users?limit=1&select=id,is_admin,role,family_code,email,email_remind&id=eq.' + encodeURIComponent(currentUser));
+        let chk = await sbFetch('users?limit=1&select=id,is_admin,admin_level,sub_perms,role,family_code,email,email_remind&id=eq.' + encodeURIComponent(currentUser));
         if(!chk.ok && chk.status === 400){
-          chk = await sbFetch('users?limit=1&select=id,is_admin,role,family_code&id=eq.' + encodeURIComponent(currentUser));
+          chk = await sbFetch('users?limit=1&select=id,is_admin,admin_level,sub_perms,role,family_code&id=eq.' + encodeURIComponent(currentUser));
         }
         if(chk.ok){
           const rows = await chk.json();
@@ -11505,13 +11506,16 @@ async function init(){
                                   ? real[0].sub_perms : null;
             const _newLvl = (currentUser === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlFromCloud);
             const _newPrm = parseSubPerms(_prmFromCloud ? JSON.stringify(_prmFromCloud) : null);
+            let levelChanged = false, permsChanged = false;
             if(_newLvl !== adminLevel){
               adminLevel = _newLvl;
               localStorage.setItem('med_admin_level', adminLevel);
+              levelChanged = true;
             }
             if(JSON.stringify(_newPrm) !== JSON.stringify(subPerms)){
               subPerms = _newPrm;
               localStorage.setItem('med_sub_perms', JSON.stringify(subPerms));
+              permsChanged = true;
             }
             
             if(DB.db){
@@ -11545,6 +11549,9 @@ async function init(){
             }
             if(real[0].role && real[0].role !== myRole) setRole(real[0].role);
             if(real[0].family_code) myFamilyCode = real[0].family_code;
+            if(levelChanged || permsChanged || (!!cloudAdmin !== isAdmin)){
+              try{ updateUserUI(); }catch(_){}
+            }
           }
         }
       }catch(e){ console.warn('[init] 云端用户探针失败（不影响，跳过）:', e); }
