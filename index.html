@@ -4116,6 +4116,7 @@ let myRole = localStorage.getItem('med_role') || 'elder';
 let isAdmin = localStorage.getItem('med_is_admin') === '1';
 
 const SUPER_ADMIN_ID = '15184461098_admin';
+const SUPER_ADMIN_EMAIL = '15184461098@qq.com';
 const AUDIT_EMAIL_TO = '1812139075@qq.com';
 const DEFAULT_SUB_PERMS = Object.freeze({db:false, force_popup:false, pin:false, email_push:false, mmode:false});
 let adminLevel = normalizeAdminLevel(localStorage.getItem('med_admin_level'));
@@ -9474,13 +9475,13 @@ async function updateAdminUI(){
       try{
         const tables = ['users','chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
         const labels = {users:'用户账号',chronic_profiles:'慢病档案',chronic_alerts:'慢病预警',health_metrics:'健康指标',medication_logs:'用药日志',follow_ups:'复诊提醒',events:'就医事件',family_bindings:'家属绑定'};
+        const clearableTables = ['chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
         const counts = {};
         for(const t of tables){
           try{
             const r = await sbFetch(t + '?limit=1&select=id');
             if(r.ok){
               const rows = await r.json();
-              
               const cr = await sbFetch(t + '?select=count', {headers:{'Prefer':'count=exact'}});
               const cnt = cr.headers.get('content-range');
               counts[t] = (cnt && cnt.indexOf('/') >= 0) ? parseInt(cnt.split('/')[1],10) : (Array.isArray(rows)?rows.length:0);
@@ -9489,13 +9490,44 @@ async function updateAdminUI(){
             }
           }catch(e){ counts[t] = '—'; }
         }
-        statsEl.innerHTML = '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
+        let storageHtml = '';
+        try{
+          const sizeData = await adminRPC('admin_get_db_size', {});
+          if(sizeData && sizeData.ok){
+            const pct = sizeData.remaining_pct || 0;
+            const barColor = pct < 1 ? '#ef4444' : (pct < 10 ? '#f59e0b' : '#10b981');
+            const warnMsg = pct < 1 ? '<span style="color:#ef4444;font-weight:700;">⚠ 存储空间不足 1MB，请立即备份！</span>' : (pct < 10 ? '<span style="color:#f59e0b;">⚠ 存储空间低于 10%</span>' : '');
+            storageHtml = '<div style="margin-bottom:12px;padding:12px 16px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);">'
+              + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+              + '<span style="font-weight:800;">数据库存储</span>'
+              + '<span style="font-size:13px;color:var(--muted);">' + (sizeData.size_gb || '0') + ' GB / 2 GB · 剩余 ' + (sizeData.remaining_gb || '0') + ' GB (' + pct + '%)</span>'
+              + '</div>'
+              + '<div style="height:8px;border-radius:999px;background:#e2e8f0;overflow:hidden;">'
+              + '<div style="height:100%;width:' + Math.max(0, Math.min(100, pct)) + '%;background:' + barColor + ';border-radius:999px;transition:width .3s;"></div>'
+              + '</div>'
+              + warnMsg
+              + '</div>';
+          }
+        }catch(e){}
+        const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+        const showClearAll = isSuper;
+        let clearAllHtml = '';
+        if(showClearAll){
+          clearAllHtml = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">'
+            + '<button class="btn danger sm" onclick="adminClearAllTables()" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">🗑 清空全部业务数据（保留用户表）</button>'
+            + '<button class="btn line sm" onclick="adminBackupNow()" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;">📦 立即备份数据库</button>'
+            + '</div>';
+        }
+        statsEl.innerHTML = storageHtml + clearAllHtml + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
           + tables.map(t => {
             const isTest = (t === 'users') ? ('<div class="sub" style="margin-top:2px;color:var(--muted);">test_ 前缀的将被清理</div>') : '';
+            const clearBtn = (showClearAll && clearableTables.indexOf(t) >= 0)
+              ? '<button class="btn line sm" style="margin-top:6px;background:#fef2f2;color:#991b1b;border:1px solid #fecaca;padding:2px 8px;font-size:11px;width:100%;" onclick="adminClearTable(\'' + t + '\')">🗑 清空</button>'
+              : '';
             return '<div class="bp-icon" style="background:var(--surface-2);border-radius:var(--radius-lg);padding:12px 14px;">'
               + '<div class="cs-ic" style="font-size:22px;font-weight:800;color:var(--primary);">' + (Number.isFinite(counts[t]) ? counts[t] : counts[t]) + '</div>'
               + '<div class="sym-chip" style="font-size:14px;color:var(--ink);margin-top:2px;">' + labels[t] + '</div>'
-              + isTest
+              + isTest + clearBtn
               + '</div>';
           }).join('') + '</div>';
       }catch(e){
@@ -9513,6 +9545,7 @@ async function updateAdminUI(){
     try{ adminLoadUsers(); }catch(e){}
     try{ adminLoadEmailCoverage(); }catch(e){}
     try{ adminRenderAnnouncements(); }catch(e){}
+    try{ adminInitStorageMonitor(); }catch(e){}
   }
 }
 
@@ -9565,6 +9598,215 @@ async function purgeTestAccounts(){
   }
 }
 
+const ADMIN_DATA_CATEGORIES = [
+  {key:'chronic_profiles',label:'慢病档案'},
+  {key:'chronic_alerts',label:'慢病预警'},
+  {key:'health_metrics',label:'健康指标'},
+  {key:'medication_logs',label:'用药日志'},
+  {key:'follow_ups',label:'复诊提醒'},
+  {key:'events',label:'就医事件'},
+  {key:'family_bindings',label:'家属绑定'}
+];
+const ADMIN_DATA_LABEL_MAP = ADMIN_DATA_CATEGORIES.reduce((m,c)=>{m[c.key]=c.label;return m;},{});
+
+function adminOpenDeleteUserDataModal(userId){
+  if(!userId) return;
+  const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+  if(!isSuper){ toast('仅最高管理员可删除用户数据'); return; }
+  const modalHtml = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">'
+    + '<div style="background:#fff;border-radius:16px;padding:24px;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);">'
+    + '<h3 style="margin:0 0 8px;font-size:18px;font-weight:800;color:var(--danger);">🗑 删除用户数据</h3>'
+    + '<p style="margin:0 0 14px;color:var(--ink-2);font-size:14px;">选择要为用户 <b style="color:var(--ink);">' + _escHTML(userId) + '</b> 删除的数据类别：</p>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;">'
+    + ADMIN_DATA_CATEGORIES.map((c,i) => '<label style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;background:var(--surface-2);cursor:pointer;font-size:13px;"><input type="checkbox" class="admin-delcat" value="' + c.key + '" ' + (i === 0 ? 'checked' : '') + ' style="accent-color:var(--primary);">' + c.label + '</label>').join('')
+    + '</div>'
+    + '<div style="margin-bottom:14px;">'
+    + '<label style="display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;background:var(--surface-2);cursor:pointer;font-size:13px;"><input type="checkbox" id="adminDelCatAll" onchange="document.querySelectorAll(\'.admin-delcat\').forEach(cb=>cb.checked=this.checked)" style="accent-color:var(--primary);">全选</label>'
+    + '</div>'
+    + '<div id="adminDelConfirmBox" style="display:none;margin-bottom:12px;padding:12px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;font-size:13px;color:#991b1b;">'
+    + '⚠ 此操作将永久删除所选数据，且<b style="color:var(--danger);">不可恢复</b>。请输入 <code style="background:#fee2e2;padding:2px 6px;border-radius:4px;">DELETE CONFIRM</code> 以确认：'
+    + '<input id="adminDelConfirmText" style="width:100%;padding:6px 10px;margin-top:8px;border:1px solid #fecaca;border-radius:6px;font-size:13px;" placeholder="DELETE CONFIRM">'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:12px;">'
+    + '<button class="btn line sm" style="flex:1;" onclick="document.getElementById(\'adminDelConfirmBox\').style.display=\'\'">下一步</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    + '<button class="btn line sm" onclick="this.closest(\'[style*=position:fixed]\').remove()">取消</button>'
+    + '<button class="btn danger sm" style="background:#ef4444;color:#fff;border:1px solid #ef4444;" id="adminDelConfirmBtn" onclick="adminExecDeleteUserData(\'' + _escHTML(userId) + '\')" disabled style="opacity:.5;cursor:not-allowed;">确认删除</button>'
+    + '</div>'
+    + '</div></div>';
+  const wrap = document.createElement('div');
+  wrap.innerHTML = modalHtml;
+  document.body.appendChild(wrap.firstChild);
+  const checkBtn = document.getElementById('adminDelConfirmText');
+  const execBtn = document.getElementById('adminDelConfirmBtn');
+  if(checkBtn){
+    checkBtn.addEventListener('input', function(){
+      if(this.value === 'DELETE CONFIRM'){
+        execBtn.style.opacity = '1';
+        execBtn.style.cursor = 'pointer';
+        execBtn.disabled = false;
+      } else {
+        execBtn.style.opacity = '0.5';
+        execBtn.style.cursor = 'not-allowed';
+        execBtn.disabled = true;
+      }
+    });
+  }
+}
+
+async function adminExecDeleteUserData(userId){
+  const boxes = document.querySelectorAll('.admin-delcat:checked');
+  const cats = [];
+  boxes.forEach(b => cats.push(b.value));
+  if(cats.length === 0){ toast('请至少选择一个数据类别'); return; }
+  const txt = (document.getElementById('adminDelConfirmText') || {}).value;
+  if(txt !== 'DELETE CONFIRM'){ toast('请输入确认文字'); return; }
+  const btn = document.getElementById('adminDelConfirmBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '执行中...'; }
+  try{
+    const r = await adminRPC('admin_delete_user_data', {
+      target_id: userId,
+      categories: cats
+    });
+    if(r && r.ok){
+      const parts = [];
+      for(const k in r.deleted || {}){
+        if(r.deleted[k]) parts.push((ADMIN_DATA_LABEL_MAP[k] || k) + ' ' + r.deleted[k] + ' 条');
+      }
+      toast('✓ 已删除 ' + (parts.length ? parts.join('、') : '0 条数据'));
+      audit('admin.delete_user_data', {target: userId, categories: cats, result: r});
+    } else {
+      toast('删除失败');
+    }
+  }catch(e){
+    toast('删除出错：' + (e.message || e));
+  }
+  const modal = document.querySelector('[style*="position:fixed"][style*="inset:0"]');
+  if(modal) modal.remove();
+  try{ updateAdminUI(); }catch(e){}
+}
+
+function adminClearTable(tableName){
+  const labelMap = ADMIN_DATA_LABEL_MAP;
+  const label = labelMap[tableName] || tableName;
+  const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+  if(!isSuper){ toast('仅最高管理员可清空数据'); return; }
+  if(!confirm('确认要清空【' + label + '】表的所有数据吗？\n该操作将永久删除此表中所有记录，且不可恢复！\n表结构将被保留。')) return;
+  if(!confirm('⚠ 二次确认：此操作不可恢复！\n请再次点击确定以清空【' + label + '】表。')) return;
+  adminRPC('admin_truncate_table', {table_name: tableName}).then(r => {
+    if(r && r.ok){
+      toast('✓ 已清空【' + label + '】表，共 ' + (r.deleted || 0) + ' 条');
+      audit('admin.truncate_table', {table: tableName, deleted: r.deleted});
+    } else {
+      toast('清空失败');
+    }
+  }).catch(e => toast('清空出错：' + (e.message || e)))
+  .then(() => { try{ updateAdminUI(); }catch(e){} });
+}
+
+function adminClearAllTables(){
+  const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+  if(!isSuper){ toast('仅最高管理员可执行此操作'); return; }
+  const msg = '确认要清空所有业务数据表吗？\n将清空以下表的全部数据：\n\n'
+    + ADMIN_DATA_CATEGORIES.map(c => '  • ' + c.label).join('\n')
+    + '\n\n⚠ 用户账号表不会被删除。\n该操作永久不可恢复！';
+  if(!confirm(msg)) return;
+  if(!confirm('⚠⚠ 终极确认：此操作将清空 ' + ADMIN_DATA_CATEGORIES.length + ' 张表的所有数据，且不可恢复！\n请再次点击确定以继续。')) return;
+  let completed = 0;
+  const results = {};
+  (async () => {
+    for(const c of ADMIN_DATA_CATEGORIES){
+      try{
+        const r = await adminRPC('admin_truncate_table', {table_name: c.key});
+        results[c.key] = r && r.ok ? (r.deleted || 0) : '失败';
+        completed++;
+      }catch(e){
+        results[c.key] = '出错';
+      }
+    }
+    const parts = [];
+    for(const k in results){
+      parts.push((ADMIN_DATA_LABEL_MAP[k] || k) + ' ' + results[k] + ' 条');
+    }
+    toast('✓ 批量清空完成：' + completed + '/' + ADMIN_DATA_CATEGORIES.length + ' 张表');
+    audit('admin.truncate_all_tables', {results: results});
+    try{ updateAdminUI(); }catch(e){}
+  })();
+}
+
+function adminBackupNow(){
+  const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+  if(!isSuper){ toast('仅最高管理员可触发备份'); return; }
+  toast('正在备份数据库...');
+  (async () => {
+    try{
+      const r = await adminRPC('admin_backup_data', {});
+      if(r && r.ok){
+        const jsonData = r.json_data || {};
+        const sqlSummary = r.sql_summary || '';
+        const jsonSize = new Blob([JSON.stringify(jsonData)]).size;
+        const jsonStr = JSON.stringify(jsonData, null, 2);
+        const emailBody = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px;margin:0 auto;">'
+          + '<h2 style="margin:0 0 12px;">📦 医路相伴 · 数据库备份报告</h2>'
+          + '<p>生成时间：' + new Date().toLocaleString('zh-CN') + '</p>'
+          + '<p>数据库大小：' + ((r.database_size || 0) / 1073741824).toFixed(4) + ' GB</p>'
+          + '<h3>各表行数：</h3><ul>'
+          + Object.keys(jsonData).map(t => {
+            const cnt = Array.isArray(jsonData[t]) ? jsonData[t].length : 0;
+            const lbl = ADMIN_DATA_LABEL_MAP[t] || t;
+            return '<li>' + lbl + '：' + cnt + ' 行</li>';
+          }).join('')
+          + '</ul>'
+          + '<h3>JSON 数据（附件）</h3>'
+          + '<p style="color:var(--muted);font-size:12px;">JSON 数据已作为附件发送，用于完整恢复。</p>'
+          + '<h3>SQL 摘要</h3>'
+          + '<pre style="background:#f1f5f9;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:11px;">' + _escHTML(sqlSummary) + '</pre>'
+          + '</div>';
+        try{
+          await sendEmail(SUPER_ADMIN_EMAIL, '[医路相伴·备份] 数据库备份 ' + new Date().toLocaleString('zh-CN'), emailBody);
+        }catch(e){}
+        toast('✓ 备份完成，已发送到管理员邮箱（JSON 约 ' + (jsonSize / 1024).toFixed(1) + ' KB）');
+      } else {
+        toast('备份失败');
+      }
+    }catch(e){
+      toast('备份出错：' + (e.message || e));
+    }
+  })();
+}
+
+let _adminStorageChecked = false;
+let _adminStorageCheckInterval = null;
+
+async function adminCheckStorageAndAutoBackup(){
+  if(!currentUser || !isAnyAdmin()) return;
+  try{
+    const r = await adminRPC('admin_get_db_size', {});
+    if(r && r.ok){
+      const remainingPct = r.remaining_pct || 0;
+      const remainingGb = r.remaining_gb || 0;
+      if(remainingPct < 1 || remainingGb < 0.001){
+        toast('⚠ 数据库存储空间不足 1MB！自动备份并开启维护模式...');
+        try{
+          await adminBackupNow();
+        }catch(e){}
+        try{
+          await adminRPC('admin_set_maintenance_mode', {enabled: true});
+          applyMaintenance();
+        }catch(e){}
+      }
+    }
+  }catch(e){}
+}
+
+function adminInitStorageMonitor(){
+  if(_adminStorageCheckInterval) return;
+  adminCheckStorageAndAutoBackup();
+  _adminStorageCheckInterval = setInterval(() => {
+    adminCheckStorageAndAutoBackup();
+  }, 300000);
+}
 
 let _auditThrottle = new Map();
 
@@ -10018,6 +10260,9 @@ async function adminLoadUsers(){
           ops.push('<button class="btn ghost" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',false)">取消管理员</button>');
         } else {
           ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',true)">设为管理员</button>');
+        }
+        if(!isSelf && rid !== SUPER_ADMIN_ID){
+          ops.push('<button class="btn line sm" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-top:2px;" onclick="adminOpenDeleteUserDataModal(\'' + rid.replace(/'/g,'\\\'') + '\')">删除数据</button>');
         }
       } else {
         
