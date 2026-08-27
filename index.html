@@ -1303,7 +1303,7 @@
         <p class="sub">一键清理数据库中所有 <b>id 以 test_ 前缀开头</b> 的账号及其级联数据（慢性档案、指标、用药、提醒、事件、家属绑定）。</p>
         <p class="hint" style="margin-top:4px;">管理员账号本身绝对不会被删除，放心使用。</p>
         <div class="gap6" style="margin-top:8px;">
-          <button class="btn block danger" onclick="purgeTestAccounts()"><svg class="icn"><use href="#ic-trash"/></svg> 清理所有 test_ 前缀测试账号</button>
+          <button class="btn block danger" id="purgeTestBtn" onclick="purgeTestAccounts()" title="需要「数据库管理」长期授权或最高管理员单次批准后才能清理测试账号"><svg class="icn"><use href="#ic-trash"/></svg> 清理所有 test_ 前缀测试账号</button>
           <div id="purgeTestResult" class="sub" style="display:none;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2);"></div>
         </div>
       </div>
@@ -9474,6 +9474,39 @@ async function updateAdminUI(){
   
   try{ adminMMReload(); }catch(e){}
   
+  // 统一门控：对所有「敏感按钮」应用 disabled 属性（禁止仅靠样式灰化但仍可点击的漏洞）
+  try{
+    const _isSuper = (currentUser === SUPER_ADMIN_ID || lv === 'super');
+    const _hasDb = _isSuper || !!hasPerm('db');
+    const _hasPin = _isSuper || !!hasPerm('pin');
+    const _hasEmail = _isSuper || !!hasPerm('email_push');
+    
+    // 清理测试账号按钮
+    const ptb = $('purgeTestBtn');
+    if(ptb){
+      if(_hasDb){
+        ptb.disabled = false; ptb.style.opacity = ''; ptb.style.cursor = '';
+      } else {
+        ptb.disabled = true; ptb.style.opacity = '.55'; ptb.style.cursor = 'not-allowed';
+      }
+    }
+    
+    // 维护模式按钮已在 adminMMReload() 中处理
+    // 公告：删 / 置顶 / 发邮件按钮等 DOM 由 adminRenderAnnouncements 生成后再批量应用
+    
+    // 应用于所有带 data-need-perm 标记的按钮（兜底）
+    document.querySelectorAll('button[data-need-perm]').forEach(function(b){
+      const need = b.getAttribute('data-need-perm');
+      let pass = _isSuper;
+      if(!pass && need === 'db') pass = _hasDb;
+      else if(!pass && need === 'pin') pass = _hasPin;
+      else if(!pass && need === 'email_push') pass = _hasEmail;
+      else if(!pass && need === 'mmode') pass = _isSuper || hasPerm('mmode');
+      if(!pass){ b.disabled = true; b.style.opacity = '.55'; b.style.cursor = 'not-allowed'; }
+      else { b.disabled = false; b.style.opacity = ''; b.style.cursor = ''; }
+    });
+  }catch(_errApplyPerm){}
+  
   const statsEl = $('adminStats');
   if(statsEl){
     statsEl.textContent = '加载中...';
@@ -9557,6 +9590,8 @@ async function updateAdminUI(){
 
 async function purgeTestAccounts(){
   if(!currentUser || !isAnyAdmin()){ toast('仅管理员可执行该操作'); return; }
+  const ok = await requirePerm('db', {action:'admin.purge_test', actionDesc:'清理所有test_前缀账号与级联数据', payload:{mode:'purge_test'}});
+  if(!ok) return;
   audit('admin.purge_test', {note:'手动清理test前缀账号'}); 
   
   if(!confirm('确认要清理数据库中所有 test_ 前缀的账号吗？该操作不可恢复！\n管理员账号本身不会被删除。')) return;
@@ -9668,6 +9703,11 @@ async function adminExecDeleteUserData(userId){
   if(cats.length === 0){ toast('请至少选择一个数据类别'); return; }
   const txt = (document.getElementById('adminDelConfirmText') || {}).value;
   if(txt !== 'DELETE CONFIRM'){ toast('请输入确认文字'); return; }
+  const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
+  if(!isSuper){
+    const ok = await requirePerm('db', {action:'admin.delete_user_data', actionDesc:'删除用户数据（类别：'+cats.join(',')+'）用户 ' + userId, payload:{target_id: userId, categories: cats}});
+    if(!ok) return;
+  }
   const btn = document.getElementById('adminDelConfirmBtn');
   if(btn){ btn.disabled = true; btn.textContent = '执行中...'; }
   try{
@@ -10278,8 +10318,15 @@ async function adminLoadUsers(){
       }
       
       if(!isSelf && rid !== currentUser && rid !== SUPER_ADMIN_ID){
-        const disDel = (adminLevel !== 'super' && !hasPerm('db')) ? ' style="opacity:.55;cursor:not-allowed;border-style:dashed;" ' : '';
-        ops.push('<button class="btn warn" ' + disDel + ' style="' + (disDel ? '' : '') + 'background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);" onclick="adminDeleteUser(\'' + rid.replace(/'/g,'\\\'') + '\')">删除</button>');
+        const canDel = (adminLevel === 'super') || hasPerm('db');
+        const disDel = canDel
+          ? ''
+          : ' disabled style="opacity:.55;cursor:not-allowed;border-style:dashed;" title="需要「数据库管理」长期授权或最高管理员单次批准后才能删除账号"';
+        const delStyle = 'background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);';
+        ops.push('<button class="btn warn" ' + disDel + (disDel ? '' : ' style="' + delStyle + '"') + ' onclick="adminDeleteUser(\'' + rid.replace(/'/g,'\\\'') + '\')">删除</button>');
+        if(adminLevel === 'super' || hasPerm('db')){
+          ops.push('<button class="btn line sm" ' + disDel + ' style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-top:2px;" onclick="adminOpenDeleteUserDataModal(\'' + rid.replace(/'/g,'\\\'') + '\')">删除数据</button>');
+        }
       } else if(isSelf){
         ops.push('<span style="font-size:12px;color:var(--muted);">（当前登录）</span>');
       } else if(rid === SUPER_ADMIN_ID && !isSelf){
@@ -10344,19 +10391,6 @@ function adminPageUsers(dir){
   ADM_STATE.offset = nextOff;
   audit('admin.users.page', {dir: dir, offset: nextOff});
   adminLoadUsers();
-}
-
-async function adminDeleteUser(id){
-  if(!confirm('确认删除账号 ' + id + ' 及其所有业务数据？不可恢复！')) return;
-  try{
-    const r = await adminRPC('admin_delete_user', { target_id: id });
-    if(r && r.ok){
-      toast('✓ 已删除 ' + (r.deleted_users||0) + ' 个账号');
-      updateAdminUI();
-      adminLoadEmailCoverage();
-      adminLoadUsers();
-    } else toast('删除失败');
-  }catch(e){ toast('删除失败：' + (e.message || '未知错误')); }
 }
 
 
@@ -10847,6 +10881,7 @@ function adminCloseAnn(){
   ADM_STATE.annEditId = null;
 }
 async function adminSubmitAnn(){
+  if(!currentUser || !isAnyAdmin()){ toast('需要管理员权限'); return; }
   const hRaw = ($('admAnnHead')||{}).value || '';
   const bRaw = ($('admAnnBody')||{}).value || '';
   const hv = validateText(hRaw, {label:'公告标题', required:true, max:80});
@@ -10936,6 +10971,8 @@ async function adminTogglePinAnn(id){
 }
 async function adminDeleteAnn(id){
   if(id === SUPER_ADMIN_ID) return; 
+  const ok = await requirePerm('pin', {action:'ann.delete', actionDesc:'删除公告：' + String(id).slice(0, 20), payload:{ann_id: id}});
+  if(!ok) return;
   audit('admin.ann.delete', {id:id});
   if(!confirm('确认删除这条公告？（已发邮件无法撤销）\n（删除=软删，所有端立即同步消失）')) return;
   try{
