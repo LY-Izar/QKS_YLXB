@@ -484,9 +484,9 @@
     .hosp-item .nm{font-size:16px;}
     body.care .hosp-item .nm{font-size:21px;}
 
-    /* 语音按钮适配 */
-    .voice-fab{width:52px;height:52px;font-size:22px;right:12px;bottom:20px;}
-    body.care .voice-fab{width:66px;height:66px;font-size:28px;right:12px;bottom:32px;}
+    /* 语音按钮适配（移动端 v2：已在下方媒体查询统一覆盖，这里仅作为关怀模式 fallback 微调尺寸） */
+    .voice-fab{box-shadow:0 2px 10px rgba(0,0,0,.1);}
+    body.care .voice-fab{box-shadow:0 4px 14px rgba(0,0,0,.15);}
 
     /* 语音条适配 */
     .voicebar{bottom:88px;font-size:14px;}
@@ -818,59 +818,44 @@
     #view-family .med-item{animation:none;}
   }
 
-  /* ===== 悬浮语音按钮 ===== */
+  /* ===== 悬浮语音按钮（右下角固定，永远最顶层·仅低于遮罩 mask=70） ===== */
   .voice-fab{
-    position:fixed;right:16px;bottom:24px;z-index:60;
+    position:fixed;right:20px;bottom:24px;z-index:69;
     width:58px;height:58px;border-radius:50%;
-    background:var(--primary);color:#fff;font-size:26px;
+    background:linear-gradient(135deg,var(--primary),var(--primary-deep));
+    color:#fff;font-size:26px;
     display:grid;place-items:center;
-    box-shadow:0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent);
-    transition:.15s;border:3px solid #fff;
+    box-shadow:
+      0 6px 20px color-mix(in srgb, var(--primary) 40%, transparent),
+      0 2px 6px rgba(0,0,0,.12),
+      inset 0 1px 0 rgba(255,255,255,.28);
+    transition:transform .15s ease, filter .2s ease, box-shadow .2s ease;
+    border:3px solid #fff;
   }
-  body.care .voice-fab{width:72px;height:72px;font-size:32px;bottom:40px;}
+  body.dark .voice-fab{ border-color:var(--bg-2); box-shadow:0 6px 20px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.15); }
+  body.care .voice-fab{width:72px;height:72px;font-size:32px;right:24px;bottom:40px;}
   .voice-fab:active{transform:scale(.92);}
-  @media (hover:hover){ .voice-fab:hover{filter:brightness(1.06);} }
-  .voice-fab.listening{background:var(--danger);animation:pulse 1s infinite;}
-  @keyframes pulse{50%{box-shadow:0 0 0 12px color-mix(in srgb, var(--danger) 22%, transparent);}}
-  /* ===== 用药按钮 成功反馈动画：按钮点击脉冲 + 卡片成功绿色边框闪烁 ===== */
-  @keyframes btnSuccessPulse{
-    0%{transform:scale(1);}
-    30%{transform:scale(1.08);box-shadow:0 0 0 6px rgba(34,197,94,.35);}
-    100%{transform:scale(.98);opacity:.3;}
+  @media (hover:hover){ .voice-fab:hover{filter:brightness(1.08);box-shadow:0 10px 28px color-mix(in srgb, var(--primary) 52%, transparent);} }
+  .voice-fab.listening{background:linear-gradient(135deg,#ef4444,#b91c1c);animation:micPulse 1.1s infinite;}
+  @keyframes micPulse{
+    0%,100%{box-shadow:0 6px 20px color-mix(in srgb, var(--primary) 40%, transparent),0 2px 6px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.28);}
+    50%{box-shadow:0 0 0 10px color-mix(in srgb, #ef4444 20%, transparent),0 8px 26px color-mix(in srgb,#ef4444 42%,transparent),inset 0 1px 0 rgba(255,255,255,.35);}
   }
-  @keyframes chipSuccessFlash{
-    0%{border:3px solid #22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.55);}
-    35%{border:3px solid #22c55e;box-shadow:0 0 0 10px rgba(34,197,94,.18);background:color-mix(in srgb,#22c55e 10%,var(--surface-2));}
-    70%{border:2.5px solid #16a34a;box-shadow:0 0 0 4px rgba(34,197,94,.28);}
-    100%{border:1px solid var(--border);box-shadow:none;background:var(--surface-2);}
+  /* — 移动端：尺寸明显缩小 + 更小的 margin + 更轻阴影，防止挡内容 — */
+  @media (max-width:768px){
+    .voice-fab{width:42px;height:42px;font-size:18px;right:12px;bottom:14px;border-width:2.5px;
+      box-shadow:0 3px 10px color-mix(in srgb, var(--primary) 38%, transparent),0 1px 3px rgba(0,0,0,.1);}
+    body.care .voice-fab{width:54px;height:54px;font-size:22px;right:12px;bottom:22px;}
+    .voicebar{bottom:88px;font-size:13px;}
+    body.care .voicebar{font-size:17px;bottom:118px;}
   }
-  @keyframes chipSkipFlash{
-    0%{border:3px solid #ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.55);}
-    35%{border:3px solid #ef4444;box-shadow:0 0 0 10px rgba(239,68,68,.18);background:color-mix(in srgb,#ef4444 10%,var(--surface-2));}
-    100%{border:1px solid var(--border);box-shadow:none;background:var(--surface-2);}
-  }
-  .chip-success-flash{animation:chipSuccessFlash 1.1s ease both;}
-  .chip-skip-flash{animation:chipSkipFlash 1.1s ease both;}
-  .btn-success-disappear{animation:btnSuccessPulse .38s ease forwards;pointer-events:none;}
-  /* 卡片内本地确认提示（顶部 toast 易被滚出视野） */
-  .med-inline-toast{
-    margin-top:8px;padding:8px 12px;border-radius:10px;
-    background:rgba(34,197,94,.12);
-    border:1px solid rgba(34,197,94,.35);color:var(--ink);font-weight:600;
-    animation:pop .25s ease both;
-  }
-  .med-inline-toast.skip{
-    background:rgba(239,68,68,.12);
-    border-color:rgba(239,68,68,.35);
-  }
-
-  /* 安全区域适配（iOS刘海屏） */
+  /* 安全区域（iOS 底部横条） — 语音条也要跟着 FAB 往上跑，避免被遮挡听筒区 */
   @supports (padding:env(safe-area-inset-bottom)){
     .voice-fab{bottom:calc(24px + env(safe-area-inset-bottom));}
     .voicebar{bottom:calc(96px + env(safe-area-inset-bottom));}
     @media (max-width:768px){
-      .voice-fab{bottom:calc(20px + env(safe-area-inset-bottom));}
-      body.care .voice-fab{bottom:calc(32px + env(safe-area-inset-bottom));}
+      .voice-fab{bottom:calc(14px + env(safe-area-inset-bottom));}
+      body.care .voice-fab{bottom:calc(22px + env(safe-area-inset-bottom));}
       .voicebar{bottom:calc(88px + env(safe-area-inset-bottom));}
       body.care .voicebar{bottom:calc(118px + env(safe-area-inset-bottom));}
     }
@@ -1034,8 +1019,7 @@
     padding:4px 10px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;
   }
   body.care .voice-warn-banner button.close{font-size:14px;padding:6px 14px;}
-  /* 语音 FAB（右下角麦克风）的红点徽章 */
-  .voice-fab{position:relative;}
+  /* 语音 FAB（右下角麦克风）的红点徽章（FAB 本身是 position:fixed，同样充当绝对定位 ::after 的包含块，无需再加 relative） */
   .voice-fab[data-voice="bad"]::after{
     content:'';
     position:absolute;top:-2px;right:-2px;
@@ -1297,6 +1281,16 @@
       </div>
     </div>
     <div id="adminRoot" style="display:none;">
+      <!-- [P3-C] 管理台页头身份徽章：明确区分最高管理员 / 次级管理员 -->
+      <div id="adminIdentityBar" class="card" style="margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;background:var(--surface-2);">
+        <div style="font-weight:800;color:var(--ink);font-size:16px;display:flex;align-items:center;gap:8px;">
+          <svg class="icn" style="color:var(--primary);"><use href="#ic-shield"/></svg>
+          管理控制台
+        </div>
+        <span id="adminBadge" class="adm-badge"></span>
+        <div style="flex:1;"></div>
+        <div id="adminPermsHint" style="font-size:13px;color:var(--muted);"></div>
+      </div>
       <div class="card" id="adminStatsCard">
         <h2><svg class="icn"><use href="#ic-chart"/></svg> 数据库概况</h2>
         <div class="gap6" id="adminStats">加载中...</div>
@@ -6581,18 +6575,17 @@ function loadAmap(force){
   };
   document.head.appendChild(s);
 }
-/* ============== 拖拽地图中心 = 选位置（防抖 + 位移阈值） ==============
- * 解决用户痛点：只拖拽平移了地图视图（视觉上"选了远方"）但没点 click，导致 userLoc 永远不更新，搜的还是原来的定位坐标。
- * 策略：
- *   - moveend 防抖 450ms，避免拖拽过程中连发搜索；
- *   - 如果当前没有 userLoc（未定位态），且地图中心距默认成都 ≥ 5km，则把中心视为用户意图并重新搜索（用户拖到了远方想看那里的医院）；
- *   - 如果已有 userLoc，仅当地图中心距 userLoc ≥ 3km 时才触发重搜（小幅平移/缩放忽略，不骚扰）；
- *   - 不弹 toast / 不语音（仅 click 明确动作时才反馈），避免感官噪音。
+/* ============== 拖拽/缩放地图仅同步 userLoc，【不触发医院 POI 重查】 ==============
+ * 变更原因（用户痛点）：用户只做了「双指缩放」或小幅拖拽，却被自动重新查询医院 →
+ *   一是浪费高德/Nominatim 配额，二是在 0 命中时意外弹出用户不想要的"演示示例·非本地"卡片。
+ * 新规则：renderHospitals() 仅在【用户明确点选位置】四条链路上触发：
+ *   ① 高德地图 click   ② Leaflet 地图 click   ③ 地点搜索(searchPlace)命中结果   ④ 自动/手动定位成功
+ * 本函数只保留"userLoc 与地图中心对齐"这一轻量副作用，用于其他地图 UI 场景。
  */
 let _MAP_MOVE_T = null;
-const _MAP_DEFAULT_CENTER = {lat: 30.5728, lng: 104.0668};   // 默认成都
-const _MAP_MOVE_TRIGGER_KM = 3;                                  // 已有 userLoc 时，位移 ≥ 3km 触发
-const _MAP_DEFAULT_DRIFT_KM = 5;                                 // 未定位态，距默认中心 ≥ 5km 触发（认为用户确实拖去了别处）
+const _MAP_DEFAULT_CENTER = {lat: 30.5728, lng: 104.0668};
+const _MAP_MOVE_TRIGGER_KM = 3;
+const _MAP_DEFAULT_DRIFT_KM = 5;
 function _bindMapMoveSync(mapObj, cfg){
   if(!mapObj || !mapObj.on || typeof cfg.getCenter !== 'function') return;
   mapObj.on('moveend', function _moveEndHandler(){
@@ -6604,16 +6597,13 @@ function _bindMapMoveSync(mapObj, cfg){
           if(!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
           let needSync = false;
           if(userLoc){
-            const d = haversine(userLoc.lat, userLoc.lng, c.lat, c.lng);
-            needSync = d >= _MAP_MOVE_TRIGGER_KM;
+            needSync = haversine(userLoc.lat, userLoc.lng, c.lat, c.lng) >= _MAP_MOVE_TRIGGER_KM;
           } else {
-            const dFromDefault = haversine(_MAP_DEFAULT_CENTER.lat, _MAP_DEFAULT_CENTER.lng, c.lat, c.lng);
-            needSync = dFromDefault >= _MAP_DEFAULT_DRIFT_KM;
+            needSync = haversine(_MAP_DEFAULT_CENTER.lat, _MAP_DEFAULT_CENTER.lng, c.lat, c.lng) >= _MAP_DEFAULT_DRIFT_KM;
           }
           if(needSync){
             userLoc = {lat: c.lat, lng: c.lng};
-            // 静默同步（不点 toast/speak），因为是拖拽隐式操作不是明确点击
-            try{ renderHospitals(); }catch(_){}
+            // ⚠️ 此处故意不调用 renderHospitals()：缩放/拖拽不允许自动重查医院
           }
         }catch(_){}
       }, 450);
@@ -8719,6 +8709,33 @@ async function updateAdminUI(){
   }
   forbid.style.display = 'none';
   root.style.display = '';
+  // ===== [P3-C] 身份徽章：最高 / 次级一眼区分，避免混淆 =====
+  const lv = normalizeAdminLevel(adminLevel);
+  const badge = $('adminBadge'), permsHint = $('adminPermsHint');
+  if(badge){
+    if(lv === 'super'){
+      badge.style.cssText = 'display:inline-block;padding:4px 14px;border-radius:999px;font-weight:900;background:#fecaca;color:#991b1b;border:1px solid #f87171;font-size:14px;letter-spacing:.3px;';
+      badge.textContent = '★ 最高管理员';
+    } else {
+      badge.style.cssText = 'display:inline-block;padding:4px 14px;border-radius:999px;font-weight:900;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;font-size:14px;letter-spacing:.3px;';
+      badge.textContent = '◇ 次级管理员';
+    }
+  }
+  if(permsHint){
+    if(lv === 'super'){
+      permsHint.innerHTML = '账号：<b>' + _escHTML(currentUser) + '</b> · 权限：<b style="color:#991b1b;">全部权限（永久全开）</b>';
+    } else {
+      const sp = typeof subPerms === 'object' && subPerms ? subPerms : {};
+      const granted = [];
+      if(sp.db) granted.push('数据库管理');
+      if(sp.force_popup) granted.push('公告强制弹窗');
+      if(sp.pin) granted.push('公告置顶');
+      if(sp.email_push) granted.push('邮件推送');
+      if(sp.mmode) granted.push('维护模式');
+      permsHint.innerHTML = '账号：<b>' + _escHTML(currentUser) + '</b> · 已授权：<b style="color:#1d4ed8;">'
+        + (granted.length ? granted.join(' / ') : '（无长期授权，其余权限请按次申请最高管理员批准）') + '</b>';
+    }
+  }
   // [AH-P2] 首次进入管理区：刷新次级管理员授权下拉
   try{ adminPermRefresh(); }catch(e){}
   // [AH-P5] 首次进入管理区：刷新维护模式状态卡片
@@ -9102,6 +9119,22 @@ async function adminSetAdmin(id, toAdmin){
     audit(toAdmin ? 'admin.set_sub' : 'admin.unset_sub', {target_id: id});
     toast('✓ 操作成功');
     adminLoadUsers();
+    // ===== 修复：立即同步刷新「次级管理员授权管理」下拉列表（A 问题：升/降级后不用手动刷新页面即可在 select 里看到新身份） =====
+    try{
+      await adminPermRefresh();
+      // 同时把下拉框自动定位到刚操作的那条账号 — 一可看到新等级标签，二可检查授权勾选是否正确回显（B 问题自动校验）
+      const sel = $('admPermUser');
+      if(sel){
+        const want = encodeURIComponent(id);
+        for(let i=0;i<sel.options.length;i++){
+          if(String(sel.options[i].value) === want){
+            sel.selectedIndex = i;
+            adminPermUserChange();
+            break;
+          }
+        }
+      }
+    }catch(_){ /* 权限不足或卡片未渲染时，静默不要打断主流程 */ }
   }catch(e){ toast('操作失败：' + (e.message || '')); }
 }
 async function adminDeleteUser(id){
@@ -9354,6 +9387,22 @@ async function adminSetAdmin(id, toAdmin){
     if(r && r.ok){
       toast('✓ 操作成功' + (r.note ? '（' + r.note + '）' : ''));
       adminLoadUsers();
+      // ===== 修复：立即同步刷新「次级管理员授权管理」下拉列表（解决用户 A 问题：升/降级后不用手动 F5） =====
+      try{
+        await adminPermRefresh();
+        // 同时尝试把 select 定位到刚刚操作的那条账号上，让用户立刻看到「新等级 + 上次保存过的授权勾选」（顺便检查 B 问题回显）
+        const sel = $('admPermUser');
+        if(sel){
+          const want = encodeURIComponent(id);
+          for(let i=0;i<sel.options.length;i++){
+            if(String(sel.options[i].value) === want){
+              sel.selectedIndex = i;
+              adminPermUserChange(); // 触发回显 6 个勾选框 & 等级徽章 = B 问题校验
+              break;
+            }
+          }
+        }
+      }catch(_){ /* 若权限不足或卡片未渲染，不要报错打断主流程 */ }
     } else {
       toast('操作失败');
     }
