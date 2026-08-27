@@ -3,4 +3,9 @@
 说明.*
 _*.py
 _*.ps1
+node_modules/
+test-results/
+playwright-report/
+.pytest_cache/
+.DS_Store
 

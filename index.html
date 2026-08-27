@@ -4125,7 +4125,12 @@ let subPerms   = parseSubPerms(localStorage.getItem('med_sub_perms'));
 
 function normalizeAdminLevel(raw){
   if(!currentUser) return 'none';
-  if(raw === 'super' || raw === 'sub' || raw === 'none') return raw;
+  if(raw === 'super' || raw === 'sub') return raw;
+  if(currentUser === SUPER_ADMIN_ID) return 'super';
+  if(raw === 'none'){
+    if(isAdmin) return 'sub';
+    return 'none';
+  }
   if(isAdmin) return 'super';
   return 'none';
 }
@@ -10341,36 +10346,6 @@ function adminPageUsers(dir){
   adminLoadUsers();
 }
 
-async function adminSetAdmin(id, toAdmin){
-  const hint = toAdmin ? '把账号 ' + id + ' 设为管理员？' : '取消账号 ' + id + ' 的管理员权限？';
-  if(!confirm(hint)) return;
-  try{
-    const r = await adminRPC('admin_set_admin', { target_id: id, make_admin: !!toAdmin });
-    if(r && r.ok){
-      toast('✓ 操作成功' + (r.note ? '（' + r.note + '）' : ''));
-      adminLoadUsers();
-      
-      try{
-        await adminPermRefresh();
-        
-        const sel = $('admPermUser');
-        if(sel){
-          const want = encodeURIComponent(id);
-          for(let i=0;i<sel.options.length;i++){
-            if(String(sel.options[i].value) === want){
-              sel.selectedIndex = i;
-              adminPermUserChange(); 
-              break;
-            }
-          }
-        }
-      }catch(_){  }
-    } else {
-      toast('操作失败');
-    }
-  }catch(e){ toast('失败：' + (e.message || '未知错误')); }
-}
-
 async function adminDeleteUser(id){
   if(!confirm('确认删除账号 ' + id + ' 及其所有业务数据？不可恢复！')) return;
   try{
@@ -11500,8 +11475,21 @@ async function init(){
           } else {
             const cloudAdmin = !!real[0].is_admin;
             
-            const _lvlFromCloud = (typeof real[0].admin_level === 'string') ? real[0].admin_level
-                                : (cloudAdmin ? 'super' : 'none');
+            const _lvlRawCloud = (typeof real[0].admin_level === 'string') ? real[0].admin_level : null;
+            const _needHeal = (currentUser !== SUPER_ADMIN_ID)
+                             && cloudAdmin === true
+                             && (_lvlRawCloud === null || _lvlRawCloud === 'none');
+            const _lvlFromCloud = _needHeal ? 'sub'
+                                : (_lvlRawCloud || (cloudAdmin ? 'super' : 'none'));
+            if(_needHeal){
+              try{
+                sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {
+                  method:'PATCH',
+                  headers:{'Prefer':'return=minimal','Content-Type':'application/json'},
+                  body: JSON.stringify({admin_level: 'sub'})
+                }).catch(()=>{});
+              }catch(_){}
+            }
             const _prmFromCloud = (real[0].sub_perms && typeof real[0].sub_perms === 'object')
                                   ? real[0].sub_perms : null;
             const _newLvl = (currentUser === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlFromCloud);
