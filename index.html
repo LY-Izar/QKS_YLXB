@@ -1251,7 +1251,7 @@
       </div>
       <div class="card" style="margin-top:12px;">
         <h2><svg class="icn"><use href="#ic-gear"/></svg> 用药 OCR 识别关键词设置（仅本账号）</h2>
-        <p class="sub" style="margin-top:4px;">在这里增删自定义的 OCR 关键词/正则，优先级比「内置通用规则」和「管理员全局规则」都高（比它们 +100 优先匹配）。加药弹窗里的 ⚙ 快捷入口和这里是同一份数据。</p>
+        <p class="sub" style="margin-top:4px;">在这里增删自定义的 OCR 关键词/正则</p>
         <p class="hint" style="margin-top:6px;">适用场景：如果你常拍摄某家医院处方（固定格式如"药品名称：XXX Sig：每次1片 tid"），在这里加几条正则或关键词，识别准确率会明显提升。</p>
         <div class="gap6" style="margin-top:10px;">
           <button class="btn block" onclick="openOCRRuleEditor('full')"><svg class="icn"><use href="#ic-gear"/></svg> 打开关键词编辑器（详细版）</button>
@@ -1637,7 +1637,7 @@
       </div>
       <label class="f" style="margin-top:12px;"><svg class="icn"><use href="#ic-calendar"/></svg> 起始日期
         <input class="inp" type="date" id="medStartDate">
-        <p class="hint" style="margin:4px 0 0;">默认今天。选过去日期：历史日期将显示为灰色补录，不计依从率。</p>
+        <p class="hint" style="margin:4px 0 0;">默认今天</p>
       </label>
       <input type="hidden" id="medEditingId" value="">
       <div id="medTimes" style="margin-top:12px;"></div>
@@ -1814,7 +1814,7 @@
     </div>
     <div class="card" id="cardElderCode">
       <h2><svg class="icn"><use href="#ic-users"/></svg> 我的邀请码</h2>
-      <p class="sub">把下面的邀请码告诉家人，家人在「我是家属」身份下输入，即可在手机上查看您的健康动态。</p>
+      <p class="sub">把下面的邀请码告诉家人，家人在「我是家属」身份下输入，即可查看您的健康动态。</p>
       <div class="gap6">
         <div class="inp center" style="font-family:ui-monospace,monospace;font-weight:800;letter-spacing:2px;font-size:20px;" id="familyCode">—</div>
         <button class="btn block ghost sm" onclick="copyCode()">复制邀请码</button>
@@ -1822,7 +1822,7 @@
     </div>
     <div class="card" id="cardFamilyBind">
       <h2 id="bindCardTitle"><svg class="icn"><use href="#ic-link"/></svg> 绑定老人</h2>
-      <p class="sub" id="bindCardDesc">输入老人端显示的 6 位邀请码，即可查看他的症状自查、用药情况和前往医院记录。支持绑定多位老人。</p>
+      <p class="sub" id="bindCardDesc">输入老人端显示的 6 位邀请码，即可查看TA的症状自查、用药情况和前往医院记录。支持绑定多位老人。</p>
       <div id="boundList"></div>
       <div class="gap6" id="bindFormArea">
         <input class="inp" id="bindCode" placeholder="输入老人的 6 位邀请码" maxlength="6" autocomplete="off" inputmode="numeric">
@@ -3412,7 +3412,7 @@ async function updatePWABadge(){
     btn.disabled = true;
     btn.textContent = '不可用';
   }else if(status === 'subscribed'){
-    badge.textContent = '已开启，关闭页面也能收到';
+    badge.textContent = '已开启';
     btn.disabled = false;
     btn.textContent = '关闭推送';
   }else{
@@ -3496,7 +3496,7 @@ function pickZhVoice(vs){
 function speak(text, rate){
   try{
     if(!('speechSynthesis' in window)){
-      toast('当前浏览器不支持语音朗读，建议使用 Edge 或 Chrome'); return;
+      toast('当前浏览器不支持语音朗读'); return;
     }
     if(!text || !text.trim()) return;
     const seq = ++speakSeq;
@@ -3588,7 +3588,7 @@ function _showVoiceBanner(kind, zhCount, localCount){
   let title = '', body = '';
   if(kind === 'online-only'){
     title = '语音：在线中文语音无法连接服务器';
-    body = '系统检测到您的浏览器只有远程中文语音（需要联网拉取）。国内网络下容易被墙。请安装本地中文语音包：<b>系统设置 → 时间和语言 → 语音 → 添加「中文(简体)」</b>，或使用 Edge 浏览器自带的本地语音。';
+    body = '系统检测到您的浏览器只有远程中文语音（需要联网拉取）请安装本地中文语音包：<b>系统设置 → 时间和语言 → 语音 → 添加「中文(简体)」</b>，或使用 Edge 浏览器自带的本地语音。';
   }else if(kind === 'no-zh'){
     title = '语音：未检测到中文语音包';
     body = '当前设备没有中文语音引擎。请在系统设置中添加中文语音包（Windows 设置路径：<b>时间和语言 → 语音 → 添加语音 → 中文(简体,中国)</b>），添加后重启浏览器即可启用。iOS/iPadOS 请在<b>设置 → 辅助功能 → 朗读内容 → 语音</b>里下载中文普通话。';
@@ -4328,7 +4328,7 @@ function switchAuthMode(silent){
     submitBtn.textContent = '确认注册';
     switchBtn.textContent = '← 返回登录';
     strength.style.display = '';
-    hint.textContent = '密码至少6位，需两次输入一致。账号保存在云端。';
+    hint.textContent = '密码至少6位，需两次输入一致。';
   } else {
     title.textContent = currentUser ? '切换账号' : '登录';
     confirmLabel.style.display = 'none';
@@ -4336,7 +4336,7 @@ function switchAuthMode(silent){
     submitBtn.textContent = '登录';
     switchBtn.textContent = '去注册';
     strength.style.display = 'none';
-    hint.textContent = '首次使用请先注册。账号保存在云端，换设备也能登录。';
+    hint.textContent = '首次使用请先注册';
   }
 }
 
@@ -5963,7 +5963,7 @@ async function renderMeds(){
         chipCard.style.borderColor = '#e2e8f0';
         chipCard.style.opacity = '0.88';
         const explain = (skipReason === 'past-at-add') ? '新增时已过' :
-                        (skipReason === 'historical-backfill') ? '补录（不计依从率）' : '跳过';
+                        (skipReason === 'historical-backfill') ? '补录' : '跳过';
         const pillLine = document.createElement('div');
         pillLine.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#94a3b8;';
         pillLine.innerHTML = '<span class="pill" style="background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1;text-decoration:line-through;text-decoration-color:#cbd5e1;">'
@@ -6766,7 +6766,7 @@ function openOCRRuleEditor(mode){
   if(scope){
     scope.innerHTML = isAdmin
       ? '这些规则会加到所有用户的 OCR 识别流程，优先级 <b>比内置规则高（+50）、比用户自定义规则低（用户+100）</b>。'
-      : '这些规则仅对 <b>' + (currentUser || '当前体验账号') + '</b> 生效，优先级最高（比管理员全局+内置都高）。空行不会保存。';
+      : '这些规则仅对 <b>' + (currentUser || '当前体验账号') + '</b> 生效，空行不会保存。';
   }
   const tbody = $('ocrRuleTableBody');
   tbody.innerHTML = '';
@@ -7065,7 +7065,7 @@ async function playDidiAlert(durationSec){
       t += perMs;
     }
     window.__DIDI_LAST_FIRE__ = { t: Date.now(), durationSec, state: ctx.state, skipped: false };
-  }catch(e){ console.warn('滴滴警报声播放失败：', e); }
+  }catch(e){ console.warn('提示播放失败：', e); }
 }
 
 let _medAlertModalOpen = false;
@@ -7236,7 +7236,7 @@ const HOSPITAL_BLACKLIST_REGEX = new RegExp([
   '宠物','动物','畜禽',
   
   '诊所','卫生所','卫生室','卫生站','医务室','卫生服务站','服务站','社区卫生[^服务中心]',
-  '门诊[^部]','门诊部[^门]','个体','村医','家庭医生','黑诊所','游医'
+  '门诊[^部]','门诊部[^门]'
 ].join('|'));
 
 
