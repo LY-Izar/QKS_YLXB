@@ -10154,17 +10154,93 @@ const ADM_ANN_HIDE = 'adm_ann_hide_day';
 function hideSiteAnnBar(){
   const bar = $('siteAnnBar');
   if(bar) bar.style.display = 'none';
-  _syncAnnBarLayout();
   const key = beijingYMD(new Date());
   try{ localStorage.setItem(ADM_ANN_HIDE, key); }catch(e){}
+  try{ _syncAnnBarLayout(); }catch(_){}
 }
+/** 统一同步所有「顶部信息条」堆叠布局，确保公告条永远不遮挡导航栏。
+ *  条的顺序：维护横幅 (maintenanceBanner) → 多条置顶 (data-ann-role=pinned) → 非置顶轮播 (data-ann-role=carousel)。
+ *  实现策略 (v2: 彻底避免「公告爬到导航栏上方」的几何错位)：
+ *    1) 所有 top 条统一塞进一个始终存在的 wrapper 容器：#annTopWrapper
+ *       - wrapper 本身 position:sticky; top = <navbar 底边 Y>。
+ *       - 条与条之间保持 DOM 正常流动（无 sticky 冲突、无需各自声明 top），堆叠顺序=DOM 顺序。
+ *       - 这样即使滚到 1000px 下，wrapper 也会牢牢粘在 navbar 正下方，条永远不会爬到 navbar 上面。
+ *    2) z-index 分层严格保证：navbar(70) > annTopWrapper(60) > main 内容。
+ *       - navbar 固定 top=18px（不再因为条的存在而被推下去）；胶囊永远在视野最上方。
+ *       - 维护/置顶/轮播等视觉等级差异靠 DOM 顺序/内联 z-index 即可，不必互相之间声明不同 z。
+ *    3) main.paddingTop = 76 + wrapper.offsetHeight（高度变化自动同步，首屏不裁切）。
+ *    4) 与旧逻辑兼容：renderMaintenanceBanner/renderSiteAnnBar 仍把条插到 body.firstChild 链路上，
+ *       本函数一跑就把它们"捞回" wrapper 里，且不改变各条自身的背景/颜色/交互。
+ */
 function _syncAnnBarLayout(){
-  const bar = $('siteAnnBar');
-  const nb  = document.getElementById('navbar');
+  // === 1. 准备 wrapper（若不存在就创建，永远放在 <main> 前、<nav id="navbar"> 附近 — 实际选 body 最顶）===
+  let wrapper = document.getElementById('annTopWrapper');
+  if(!wrapper){
+    wrapper = document.createElement('div');
+    wrapper.id = 'annTopWrapper';
+    // 先插入到 body 最顶（所有其他 bar 都在其后 — 见下方"捞回"阶段）
+    if(document.body && document.body.firstChild){
+      document.body.insertBefore(wrapper, document.body.firstChild);
+    } else if(document.body){
+      document.body.appendChild(wrapper);
+    }
+  }
+
+  // === 2. 把所有"游离"的 bar DOM 捞进 wrapper（保持顺序：维护 → 置顶1 → 置顶2... → 轮播）===
+  const order = [];
+  const mb = document.getElementById('maintenanceBanner');
+  if(mb) order.push(mb);
+  document.querySelectorAll('[data-ann-role="pinned"]').forEach(el => order.push(el));
+  const car = document.querySelector('[data-ann-role="carousel"]');
+  if(car) order.push(car);
+  // 按顺序 appendChild 到 wrapper（自动 move，不复制）
+  for(const el of order){ if(el.parentNode !== wrapper) wrapper.appendChild(el); }
+
+  // === 3. 测量 navbar 底边（navbar 默认 top:18px，被 sticky wrapper 遮挡绝对不能发生）===
+  const nb = document.getElementById('navbar');
   const main = document.querySelector('main');
-  const h = (bar && bar.style.display !== 'none') ? bar.offsetHeight : 0;
-  if(nb)  nb.style.top = (18 + h) + 'px';
-  if(main) main.style.paddingTop = (76 + h) + 'px';
+  const nbHeight = nb ? (nb.getBoundingClientRect().height || 60) : 60;
+  const NB_INLINE_TOP = 18;            // 与 index.html L179 保持一致
+  const navbarBottomY = NB_INLINE_TOP + nbHeight;
+
+  // === 4. 强制校准：navbar 固定在最顶（任何情况下不被推）；wrapper 卡住的边 = navbarBottomY
+  if(nb){
+    nb.style.top = NB_INLINE_TOP + 'px';
+    nb.style.setProperty('z-index', '70', 'important'); // 明显高于 wrapper
+    nb.style.setProperty('position', 'fixed', 'important');
+  }
+  // wrapper 本身：滚动时卡住的上边就是 navbar 正下方
+  wrapper.style.setProperty('position', 'sticky', 'important');
+  wrapper.style.setProperty('top', navbarBottomY + 'px', 'important');
+  wrapper.style.setProperty('z-index', '60', 'important');
+  wrapper.style.setProperty('left', '0', 'important');
+  wrapper.style.setProperty('right', '0', 'important');
+  wrapper.style.setProperty('width', '100%', 'important');
+  // wrapper.display：无任何子条时仍保持节点存在（避免抖动），但高度为 0、不参与占位
+  wrapper.style.setProperty('display', 'block', 'important');
+
+  // === 5. 子条自己声明的 position:sticky;top:0 会与 wrapper 冲突 → 全部覆盖为 static（wrapper 承担 sticky 职责）===
+  if(mb){
+    mb.style.setProperty('position', 'static', 'important');
+    mb.style.removeProperty('top');
+  }
+  document.querySelectorAll('[data-ann-role]').forEach(el => {
+    el.style.setProperty('position', 'static', 'important');
+    el.style.removeProperty('top');
+  });
+
+  // === 6. main 的 paddingTop：76(nav预留) + wrapper 实际高度，首屏内容不被裁
+  const wrapperH = wrapper.getBoundingClientRect().height || 0;
+  if(main){
+    main.style.paddingTop = (76 + wrapperH) + 'px';
+  }
+
+  // === 7. 一次 rAF + 定时二次校准（字体/断点变化时）
+  if(!window.__ANN_LAYOUT_RERAN__){
+    window.__ANN_LAYOUT_RERAN__ = true;
+    requestAnimationFrame(() => { try{ _syncAnnBarLayout(); }catch(_){} });
+    setTimeout(() => { try{ _syncAnnBarLayout(); }catch(_){ window.__ANN_LAYOUT_RERAN__=false; } }, 300);
+  }
 }
 // ============== [MM01-A1/A2] 公告条：置顶堆叠 + 非置顶轮播 ==============
 /** 按等级返回公告颜色（实心色，避免渐变防 AI 感）。 */
@@ -10360,6 +10436,10 @@ function renderSiteAnnBar(forceShow){
     _annCarouselSetup(car, nonPinned);
     ensureDisp();
   }
+  // —— 所有 DOM 就位后统一同步一次布局：让维护横幅、多条置顶、轮播、navbar 胶囊、main 间距对齐，
+  //    严格保证公告矩形与导航胶囊矩形零像素重叠（导航在最上，所有公告条都在胶囊下方且正确「卡住」）。
+  try{ _syncAnnBarLayout(); }catch(e){ console.warn('[renderSiteAnnBar] _syncAnnBarLayout fail:', e); }
+  window.addEventListener('resize', () => { if(window.__ANN_LAYOUT_DEBOUNCE__) clearTimeout(window.__ANN_LAYOUT_DEBOUNCE__); window.__ANN_LAYOUT_DEBOUNCE__ = setTimeout(()=>{ try{ _syncAnnBarLayout(); }catch(_){} }, 80); }, { passive:true });
 }
 
 /* ==================== 心跳上报（在线状态） ==================== */
@@ -10907,6 +10987,8 @@ function renderMaintenanceBanner(){
   }
   // —— 每次 banner 刷新后同步 navbar / 锁定按钮（刷新页面维护模式默认开启也能正确锁死）
   try{ refreshNavVisibilityForMaintenance(); }catch(_){}
+  // —— 维护横幅高度/定位变化后，必须立刻重跑整层布局同步，确保不压盖导航栏、也不被导航栏遮挡首字
+  try{ _syncAnnBarLayout(); }catch(e){ console.warn('[renderMaintenanceBanner] _syncAnnBarLayout fail:', e); }
 }
 
 // ---- URL ?admin_approve=<token> / ?admin_reject=<token> 落地：B1 批准/拒绝 ----
