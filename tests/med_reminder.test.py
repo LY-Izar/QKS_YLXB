@@ -412,8 +412,121 @@ def run_tests():
         except Exception as e:
             fail('R2', '异常: ' + traceback.format_exc(limit=4))
 
+        # -------------------------------------------------------
+        # R6: 新增规则1 —— "新增时已过"的灰卡 slot 不弹窗不滴滴
+        # R7: 新增规则2 —— 超 30 分钟窗口（32min / 45min）不弹窗不滴滴
+        #     同时含一条 R8 正例（3min 前、无灰卡）确保"30 分钟内仍然触发"没被误杀
+        # -------------------------------------------------------
+        try:
+            reload(page)
+            wait_db(page)
+            click_body(page)
+            do_quick_use(page)
+            # 关掉 interval + 清残留
+            page.evaluate("""() => {
+              try{
+                const maxId = window.setTimeout(()=>{},0);
+                for(let i=1; i<=maxId; i++){ try{ clearInterval(i); }catch(_){} }
+              }catch(_){}
+              try{ const w = document.getElementById('__medAlertWrap__'); if(w) w.remove(); }catch(_){}
+              try{ _medAlertModalOpen = false; }catch(_){}
+            }""")
+            page.wait_for_timeout(250)
+
+            plan = page.evaluate("""() => {
+              const pad = n => String(n).padStart(2,'0');
+              const bj = new Date(Date.now() + (new Date().getTimezoneOffset()+8*60)*60*1000);
+              const ymd = bj.getFullYear()+'-'+pad(bj.getMonth()+1)+'-'+pad(bj.getDate());
+              const hm = d => pad(d.getHours())+':'+pad(d.getMinutes());
+              return {
+                ymd,
+                s_past_at_add_3min: hm(new Date(bj.getTime()-3*60*1000)),   // 3 分钟前 + 标 past-at-add → 静默
+                s_inwin_nogray_3min:  hm(new Date(bj.getTime()-3*60*1000)),  // 3 分钟前、无灰卡 → 30 分钟内应触发
+                s_over32min:          hm(new Date(bj.getTime()-32*60*1000)), // 32 分钟前、无灰卡 → 超窗静默
+                s_over45min:          hm(new Date(bj.getTime()-45*60*1000))  // 45 分钟前、无灰卡 → 超窗静默
+              };
+            }""")
+            ok(f'R6/R7/R8-PREP: 时间槽 plan={json.dumps(plan, ensure_ascii=False)}')
+            ymd = plan['ymd']
+
+            # 一次清库 + 塞 4 条 meds
+            page.evaluate("""async (p) => {
+              for(const s of ['meds','medlog']){
+                const list = await DB.all(s);
+                for(const r of list){ try{ await DB.del(s, r.id); }catch(_){} }
+              }
+              const rows = [
+                {id:'r6_01', username:'guest', name:'R6 灰卡阿司匹林', dose:'1片', freq:'daily',
+                  times:[{time:p.s_past_at_add_3min, skippedReason:'past-at-add'}],
+                  time:p.s_past_at_add_3min, startDate:p.ymd, reminded:{}, created:Date.now()},
+                {id:'r8_01', username:'guest', name:'R8 3min无灰卡', dose:'1片', freq:'daily',
+                  times:[{time:p.s_inwin_nogray_3min, skippedReason:null}],
+                  time:p.s_inwin_nogray_3min, startDate:p.ymd, reminded:{}, created:Date.now()},
+                {id:'r7a_01', username:'guest', name:'R7a 超32min', dose:'1片', freq:'daily',
+                  times:[{time:p.s_over32min, skippedReason:null}],
+                  time:p.s_over32min, startDate:p.ymd, reminded:{}, created:Date.now()},
+                {id:'r7b_01', username:'guest', name:'R7b 超45min', dose:'1片', freq:'daily',
+                  times:[{time:p.s_over45min, skippedReason:null}],
+                  time:p.s_over45min, startDate:p.ymd, reminded:{}, created:Date.now()},
+              ];
+              for(const r of rows){ await DB.put('meds', r); }
+              try{ await renderMeds(); }catch(e){ console.warn(e); }
+            }""", plan)
+            page.wait_for_timeout(700)
+
+            # 清钩子 → checkMeds
+            page.evaluate("""() => {
+              window.__MED_ALERT_LAST_FIRE__ = null;
+              window.__DIDI_LAST_FIRE__ = null;
+              window.__MED_ALERT_HISTORY__ = [];
+            }""")
+            page.evaluate("""async () => { try{ await checkMeds(); }catch(e){ window.__CM_ERR__ = String(e); } }""")
+            page.wait_for_timeout(3000)
+
+            # 取每条 med 各自的命中情况：通过 history length + history title 判断（因为 showMedAlertUI 同一时刻只画 1 个 DOM）
+            r_x = page.evaluate("""() => {
+              const hist = window.__MED_ALERT_HISTORY__ || [];
+              const titles = hist.map(h => h.title);
+              const didiFired = !!window.__DIDI_LAST_FIRE__;
+              return {
+                histCount: hist.length,
+                titles,
+                didiFired,
+                err: window.__CM_ERR__ || null,
+                // DOM：最终是否仍存在弹窗（1 条正例应在）
+                wrapExists: !!document.getElementById('__medAlertWrap__')
+              };
+            }""")
+            if r_x.get('err'):
+                fail('R6-R8-PREP', 'checkMeds 异常: ' + str(r_x['err']))
+            titles = r_x.get('titles') or []
+            # R6: past-at-add 不应出现在任何弹窗标题里
+            if any('R6 灰卡阿司匹林' in t for t in titles):
+                fail('R6 新增时已过', f'被标记 past-at-add 的 R6 灰卡仍然触发了弹窗。titles={json.dumps(titles,ensure_ascii=False)}')
+            else: ok('R6 past-at-add 灰卡：未触发任何弹窗（静默正确）')
+
+            # R7a / R7b: 超 32 / 45 分钟不应有弹窗
+            if any('R7a 超32min' in t for t in titles):
+                fail('R7a 超窗32min', '32 分钟前无灰卡药名仍被弹窗，titles=' + json.dumps(titles, ensure_ascii=False))
+            else: ok('R7a 超窗32min：未触发弹窗（30min 上限正确）')
+            if any('R7b 超45min' in t for t in titles):
+                fail('R7b 超窗45min', '45 分钟前无灰卡药名仍被弹窗，titles=' + json.dumps(titles, ensure_ascii=False))
+            else: ok('R7b 超窗45min：未触发弹窗（30min 上限正确）')
+
+            # R8 正例：3 分钟前 无灰卡 应被 30min 窗口命中
+            if not any('R8 3min无灰卡' in t for t in titles):
+                fail('R8 30分钟内仍应提醒', f'3 分钟前无灰卡的"R8 3min无灰卡"没有出现在弹窗历史里（说明 30min 窗口可能收太严或逻辑被误杀）。titles={json.dumps(titles,ensure_ascii=False)} didi={r_x.get("didiFired")} wrap={r_x.get("wrapExists")}')
+            else: ok('R8 30 分钟窗口内正常触发（3 分钟前无灰卡 → 弹窗标题含药名）')
+            # R8 对应的滴滴声：只要任意提醒发了（即 didiFired=true）就算通过（滴滴声是每条提醒都会调一次，至少一次有）
+            if not r_x.get('didiFired'):
+                fail('R8 滴滴声', '本次 checkMeds 没有任何提醒调用 playDidiAlert（至少 R8 该调一次）')
+            else: ok('R8 30 分钟窗口内 playDidiAlert 被调用（滴滴声请求已发起）')
+        except Exception as e:
+            fail('R6/R7/R8', '异常: ' + traceback.format_exc(limit=4))
+
         browser.close()
 
+# ===== 执行 =====
 if __name__ == '__main__':
     run_tests()
     print()
@@ -422,4 +535,4 @@ if __name__ == '__main__':
         for n, m in FAIL: print(f"  - {n}: {m}")
         sys.exit(1)
     else:
-        print("全部 R1/R2/R3 用例通过。")
+        print("全部 R1/R2/R3/R6/R7/R8 用例通过。")

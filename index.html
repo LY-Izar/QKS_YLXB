@@ -6384,7 +6384,27 @@ async function checkMeds(){
   try{ allLogs = await allMine('medlog'); }catch(e){ console.warn('[checkMeds] allMine(medlog) fail:', e); }
   const effectiveUser = currentUser || 'guest';
   let remindFiredCount = 0;
+  // ===== 用户新增规则 =====
+  // 规则1: 被标记为"免罚灰卡"的 slot（past-at-add / historical-backfill / expired-single / __merged_taken）永远不触发弹窗+滴滴声
+  //        —— 新增时已过的、历史补录的、单次过期的、被合并"已服"掉的，一概不再吵用户
+  // 规则2: 正常 slot 只有在「到点后 30 分钟之内」进入网站才允许触发；超过 30 分钟 → 视为用户自行错过，不再报警
+  //        （即 diffMin ∈ [0, 30] 时才触发；之前的 6 小时上限完全收缩为 30 分钟）
+  const ALERT_WINDOW_MIN = 30;
+  const SKIP_REASONS_SILENT = { 'past-at-add':1, 'historical-backfill':1, 'expired-single':1, '__merged_taken':1, '__not_started':1 };
   for(const med of meds){
+    // 为便于通过 HH:MM 字符串反查对应 slot 对象的 skippedReason，先建一张 Map
+    const timeToSlot = new Map();
+    if(Array.isArray(med.times)){
+      for(const s of med.times){
+        const tStr = (s && typeof s === 'object') ? String(s.time || '') : String(s || '');
+        if(!tStr) continue;
+        // 若同一 HH:MM 出现多条，保留"有 skippedReason 的那条"（至少能抑制静默）
+        const prev = timeToSlot.get(tStr);
+        if(!prev || ( (s && s.skippedReason) && !prev.skippedReason )){
+          timeToSlot.set(tStr, (s && typeof s === 'object') ? s : { time: tStr, skippedReason: null, skippedAt: null });
+        }
+      }
+    }
     for(const tp of timePoints(med)){
       const tm = timeToMin(tp);
       const diffMin = curMin - tm;
@@ -6397,9 +6417,22 @@ async function checkMeds(){
       if(todayLog && (todayLog.status === 'taken' || todayLog.status === 'late_taken' || todayLog.status === 'skipped')){
         continue;
       }
+      // 还没到点（提前 2 分钟以上）→ 暂时跳过
       if(diffMin < -1) continue;
+      // —— 新增规则1：免罚灰卡 slot 不弹窗不滴滴 ——
+      const slotObj = timeToSlot.get(String(tp)) || null;
+      const skipReason = (slotObj && slotObj.skippedReason) || null;
+      if(skipReason && SKIP_REASONS_SILENT[skipReason]){
+        continue;
+      }
+      // —— 新增规则2：超过 30 分钟窗口的静默 ——
+      if(diffMin > ALERT_WINDOW_MIN){
+        continue;
+      }
+      // 原重复提醒档位：首次(0~1min) 为 slotIndex=0，之后每 10 分钟一档（1=10~19，2=20~29）。
+      // 收缩到 30min 窗口后，最多只有 0/1/2 三档（仍然每 10 分钟重复一次，但不会超过 20~29 这一档）。
       const slotIndex = diffMin <= 1 ? 0 : Math.max(0, Math.floor(diffMin / 10));
-      if(slotIndex > 36) continue;
+      if(slotIndex > 2) continue; // 冗余双保险：20~29 分钟是 slotIndex=2，超 30min 已被上面 continue 拦截
       if(!med.remindSlots) med.remindSlots = {};
       const slotKey = todayStr + '_' + tp + '#' + slotIndex;
       if(med.remindSlots[slotKey]) continue;
@@ -6425,7 +6458,7 @@ async function checkMeds(){
       }catch(e){}
       // ======= 弹窗 + 滴滴声：必须和上面的数据写入链路分离，任何前置异常都不能阻断 =======
       try{ playDidiAlert(10); }catch(e){ console.warn('[checkMeds] playDidiAlert fail:', e); }
-      try{ showMedAlertUI(baseMsg, '请尽快点击该时间段下方的「已服用」或「跳过今天」，否则每 10 分钟重复提醒一次。'); }catch(e){ console.warn('[checkMeds] showMedAlertUI fail:', e); }
+      try{ showMedAlertUI(baseMsg, '请尽快点击该时间段下方的「已服用」或「跳过今天」，否则每 10 分钟重复提醒一次，最多提醒 3 次。'); }catch(e){ console.warn('[checkMeds] showMedAlertUI fail:', e); }
       remindFiredCount++;
     }
   }
