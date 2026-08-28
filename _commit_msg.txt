@@ -1,6 +1,0 @@
-chore: 清除新增代码注释并同步到维护文档（严格模式）
-
-- index.html: 移除 updateAdminUI 统一门控块 5 条注释
-- tests/subadmin_perm_bypass.spec.js: 移除 9 条测试注释
-- MAINTENANCE.md: 同步 14 条注释到对应函数条目 + 新增测试文件章节
-- 9/9 Playwright 测试验证通过
