@@ -1298,6 +1298,14 @@
         <h2><svg class="icn"><use href="#ic-chart"/></svg> 数据库概况</h2>
         <div class="gap6" id="adminStats">加载中...</div>
       </div>
+      <div class="card" id="adminApprovalCard" style="display:none;margin-top:12px;">
+        <h2><svg class="icn"><use href="#ic-check"/></svg> 授权审批（按次申请）</h2>
+        <p class="sub">次级管理员发起的按次权限申请。批准后申请人的操作会在 10 秒内自动执行，无需邮件链接。</p>
+        <div class="gap6" style="margin-top:8px;">
+          <button class="btn line sm" onclick="adminLoadApprovals()" style="align-self:flex-start;">🔄 刷新审批列表</button>
+        </div>
+        <div id="adminApprovalList" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">加载中...</div>
+      </div>
       <div class="card" style="margin-top:12px;background:var(--surface-danger);border:1px solid var(--danger-15);">
         <h2 style="color:var(--danger);"><svg class="icn"><use href="#ic-alert"/></svg> 清理测试账号</h2>
         <p class="sub">一键清理数据库中所有 <b>id 以 test_ 前缀开头</b> 的账号及其级联数据（慢性档案、指标、用药、提醒、事件、家属绑定）。</p>
@@ -3200,10 +3208,10 @@ function _classifyToast(msg){
      || /^(测试|已)/.test(s)){
     return {tone:'tone-success', ms: 1000};
   }
-  if(/(失败|错误|异常|不行|无法|不能|拒绝|无效|不匹配|未找到|不允许|禁止|403|超时|中断|崩溃|冲突|已满|过期|已过期|缺少|为空|不能为空|超过|格式不正确|请检查|请输入|请先|请|建议)/.test(s)
-     || /(请联系|请在|请使用|需|需要)/.test(s)){
-    return {tone:'tone-error', ms: 2500};
-  }
+    if(/(失败|错误|异常|不行|无法|不能|拒绝|无效|不匹配|未找到|不允许|禁止|403|超时|中断|崩溃|冲突|已满|过期|已过期|缺少|为空|不能为空|超过|格式不正确|请检查|请输入|请先|请|建议)/.test(s)
+       || /(请联系|请在|请使用|需|需要)/.test(s)){
+      return {tone:'tone-error', ms: 6000};
+    }
   return {tone:'tone-default', ms: 2000};
 }
 function _flushToast(){
@@ -9788,6 +9796,7 @@ async function updateAdminUI(){
           clearAllHtml = '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">'
             + '<button class="btn danger sm" onclick="adminClearAllTables()" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">🗑 清空全部业务数据（保留用户表）</button>'
             + '<button class="btn line sm" onclick="adminBackupNow()" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;">📦 立即备份数据库</button>'
+            + '<button class="btn line sm" onclick="adminDownloadBackup()" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;">⬇ 下载上次备份</button>'
             + '</div>';
         }
         statsEl.innerHTML = storageHtml + clearAllHtml + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
@@ -10024,12 +10033,21 @@ function adminBackupNow(){
       if(r && r.ok){
         const jsonData = r.json_data || {};
         const sqlSummary = r.sql_summary || '';
-        const jsonSize = new Blob([JSON.stringify(jsonData)]).size;
-        const jsonStr = JSON.stringify(jsonData, null, 2);
+        const jsonStr = JSON.stringify(jsonData);
+        const jsonKB = (jsonStr.length / 1024).toFixed(1);
+        let saved = false, saveMsg = '';
+        try{
+          const sv = await adminRPC('admin_save_backup', { data: jsonStr });
+          if(sv && sv.ok){ saved = true; }
+          else saveMsg = (sv && (sv.message || sv.error)) || '';
+        }catch(e){ saveMsg = (e && e.message) || '保存异常'; }
         const emailBody = '<div style="font-family:system-ui,Arial,sans-serif;max-width:640px;margin:0 auto;">'
           + '<h2 style="margin:0 0 12px;">📦 医路相伴 · 数据库备份报告</h2>'
           + '<p>生成时间：' + new Date().toLocaleString('zh-CN') + '</p>'
           + '<p>数据库大小：' + ((r.database_size || 0) / 1073741824).toFixed(4) + ' GB</p>'
+          + (saved
+              ? '<p style="color:#1a7a3a;font-weight:700;">✓ 备份文件已保存至管理台「数据库概况 → ⬇ 下载上次备份」，请登录最高管理员账号下载。</p>'
+              : '<p style="color:#b45309;">管理台保存失败：' + _escHTML(saveMsg) + '</p>')
           + '<h3>各表行数：</h3><ul>'
           + Object.keys(jsonData).map(t => {
             const cnt = Array.isArray(jsonData[t]) ? jsonData[t].length : 0;
@@ -10037,15 +10055,14 @@ function adminBackupNow(){
             return '<li>' + lbl + '：' + cnt + ' 行</li>';
           }).join('')
           + '</ul>'
-          + '<h3>JSON 数据（附件）</h3>'
-          + '<p style="color:var(--muted);font-size:12px;">JSON 数据已作为附件发送，用于完整恢复。</p>'
           + '<h3>SQL 摘要</h3>'
-          + '<pre style="background:#f1f5f9;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:11px;">' + _escHTML(sqlSummary) + '</pre>'
+          + '<pre style="background:#f1f5f9;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:11px;">' + _escHTML(sqlSummary.slice(0, 4000)) + '</pre>'
           + '</div>';
         try{
           await sendEmail(SUPER_ADMIN_EMAIL, '[医路相伴·备份] 数据库备份 ' + new Date().toLocaleString('zh-CN'), emailBody);
         }catch(e){}
-        toast('✓ 备份完成，已发送到管理员邮箱（JSON 约 ' + (jsonSize / 1024).toFixed(1) + ' KB）');
+        if(saved) toast('✓ 备份完成（' + jsonKB + ' KB）已保存，可在管理台下载');
+        else toast('✓ 备份邮件已发送' + (saveMsg ? '（管理台保存失败：' + saveMsg + '）' : ''));
       } else {
         toast('备份失败');
       }
@@ -10053,6 +10070,24 @@ function adminBackupNow(){
       toast('备份出错：' + (e.message || e));
     }
   })();
+}
+
+async function adminDownloadBackup(){
+  try{
+    const r = await adminRPC('admin_get_backup', {});
+    if(!(r && r.data)){ toast('尚无已保存的备份，请先备份一次'); return; }
+    const blob = new Blob([r.data], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'yiluxiangban-backup-' + beijingYMD() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('✓ 备份文件下载中');
+  }catch(e){
+    toast('下载备份失败：' + ((e && e.message) || e));
+  }
 }
 let _adminStorageChecked = false;
 let _adminStorageCheckInterval = null;
@@ -10591,6 +10626,56 @@ async function adminLoadUsers(){
     console.warn('adminLoadUsers 失败:', e);
     tb.innerHTML = '<tr><td colspan="9" class="td-empty" style="color:var(--danger);">加载失败：' + (e && e.message ? e.message : '未知错误') + '</td></tr>';
     toast('用户列表加载失败');
+  }
+  try{ if(adminLevel === 'super') adminLoadApprovals(); }catch(_){}
+}
+
+if(!window.__APPROVAL_AUTO_REFRESH__){
+  window.__APPROVAL_AUTO_REFRESH__ = true;
+  setInterval(() => {
+    try{
+      const v = document.getElementById('view-admin');
+      if(currentUser && adminLevel === 'super' && v && v.offsetParent !== null) adminLoadApprovals();
+    }catch(_){}
+  }, 30000);
+}
+
+async function adminLoadApprovals(){
+  const card = document.getElementById('adminApprovalCard');
+  if(!card) return;
+  if(!(currentUser && adminLevel === 'super')){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const list = document.getElementById('adminApprovalList');
+  if(!list) return;
+  list.textContent = '加载中...';
+  try{
+    const r = await adminRPC('admin_list_pending', {});
+    const rows = (r && r.rows) || [];
+    if(!rows.length){ list.innerHTML = '<p class="hint">暂无待审批申请。</p>'; return; }
+    list.innerHTML = rows.map(p => {
+      const exp = p.expires_at ? new Date(p.expires_at).toLocaleString('zh-CN', {hour12:false}) : '';
+      const created = p.created_at ? new Date(p.created_at).toLocaleString('zh-CN', {hour12:false}) : '';
+      return '<div style="padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);">'
+        + '<div style="font-weight:700;">' + _escHTML(p.operator || '') + ' 申请「' + _escHTML(p.perm_key || '') + '」权限</div>'
+        + '<div class="hint" style="margin:4px 0;">' + _escHTML(p.action_desc || '') + '<br>发起：' + created + ' · 过期：' + exp + '</div>'
+        + '<div style="display:flex;gap:8px;">'
+        + '<button class="btn sm" style="background:#10b981;color:#fff;" onclick="adminResolveApprovalUI(\'' + _escJSHtml(p.token) + '\',true)">✓ 批准</button>'
+        + '<button class="btn sm" style="background:#ef4444;color:#fff;" onclick="adminResolveApprovalUI(\'' + _escJSHtml(p.token) + '\',false)">✕ 拒绝</button>'
+        + '</div></div>';
+    }).join('');
+  }catch(e){
+    list.textContent = '加载失败：' + ((e && e.message) || e);
+  }
+}
+
+async function adminResolveApprovalUI(token, approve){
+  try{
+    await adminRPC('admin_resolve_approval', { p_token: token, approve: !!approve });
+    toast(approve ? '✓ 已批准，申请人将在 10 秒内自动生效' : '已拒绝该申请');
+    audit('admin.approval.resolve', {token: String(token).slice(0, 16), approve: !!approve});
+    adminLoadApprovals();
+  }catch(e){
+    toast('操作失败：' + ((e && e.message) || e));
   }
 }
 
