@@ -9737,6 +9737,17 @@ async function updateAdminUI(){
         const labels = {users:'用户账号',chronic_profiles:'慢病档案',chronic_alerts:'慢病预警',health_metrics:'健康指标',medication_logs:'用药日志',follow_ups:'复诊提醒',events:'就医事件',family_bindings:'家属绑定'};
         const clearableTables = ['chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
         const counts = {};
+        let countsViaRpc = false;
+        try{
+          const cd = await adminRPC('admin_table_counts', {});
+          if(cd && cd.ok && cd.counts){
+            for(const t of tables){
+              counts[t] = (typeof cd.counts[t] === 'number') ? cd.counts[t] : '—';
+            }
+            countsViaRpc = true;
+          }
+        }catch(e){}
+        if(!countsViaRpc){
         for(const t of tables){
           try{
             const r = await sbFetch(t + '?limit=1&select=id');
@@ -9749,6 +9760,7 @@ async function updateAdminUI(){
               counts[t] = '—';
             }
           }catch(e){ counts[t] = '—'; }
+        }
         }
         let storageHtml = '';
         try{
