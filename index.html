@@ -1261,7 +1261,7 @@
         <h2><svg class="icn"><use href="#ic-logout"/></svg> 登录状态</h2>
         <div class="gap6">
           <button class="btn block warn" onclick="doLogout()">退出登录</button>
-          <button class="btn block ghost" onclick="go('welcome'); openAuth();">切换账号</button>
+          <button class="btn block ghost" onclick="switchUser();">切换账号</button>
           <button class="btn block ghost" onclick="go('home')">返回首页</button>
         </div>
       </div>
@@ -3182,7 +3182,17 @@ const DB = {
   put(store, obj){ return new Promise((res,rej)=>{ const r=this.tx(store,'readwrite').put(obj); r.onsuccess=()=>res(r.result); r.onerror=rej; }); },
   get(store, key){ return new Promise((res,rej)=>{ const r=this.tx(store,'readonly').get(key); r.onsuccess=()=>res(r.result); r.onerror=rej; }); },
   all(store){ return new Promise((res,rej)=>{ const r=this.tx(store,'readonly').getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=rej; }); },
-  del(store, key){ return new Promise((res,rej)=>{ const r=this.tx(store,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=rej; }); }
+  del(store, key){ return new Promise((res,rej)=>{ const r=this.tx(store,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=rej; }); },
+  async clearUserData(){
+    if(!this.db) return;
+    const stores = ['meds','events','chronic','metrics','followups','medlog'];
+    for(const s of stores){
+      try{
+        const r = this.tx(s,'readwrite').clear();
+        await new Promise((res,rej)=>{ r.onsuccess=()=>res(); r.onerror=rej; });
+      }catch(e){}
+    }
+  }
 };
 
 
@@ -4294,7 +4304,24 @@ function setRole(r){
 }
 
 let _authMode = 'login'; 
-function openAuth(){
+async function openAuth(){
+  if(currentUser){
+    await DB.clearUserData();
+    try{ purgeSharedUserCache(); }catch(e){}
+    try{ purgeAllUserInputs(); }catch(e){}
+    currentUser = null;
+    localStorage.removeItem('med_user');
+    localStorage.removeItem('med_is_admin');
+    adminLevel = 'none';
+    subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+    localStorage.removeItem('med_admin_level');
+    localStorage.removeItem('med_sub_perms');
+    isAdmin = false;
+    await resetAppState();
+    myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
+    setRole('elder');
+    updateUserUI();
+  }
   $('authMask').classList.add('show');
   $('authNotice').style.display = 'none';
   $('authNotice').textContent = '';
@@ -4886,6 +4913,7 @@ async function doLogout(){
   if(!currentUser){ toast('您还未登录'); return; }
   bumpRenderToken('doLogout：登出清账号');
   
+  try{ await DB.clearUserData(); }catch(e){}
   try{ purgeSharedUserCache(); }catch(e){}
   try{ purgeAllUserInputs(); }catch(e){}
   currentUser = null;
@@ -4907,6 +4935,27 @@ async function doLogout(){
   try{ renderMaintenanceBanner(); }catch(_){}
   try{ refreshNavVisibilityForMaintenance(); }catch(_){}
   toast('已退出登录');
+}
+async function switchUser(){
+  if(currentUser){
+    await DB.clearUserData();
+    try{ purgeSharedUserCache(); }catch(e){}
+    try{ purgeAllUserInputs(); }catch(e){}
+    currentUser = null;
+    localStorage.removeItem('med_user');
+    localStorage.removeItem('med_is_admin');
+    adminLevel = 'none';
+    subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
+    localStorage.removeItem('med_admin_level');
+    localStorage.removeItem('med_sub_perms');
+    isAdmin = false;
+    await resetAppState();
+    myFamilyCode = String(Math.floor(100000 + Math.random()*900000));
+    setRole('elder');
+    updateUserUI();
+  }
+  go('welcome');
+  openAuth();
 }
 function updateUserUI(){
   if(currentUser){
