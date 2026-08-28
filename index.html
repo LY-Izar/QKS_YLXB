@@ -10331,9 +10331,6 @@ async function adminLoadUsers(){
         } else {
           ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',true)">设为管理员</button>');
         }
-        if(!isSelf && rid !== SUPER_ADMIN_ID){
-          ops.push('<button class="btn line sm" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-top:2px;" onclick="adminOpenDeleteUserDataModal(\'' + rid.replace(/'/g,'\\\'') + '\')">删除数据</button>');
-        }
       } else {
         
         const dis = hasPerm('db') ? '' : ' disabled style="opacity:.55;cursor:not-allowed;border-style:dashed;" title="需要「数据库管理」长期授权或单次批准后可用"';
