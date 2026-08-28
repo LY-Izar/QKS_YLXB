@@ -9,3 +9,7 @@ playwright-report/
 .pytest_cache/
 .DS_Store
 
+
+.zcode/
+login_tmp.json
+RUN_THIS_SQL.sql

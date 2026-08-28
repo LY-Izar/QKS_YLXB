@@ -1913,7 +1913,7 @@
     </label>
     <label class="f" id="rolePick">我的身份
       <div class="gap6">
-        <button class="btn block" id="roleElder" onclick="pickRole('elder')"><svg class="icn"><use href="#ic-user"/></svg> 我是老人</button>
+        <button class="btn block" id="roleElder" onclick="pickRole('elder')" aria-label="我是老人"><svg class="icn"><use href="#ic-user"/></svg> 我是老人</button>
         <button class="btn block ghost" id="roleFamily" onclick="pickRole('family')"><svg class="icn"><use href="#ic-users"/></svg> 我是家属</button>
       </div>
     </label>
@@ -2985,26 +2985,36 @@ function bumpRenderToken(reason){
 }
 
 
+function activeScope(role){
+  const u = currentUser || localStorage.getItem('med_user') || 'guest';
+  let r = role;
+  if(!r){ try{ r = myRole; }catch(_){ r = null; } }
+  return u + '|' + (r || 'elder');
+}
+function scopeOf(rec, u){
+  return (rec && rec.scope) ? rec.scope : (u + '|elder');
+}
 function withUsername(rec){
   if(!currentUser){
     const saved = localStorage.getItem('med_user');
     if(saved){ currentUser = saved; console.warn('[withUsername] 恢复丢失的 currentUser =', saved); }
   }
-  return Object.assign({}, rec || {}, { username: currentUser || 'guest' });
+  return Object.assign({}, rec || {}, { username: currentUser || 'guest', scope: activeScope() });
 }
 
-async function allMine(storeName){
+async function allMine(storeName, roleOverride){
   if(!DB.db) return [];
   if(!currentUser){
     const saved = localStorage.getItem('med_user');
     if(saved){ currentUser = saved; console.warn('[allMine] 恢复丢失的 currentUser =', saved); }
   }
   const u = currentUser || 'guest';
+  const scope = activeScope(roleOverride);
   const all = await DB.all(storeName);
-  return all.filter(r => r && r.username === u);
+  return all.filter(r => r && r.username === u && scopeOf(r, u) === scope);
 }
 
-async function ensureMine(storeName, id){
+async function ensureMine(storeName, id, roleOverride){
   if(!DB.db || id == null) return null;
   if(!currentUser){
     const saved = localStorage.getItem('med_user');
@@ -3014,7 +3024,7 @@ async function ensureMine(storeName, id){
     const r = await DB.get(storeName, id);
     if(!r) return null;
     const u = currentUser || 'guest';
-    return (r.username === u) ? r : null;
+    return (r.username === u && scopeOf(r, u) === activeScope(roleOverride)) ? r : null;
   }catch(e){ return null; }
 }
 
@@ -3058,14 +3068,6 @@ function loadFamilyBinds(){
   if(familyBinds.length === 0){
     const old = localStorage.getItem(lsKey('med_bind'));
     if(old && old.length === 6) familyBinds = [old];
-    
-    if(familyBinds.length === 0){
-      const oldShared = localStorage.getItem('med_bind');
-      if(oldShared && oldShared.length === 6){
-        familyBinds = [oldShared];
-        saveFamilyBinds();
-      }
-    }
   }
   if(familyBinds.length) currentViewBind = familyBinds[0];
 }
@@ -3100,17 +3102,10 @@ function sanitizeInput(str, maxLen){
   if(typeof str !== 'string') return '';
   let s = str.trim();
   
-  s = s.replace(/['";\\]/g, '');
-  s = s.replace(/--/g, '');
-  s = s.replace(/\/\*|\*\//g, '');
-  s = s.replace(/;\s*/g, '');
-  
-  s = s.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  s = s.replace(/<\/?script[^>]*>/gi, '');
-  s = s.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '');
+  s = s.replace(/<\s*\/?\s*(script|iframe|svg|math|details|object|embed|link|style|base|form)\b[^>]*>/gi, '');
+  s = s.replace(/on\w+\s*=/gi, '');
   s = s.replace(/javascript:/gi, '');
-  s = s.replace(/<\s*iframe[^>]*>/gi, '');
-  s = s.replace(/<\s*img[^>]*on\w+\s*=[^>]*>/gi, '');
+  s = s.replace(/<\s*/g, '＜').replace(/>/g, '＞');
   
   s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   
@@ -3489,8 +3484,23 @@ function loadVoices(){
 if('speechSynthesis' in window){
   loadVoices();
   speechSynthesis.onvoiceschanged = loadVoices;
-  
+
   document.addEventListener('pointerdown', ()=>{ if(!voicesReady) loadVoices(); }, {capture:true});
+  let _ttsPrimed = false;
+  document.addEventListener('pointerdown', ()=>{
+    if(_ttsPrimed) return;
+    _ttsPrimed = true;
+    try{
+      const p = new SpeechSynthesisUtterance(' ');
+      p.volume = 0;
+      speechSynthesis.speak(p);
+    }catch(e){}
+  }, {capture:true});
+  setInterval(()=>{
+    try{
+      if(speechSynthesis.speaking && !speechSynthesis.paused) speechSynthesis.resume();
+    }catch(e){}
+  }, 10000);
 }else{
   
   if(typeof _setVoiceBadge === 'function') _setVoiceBadge('bad');
@@ -3722,7 +3732,6 @@ function ensureVoskScript(){
 }
 
 const VOSK_MODEL_URLS = [
-  'assets/vosk-model-small-cn-0.22.tar.gz',
   'https://github.com/LY-Izar/QKS_qyjiuyi/releases/download/v1.0-model/vosk-model-small-cn-0.22.tar.gz'
 ];
 async function loadVoskModel(){
@@ -3769,7 +3778,11 @@ function startRecognize(prompt, onResult, grammar){
       const started = await startWebSpeech(prompt);
       if(started) return;
     }
-    failVoice('语音输入暂不可用，请手动输入');
+    if(/iP(hone|od|ad)/.test(navigator.userAgent)){
+      failVoice('当前浏览器不支持语音识别，iOS 建议使用 Safari 打开本页后重试');
+    }else{
+      failVoice('语音输入暂不可用，请手动输入');
+    }
   })();
   return true;
 }
@@ -4093,6 +4106,16 @@ async function go(view){
 
 const SB_URL = 'https://hjryfgujkxuaxovftlai.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqcnlmZ3Vqa3h1YXhvdmZ0bGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NTcwNjUsImV4cCI6MjEwMzEzMzA2NX0.VsGxfhBt1J6iVYiZNyWhaeI_MSYnxSCaVFHgco1wKbc';
+const SB_EDGE_AUTH = SB_URL + '/functions/v1/ylxb-auth';
+function medAuthToken(){
+  try{ return localStorage.getItem('med_auth_token') || ''; }catch(e){ return ''; }
+}
+function medAuthSet(token){
+  try{
+    if(token) localStorage.setItem('med_auth_token', token);
+    else localStorage.removeItem('med_auth_token');
+  }catch(e){}
+}
 function cloudUsable(){
   return !!(window.fetch && window.crypto && crypto.subtle);
 }
@@ -4111,7 +4134,7 @@ async function sbFetch(path, opts){
       method: opts.method || 'GET',
       headers: Object.assign({
         apikey: SB_KEY,
-        Authorization: 'Bearer ' + SB_KEY,
+        Authorization: 'Bearer ' + (medAuthToken() || SB_KEY),
         'Content-Type': 'application/json'
       }, opts.headers || {}),
       body: opts.body || null,
@@ -4133,10 +4156,11 @@ const DEFAULT_SUB_PERMS = Object.freeze({db:false, force_popup:false, pin:false,
 let adminLevel = normalizeAdminLevel(localStorage.getItem('med_admin_level'));
 let subPerms   = parseSubPerms(localStorage.getItem('med_sub_perms'));
 
-function normalizeAdminLevel(raw){
-  if(!currentUser) return 'none';
+function normalizeAdminLevel(raw, uid){
+  const who = uid || currentUser;
+  if(!who) return 'none';
   if(raw === 'super' || raw === 'sub') return raw;
-  if(currentUser === SUPER_ADMIN_ID) return 'super';
+  if(who === SUPER_ADMIN_ID) return 'super';
   if(raw === 'none' || raw === null || raw === undefined || raw === ''){
     if(isAdmin) return 'sub';
     return 'none';
@@ -4306,7 +4330,7 @@ function setRole(r){
 let _authMode = 'login'; 
 async function openAuth(){
   if(currentUser){
-    await DB.clearUserData();
+    medAuthSet('');
     try{ purgeSharedUserCache(); }catch(e){}
     try{ purgeAllUserInputs(); }catch(e){}
     currentUser = null;
@@ -4373,7 +4397,8 @@ function switchAuthMode(silent){
   }
 }
 
-async function onAuthSubmit(){
+let _authBusy = false;
+async function onAuthSubmitInner(){
   if(_authMode === 'register'){
     await doRegister();
     return;
@@ -4435,6 +4460,18 @@ async function onAuthSubmit(){
 
   
   await doLogin();
+}
+async function onAuthSubmit(){
+  if(_authBusy){ toast('正在处理，请稍候…'); return; }
+  const submitBtn = document.getElementById('authSubmitBtn');
+  _authBusy = true;
+  if(submitBtn){ submitBtn.disabled = true; submitBtn.style.opacity = .6; }
+  try{
+    await onAuthSubmitInner();
+  }finally{
+    _authBusy = false;
+    if(submitBtn){ submitBtn.disabled = false; submitBtn.style.opacity = ''; }
+  }
 }
 function checkPassStrength(val){
   const bar = $('passStrengthBar');
@@ -4542,11 +4579,13 @@ function purgeAllUserInputs(){
   
   if(currentUser){
     const suffix = '_' + encodeURIComponent(currentUser);
+    const knownBases = new Set(['med_bind','med_binds','med_pushplus_token']);
     const keysToRemove = [];
     for(let i = 0; i < localStorage.length; i++){
       const k = localStorage.key(i);
-      if(!k) continue;
-      if(k.endsWith(suffix)){ keysToRemove.push(k); }
+      if(!k || !k.endsWith(suffix)) continue;
+      const prefix = k.slice(0, k.length - suffix.length);
+      if(knownBases.has(prefix)) keysToRemove.push(k);
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
   }
@@ -4567,9 +4606,8 @@ function purgeAllUserInputs(){
   for(let i = 0; i < localStorage.length; i++){
     const k = localStorage.key(i);
     if(!k) continue;
-    if(k.startsWith('med_') && !systemKeys.has(k) && !k.includes('_') && k !== 'med_user' && k !== 'med_is_admin' && k !== 'med_role'){
-      
-      if(!systemKeys.has(k)) otherRemovals.push(k);
+    if(k.startsWith('med_') && !systemKeys.has(k) && !k.includes('_', 4)){
+      otherRemovals.push(k);
     }
   }
   otherRemovals.forEach(k => localStorage.removeItem(k));
@@ -4638,7 +4676,46 @@ async function doRegister(){
   if(cloudUsable()){
     try{ h = await hashPass(p); }catch(e){ h = null; }
   }
-  if(h){
+  if(!h && !cloudUsable()){
+    toast('当前环境不支持安全加密（需 HTTPS 或 localhost），无法注册，请检查网址后重试');
+    return;
+  }
+  let cloudSaved = false;
+  let edgeTried = false;
+  if(cloudUsable()){
+    try{
+      const er = await fetch(SB_EDGE_AUTH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SB_KEY },
+        body: JSON.stringify({ action: 'register', username: u, password: p, role: pickedRole, email: email || null })
+      });
+      if(er.status !== 404){
+        edgeTried = true;
+        const ej = await er.json().catch(() => ({}));
+        if(er.ok && ej.ok && ej.token){
+          medAuthSet(ej.token);
+          cloudSaved = true;
+          if(ej.family_code) code = ej.family_code;
+        } else if(ej.error === 'taken'){
+          toast('该账号已被注册，请直接登录（若忘记密码可联系管理员重置）');
+          const notice = $('authNotice');
+          notice.textContent = '提示：该账号已在云端注册过，已切到登录界面，请使用该账号密码登录。';
+          notice.style.display = '';
+          $('authPass').value = '';
+          if($('authPass2')) $('authPass2').value = '';
+          _authMode = 'login';
+          switchAuthMode(true);
+          return;
+        } else if(ej.error === 'weakpass'){
+          toast('密码至少6位');
+          return;
+        } else {
+          note = '云端服务暂不可用';
+        }
+      }
+    }catch(e){ note = '云端连接失败'; }
+  }
+  if(!edgeTried && cloudUsable() && h){
     try{
       let res = await sbFetch('users', {
         method: 'POST',
@@ -4654,6 +4731,7 @@ async function doRegister(){
       }
       if(res.ok){
         note = '账号已存云端，任意设备可登录';
+        cloudSaved = true;
       } else {
         const errText = await res.text();
         if(res.status === 409 || errText.includes('23505')){
@@ -4667,18 +4745,22 @@ async function doRegister(){
           switchAuthMode(true);
           return;
         }
-        if(res.status === 404){ note = '已保存本机（云端数据表未创建）'; }
-        else { note = '已保存本机（云端暂不可用）'; }
+        if(res.status === 404){ note = '云端数据表未创建'; }
+        else { note = '云端暂不可用'; }
       }
-    }catch(e){ note = '已保存本机（云端连接失败）'; }
+    }catch(e){ note = '云端连接失败'; }
   }
-  await DB.put('users', {id:u, pass_hash:h || p, familyCode:code, role:pickedRole, email:email||null, emailRemind:false, created:Date.now()});
+  if(!cloudSaved){
+    toast('注册未完成：' + note + '，请检查网络后重试');
+    return;
+  }
+  await DB.put('users', {id:u, pass_hash:h, familyCode:code, role:pickedRole, email:email||null, emailRemind:false, created:Date.now(), cloudSaved:true});
   currentUser = u; localStorage.setItem('med_user', u);
   bumpRenderToken('doRegister：新账号写入 currentUser');
   await resetAppState();
   myFamilyCode = code;
   setRole(pickedRole);
-  toast('注册成功，' + note);
+  toast('注册成功，账号已存云端，任意设备可登录');
   closeAuth(); await afterLogin();
   if(email){
     sendEmail(email, '医路相伴 · 欢迎注册', '<h2>欢迎使用医路相伴</h2><p>您的账号已注册成功。到点用药时将收到邮件提醒。</p><p>祝您健康！</p>');
@@ -4714,7 +4796,46 @@ async function doLogin(){
   }
 
   let code = null, role = null, boundElder = null, wrongPass = false, netFail = false;
+  let edgeDone = false;
   if(cloudUsable()){
+    try{
+      const er = await fetch(SB_EDGE_AUTH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SB_KEY },
+        body: JSON.stringify({ action: 'login', username: u, password: p })
+      });
+      if(er.status !== 404){
+        edgeDone = true;
+        const ej = await er.json().catch(() => ({}));
+        if(er.ok && ej.ok && ej.token){
+          medAuthSet(ej.token);
+          const pr = ej.profile || {};
+          code = pr.family_code || null;
+          role = pr.role || null;
+          const bc = pr.bound_elder_codes;
+          const bs = pr.bound_elder_code;
+          if(Array.isArray(bc) && bc.length){ boundElder = bc; }
+          else if(bs){ boundElder = [bs]; }
+          else { boundElder = null; }
+          if(typeof pr.is_admin === 'boolean'){ isAdmin = pr.is_admin; }
+          const _lvlCloud = (typeof pr.admin_level === 'string') ? pr.admin_level : (pr.is_admin === true ? 'super' : 'none');
+          const _prmCloud = (pr.sub_perms && typeof pr.sub_perms === 'object') ? pr.sub_perms : null;
+          adminLevel = (u === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlCloud, u);
+          subPerms   = parseSubPerms(_prmCloud ? JSON.stringify(_prmCloud) : null);
+          localStorage.setItem('med_admin_level', adminLevel);
+          localStorage.setItem('med_sub_perms',   JSON.stringify(subPerms));
+          await DB.put('users', {id:u, pass_hash:'', familyCode:code, role:pickedRole, boundElderCodes:boundElder, email:pr.email||null, emailRemind:!!pr.email_remind, isAdmin:isAdmin, admin_level: adminLevel, sub_perms: subPerms, created:Date.now()});
+        } else if(ej.error === 'wrongpass'){
+          wrongPass = true;
+        } else if(ej.error === 'reserved'){
+          wrongPass = true;
+        } else {
+          netFail = true;
+        }
+      }
+    }catch(e){ edgeDone = false; }
+  }
+  if(!edgeDone && cloudUsable()){
     try{
       const h = await hashPass(p);
       let res = await sbFetch('users?select=id,pass_hash,family_code,role,bound_elder_code,bound_elder_codes,email,email_remind,is_admin,admin_level,sub_perms&id=eq.' + encodeURIComponent(u));
@@ -4734,7 +4855,7 @@ async function doLogin(){
             const _lvlCloud = (typeof rows[0].admin_level === 'string') ? rows[0].admin_level
                            : (rows[0].is_admin === true ? 'super' : 'none');
             const _prmCloud = (rows[0].sub_perms && typeof rows[0].sub_perms === 'object') ? rows[0].sub_perms : null;
-            adminLevel = (u === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlCloud);
+            adminLevel = (u === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlCloud, u);
             subPerms   = parseSubPerms(_prmCloud ? JSON.stringify(_prmCloud) : null);
             localStorage.setItem('med_admin_level', adminLevel);
             localStorage.setItem('med_sub_perms',   JSON.stringify(subPerms));
@@ -4805,6 +4926,7 @@ async function quickUse(){
   adminLevel = 'none'; localStorage.removeItem('med_admin_level');
   subPerms = Object.assign({}, DEFAULT_SUB_PERMS); localStorage.removeItem('med_sub_perms');
   bumpRenderToken('quickUse：进入体验模式清账号');
+  setRole('elder');
   
   try{ purgeSharedUserCache(); }catch(e){}
   try{ purgeAllUserInputs(); }catch(e){}
@@ -4854,14 +4976,6 @@ async function afterLogin(){
       if(old && old.length === 6) familyBinds = [old];
     }
   }
-  
-  if(familyBinds.length === 0){
-    const oldShared = localStorage.getItem('med_bind');
-    if(oldShared && oldShared.length === 6){
-      familyBinds = [oldShared];
-      saveFamilyBinds();
-    }
-  }
   if(familyBinds.length){ currentViewBind = familyBinds[0]; saveFamilyBinds(); }
   
   localStorage.setItem('med_mode', myRole === 'elder' ? 'care' : 'normal');
@@ -4909,11 +5023,11 @@ async function afterLogin(){
     }catch(e){}
   }
 }
-async function doLogout(){
-  if(!currentUser){ toast('您还未登录'); return; }
+async function doLogout(silent){
+  if(!currentUser){ if(!silent) toast('您还未登录'); return; }
   bumpRenderToken('doLogout：登出清账号');
+  medAuthSet('');
   
-  try{ await DB.clearUserData(); }catch(e){}
   try{ purgeSharedUserCache(); }catch(e){}
   try{ purgeAllUserInputs(); }catch(e){}
   currentUser = null;
@@ -4934,11 +5048,11 @@ async function doLogout(){
   
   try{ renderMaintenanceBanner(); }catch(_){}
   try{ refreshNavVisibilityForMaintenance(); }catch(_){}
-  toast('已退出登录');
+  if(!silent) toast('已退出登录');
 }
 async function switchUser(){
   if(currentUser){
-    await DB.clearUserData();
+    medAuthSet('');
     try{ purgeSharedUserCache(); }catch(e){}
     try{ purgeAllUserInputs(); }catch(e){}
     currentUser = null;
@@ -5097,7 +5211,27 @@ async function doChangeUsername(){
   if(!rec){ toast('账户数据异常'); return; }
   var newRec = Object.assign({}, rec, {id:newU});
   await DB.put('users', newRec);
-  if(cloudUsable()){
+  var edgeRenamed = false;
+  if(cloudUsable() && medAuthToken()){
+    try{
+      var ern = await fetch(SB_EDGE_AUTH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: SB_KEY, 'Authorization': 'Bearer ' + medAuthToken() },
+        body: JSON.stringify({ action: 'rename', new_username: newU })
+      });
+      if(ern.status !== 404){
+        var ejn = await ern.json().catch(() => ({}));
+        if(ern.ok && ejn.ok && ejn.token){
+          medAuthSet(ejn.token);
+          edgeRenamed = true;
+        } else {
+          toast('云端改名失败：' + (ejn.error === 'taken' ? '该用户名已被占用' : (ejn.error || '未知错误')));
+          return;
+        }
+      }
+    }catch(e){}
+  }
+  if(!edgeRenamed && cloudUsable()){
     try{
       await sbFetch('users', {method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({id:newU, pass_hash:rec.pass_hash, family_code:rec.familyCode, role:rec.role, email:rec.email||null, email_remind:!!rec.emailRemind})});
       var tables = ['chronic_profiles','chronic_alerts','health_metrics'];
@@ -5114,6 +5248,10 @@ async function doChangeUsername(){
       for(var k=0; k<all.length; k++){
         if(all[k].username === currentUser){
           all[k].username = newU;
+          if(all[k].scope && typeof all[k].scope === 'string'){
+            const pi = all[k].scope.indexOf('|');
+            all[k].scope = newU + (pi >= 0 ? all[k].scope.slice(pi) : '|elder');
+          }
           await DB.put(storeNames[j], all[k]);
         }
       }
@@ -5366,7 +5504,9 @@ async function calibrateTime(){
       const t1 = Date.now();
       const rtt = (t1 - t0) / 2;
       if(url.includes('timeapi.io')){
-        serverTime = new Date(data.dateTime).getTime() + rtt;
+        let dt = String(data.dateTime || '');
+        if(dt && !/[Zz]$|[+-]\d{2}:?\d{2}$/.test(dt)) dt += '+08:00';
+        serverTime = new Date(dt).getTime() + rtt;
       }else{
         serverTime = new Date(data.datetime).getTime() + rtt;
       }
@@ -5404,24 +5544,44 @@ function nowBeijing(){
   return new Date(Date.now() + _timeOffset);
 }
 
+let _bjFmt = null;
+function _bjParts(d){
+  try{
+    if(!_bjFmt){
+      _bjFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+    }
+    const parts = _bjFmt.formatToParts(d);
+    const get = t => { const p = parts.find(x => x.type === t); return p ? p.value : null; };
+    return { y: get('year'), m: get('month'), d: get('day'), h: get('hour'), mi: get('minute'), s: get('second') };
+  }catch(e){ return null; }
+}
 function beijingHHMM(date){
   const d = (date instanceof Date) ? date : nowBeijing();
+  const p = _bjParts(d);
+  if(p && p.h !== null && p.mi !== null) return p.h + ':' + p.mi;
   const pad = n => (n < 10 ? '0' : '') + n;
   return pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
 
 function beijingYMD(date){
   const d = (date instanceof Date) ? date : nowBeijing();
+  const p = _bjParts(d);
+  if(p && p.y !== null) return p.y + '-' + p.m + '-' + p.d;
   const pad = n => (n < 10 ? '0' : '') + n;
   return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function beijingHMS(date){
+  const d = (date instanceof Date) ? date : nowBeijing();
+  const p = _bjParts(d);
+  if(p && p.h !== null) return p.h + ':' + p.mi + ':' + p.s;
+  const pad = n => String(n).padStart(2, '0');
+  return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 function startBeijingClock(){
   const el = $('beijingTime');
   if(!el) return;
   function tick(){
-    const d = nowBeijing();
-    const pad = n => String(n).padStart(2,'0');
-    el.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' 北京时间';
+    el.textContent = beijingHMS() + ' 北京时间';
   }
   tick();
   setInterval(tick, 1000);
@@ -5476,10 +5636,21 @@ function freqActiveToday(med, dateStr){
   return true;
 }
 
+function _normHHMM(t){
+  const s = String(t || '').trim();
+  const m = s.match(/^(\d{1,2})[:：点](\d{1,2})?$/);
+  if(m){
+    const h = Math.min(23, parseInt(m[1], 10));
+    const mi = m[2] ? Math.min(59, parseInt(m[2], 10)) : 0;
+    return (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
+  }
+  return /^\d{2}:\d{2}$/.test(s) ? s : '';
+}
 function renderTimeInputs(freq, existingTimes){
   const c = $('medTimes');
   const count = FREQ_PRESETS[freq]?.length || 1;
-  const defaults = existingTimes || FREQ_PRESETS[freq] || ['08:00'];
+  const defaults = (existingTimes || FREQ_PRESETS[freq] || ['08:00']).map(_normHHMM).filter(Boolean);
+  while(defaults.length < count) defaults.push('08:00');
   const labels = FREQ_LABELS[freq] || [''];
   c.innerHTML = '';
   for(let i=0;i<count;i++){
@@ -5563,13 +5734,14 @@ function timePoints(med){
   if(Array.isArray(med.times) && med.times.length){
     for(const tp of med.times){
       const s = (tp && typeof tp === 'object') ? String(tp.time || '') : String(tp || '');
-      if(s && /^\d{1,2}:\d{2}$/.test(s)) out.push(s.slice(0,2).padStart(2,'0') + s.slice(-3));
+      const n = _normHHMM(s);
+      if(n) out.push(n);
     }
     if(out.length) return out;
   }
   if(med.time){
-    const s = String(med.time);
-    if(/^\d{1,2}:\d{2}$/.test(s)) return [s.slice(0,2).padStart(2,'0') + s.slice(-3)];
+    const n = _normHHMM(String(med.time));
+    if(n) return [n];
   }
   return [];
 }
@@ -6121,7 +6293,7 @@ function registerMedActionDelegation(){
       const medId = Number(btn.dataset.medId);
       const date = String(btn.dataset.date || '').trim();
       const timeSlot = decodeURIComponent(String(btn.dataset.time || '').trim());
-      if(!medId || !date || !timeSlot || !/^taken|late_taken|skipped|expired_makeup$/.test(action)){
+      if(!medId || !date || !timeSlot || !/^(taken|late_taken|skipped|expired_makeup)$/.test(action)){
         toast('按钮参数异常，请刷新页面重试'); return;
       }
       
@@ -7105,8 +7277,9 @@ async function playDidiAlert(durationSec){
 }
 
 let _medAlertModalOpen = false;
+const _medAlertQueue = [];
 function showMedAlertUI(titleMsg, hintMsg, onClose){
-  if(_medAlertModalOpen) return;
+  if(_medAlertModalOpen){ _medAlertQueue.push({ titleMsg: titleMsg, hintMsg: hintMsg, onClose: onClose }); return; }
   _medAlertModalOpen = true;
   
   window.__MED_ALERT_LAST_FIRE__ = { t: Date.now(), title: String(titleMsg||''), hint: String(hintMsg||'') };
@@ -7130,6 +7303,8 @@ function showMedAlertUI(titleMsg, hintMsg, onClose){
     _medAlertModalOpen = false;
     try{ document.body.removeChild(wrap); }catch(e){}
     if(typeof onClose === 'function'){ try{ onClose(); }catch(e){} }
+    const next = _medAlertQueue.shift();
+    if(next) setTimeout(() => { showMedAlertUI(next.titleMsg, next.hintMsg, next.onClose); }, 400);
   };
   wrap.addEventListener('click', e=>{ if(e.target === wrap) close(); });
   const btn = document.getElementById('__medAlertClose__');
@@ -7204,7 +7379,7 @@ async function checkMeds(){
       }
       
       
-      const slotIndex = diffMin <= 1 ? 0 : Math.max(0, Math.floor(diffMin / 10));
+      const slotIndex = diffMin <= 1 ? 0 : Math.max(1, Math.floor(diffMin / 10));
       if(slotIndex > 2) continue; 
       if(!med.remindSlots) med.remindSlots = {};
       const slotKey = todayStr + '_' + tp + '#' + slotIndex;
@@ -7423,10 +7598,15 @@ function locate(){
     renderHospitals();
     autoSpeak('已定位成功，为您推荐最近的医院。');
   }, err=>{
-    toast('自动定位失败，可在地图上点选位置');
-    autoSpeak('自动定位失败，请在地图上点选您的位置。');
+    if(err && err.code === 1){
+      toast('定位权限被拒绝：请允许位置权限后重试（iOS：设置→隐私与安全性→定位服务）');
+      autoSpeak('定位权限被拒绝，请在系统设置中允许位置权限，或在地图上手动点选您的位置。');
+    }else{
+      toast('自动定位失败，可在地图上点选位置');
+      autoSpeak('自动定位失败，请在地图上点选您的位置。');
+    }
     renderHospitals();
-  }, {enableHighAccuracy:true, timeout:10000});
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:30000});
 }
 function searchPlace(){
   const el = $('addrInput');
@@ -8576,7 +8756,11 @@ async function saveMetric(){
   const label = METRIC_LABELS[type] || type;
   const display = type === 'bp' ? v1 + '/' + v2 + ' mmHg' : v1 + (type === 'weight' ? ' kg' : (type === 'heart_rate' ? ' 次/分' : ' mmol/L'));
   autoSpeak(label + ' ' + display + ' 已记录');
-  checkThreshold(type, v1, v2, chronic);
+  (async () => {
+    try{ await checkThreshold(type, v1, v2, chronic); }catch(e){}
+    await new Promise(r => setTimeout(r, 1200));
+    try{ renderChronicAlerts(); }catch(e){}
+  })();
   $('m_v1').value = '';
   if($('m_v2')) $('m_v2').value = '';
   $('metricNote').value = '';
@@ -8609,13 +8793,14 @@ function checkThreshold(type, v1, v2, chronic){
     const alertMsg = msg;
     notify(alertMsg);
     if(currentUser && cloudUsable()){
-      sbFetch('chronic_alerts', {
+      return sbFetch('chronic_alerts', {
         method:'POST',
         headers:{'Prefer':'return=minimal'},
         body: JSON.stringify({ username: currentUser, disease_type: chronic.disease_type, alert_level: level, title: '指标预警', message: alertMsg })
       }).catch(()=>{});
     }
   }
+  return null;
 }
 
 function assessMetricLevel(m, chronic){
@@ -8944,7 +9129,7 @@ async function renderCompliance(targetUser, statsId, calId){
         const dedupRows = Array.from(dedup.values());
         
         const nowBJ = nowBeijing();
-        const thirtyAgoStr = beijingYMD(new Date(nowBJ.getTime() - 30 * 86400000));
+        const thirtyAgoStr = beijingYMD(new Date(nowBJ.getTime() - 29 * 86400000));
         myLogs = dedupRows.filter(r => {
           const s = String(r.scheduled_date || '').slice(0,10);
           return s >= thirtyAgoStr;
@@ -8999,9 +9184,14 @@ async function renderCompliance(targetUser, statsId, calId){
           }
           const skipKind = getSkippedForSlot(m, ds, slot);
           if(skipKind === '__not_started') return;
-          if(skipKind === 'past-at-add' || skipKind === 'historical-backfill' || skipKind === 'expired-single'){
-            
-            return;
+          if(ds === todayStr){
+            if(skipKind === 'past-at-add' || skipKind === 'expired-single'){
+              return;
+            }
+          }else{
+            if(slot.skippedReason === 'past-at-add' && m.created && ds === beijingYMD(new Date(m.created))){
+              return;
+            }
           }
           
           if(String(m.freq || '') === 'once' && ds !== String(m.startDate || todayStr)){
@@ -9038,30 +9228,37 @@ async function renderCompliance(targetUser, statsId, calId){
         logsByKey.delete(keyNoM); 
         return;
       }
-      const status = (log && log.status) ? String(log.status) : '__pending';
+      const status = (log && log.status) ? String(log.status) : (v.date < todayStr ? 'skipped' : '__pending');
       rows.push({ scheduled_date: v.date, scheduled_time: v.time, med_id: v.medId, status, _excludeFromTotal: !v.countTowardTotal });
       logsByKey.delete(keyNoM);
     });
-    
+
     logsByKey.forEach(l => {
-      if(l.status === 'taken' || l.status === 'late_taken'){
+      if(l.status === 'taken' || l.status === 'late_taken' || l.status === 'skipped'){
         rows.push({ scheduled_date: String(l.scheduled_date).slice(0,10), scheduled_time: String(l.scheduled_time||'').slice(0,5), med_id: l.med_id, status: l.status, _excludeFromTotal: true });
       }
-      
+
     });
 
     
-    const allTotal = rows.filter(r => !r._excludeFromTotal).length;
-    const onTime = rows.filter(r => r.status === 'taken').length;
-    const late   = rows.filter(r => r.status === 'late_taken').length;
-    const skip   = rows.filter(r => r.status === 'skipped').length;
+    const countedRows = rows.filter(r => !r._excludeFromTotal);
+    const allTotal = countedRows.length;
+    const onTime = countedRows.filter(r => r.status === 'taken').length;
+    const late   = countedRows.filter(r => r.status === 'late_taken').length;
+    const skip   = countedRows.filter(r => r.status === 'skipped').length;
     const served = onTime + late;
     const denom = allTotal || 0;
-    const rate = denom === 0 ? 0 : Math.round(served / denom * 100);
+    const rate = denom === 0 ? 0 : Math.min(100, Math.round(served / denom * 100));
+    const familyNoPlan = (denom === 0 && medsBase.length === 0 && myLogs.length > 0);
+    const famRows = rows.filter(r => r._excludeFromTotal);
+    const famServed = famRows.filter(r => r.status === 'taken' || r.status === 'late_taken').length;
+    const famSkip = famRows.filter(r => r.status === 'skipped').length;
     sEl.innerHTML = '<div>' +
       '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
         '<div style="font-size:32px;font-weight:700;color:' + (denom === 0 ? '#64748b' : rate >= 80 ? '#22c55e' : rate >= 50 ? '#eab308' : '#ef4444') + ';">' + (denom === 0 ? '—' : rate + '%') + '</div>' +
-        '<div class="hint">近30天用药依从率<br>已服 ' + served + ' / 应服 ' + denom + ' 次' + (denom === 0 && (onTime+late+skip)===0 ? '（新增时段已过的今日不计入，只记未来时段成绩）' : '') + '</div>' +
+        (familyNoPlan
+          ? '<div class="hint">近30天服药记录<br>按时/补服 ' + famServed + ' 次 · 跳过 ' + famSkip + ' 次（家属端无法读取老人用药计划，不计算依从率）</div>'
+          : '<div class="hint">近30天用药依从率<br>已服 ' + served + ' / 应服 ' + denom + ' 次' + (denom === 0 && (onTime+late+skip)===0 ? '（新增时段已过的今日不计入，只记未来时段成绩）' : '') + '</div>') +
       '</div>' +
       (denom === 0 && rows.length === 0 ? '<div class="hint" style="margin-top:6px;color:var(--primary-deep);">'+ic('ic-pencil')+' 暂无服药记录，到点后点击「已服用」即可开始统计。</div>' : '') +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">' +
@@ -9189,7 +9386,7 @@ async function markMedTaken(medId, date, timeSlot, status){
   if(!medOwn){ toast('无权操作该用药'); return; }
   const logs = await allMine('medlog'); 
   
-  const existing = logs.find(l => l.med_id === medId && l.scheduled_date === date && l.scheduled_time === timeSlot);
+  const existing = logs.find(l => String(l.med_id) === String(medId) && l.scheduled_date === date && l.scheduled_time === timeSlot);
   
   const now = nowBeijing();
   const curMin = now.getHours()*60 + now.getMinutes();
@@ -9448,8 +9645,8 @@ async function renderChronicAlerts(){
           $('chronicAlertList').innerHTML = rows.map(r => {
             const color = r.alert_level === 'critical' ? '#ef4444' : (r.alert_level === 'warning' ? '#eab308' : '#3b82f6');
             return '<div class="med-item" style="border-left:3px solid ' + color + ';">'
-              + '<div style="font-weight:700;color:' + color + ';">' + (r.title || '预警') + '</div>'
-              + '<div>' + (r.message || '') + '</div>'
+              + '<div style="font-weight:700;color:' + color + ';">' + _escHTML(r.title || '预警') + '</div>'
+              + '<div>' + _escHTML(r.message || '') + '</div>'
               + '<div class="hint">' + new Date(r.created_at).toLocaleString('zh-CN') + '</div>'
               + '</div>';
           }).join('');
@@ -9697,7 +9894,7 @@ function adminOpenDeleteUserDataModal(userId){
     + '</div>'
     + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
     + '<button class="btn line sm" onclick="this.closest(\'[style*=position:fixed]\').remove()">取消</button>'
-    + '<button class="btn danger sm" style="background:#ef4444;color:#fff;border:1px solid #ef4444;" id="adminDelConfirmBtn" onclick="adminExecDeleteUserData(\'' + _escHTML(userId) + '\')" disabled style="opacity:.5;cursor:not-allowed;">确认删除</button>'
+    + '<button class="btn danger sm" style="background:#ef4444;color:#fff;border:1px solid #ef4444;" id="adminDelConfirmBtn" onclick="adminExecDeleteUserData(\'' + _escJSHtml(userId) + '\')" disabled style="opacity:.5;cursor:not-allowed;">确认删除</button>'
     + '</div>'
     + '</div></div>';
   const wrap = document.createElement('div');
@@ -9807,9 +10004,9 @@ function adminClearAllTables(){
 
 function adminBackupNow(){
   const isSuper = (currentUser === SUPER_ADMIN_ID || adminLevel === 'super');
-  if(!isSuper){ toast('仅最高管理员可触发备份'); return; }
+  if(!isSuper){ toast('仅最高管理员可触发备份'); return Promise.resolve(); }
   toast('正在备份数据库...');
-  (async () => {
+  return (async () => {
     try{
       const r = await adminRPC('admin_backup_data', {});
       if(r && r.ok){
@@ -9845,7 +10042,6 @@ function adminBackupNow(){
     }
   })();
 }
-
 let _adminStorageChecked = false;
 let _adminStorageCheckInterval = null;
 
@@ -9857,6 +10053,8 @@ async function adminCheckStorageAndAutoBackup(){
       const remainingPct = r.remaining_pct || 0;
       const remainingGb = r.remaining_gb || 0;
       if(remainingPct < 1 || remainingGb < 0.001){
+        if(_adminStorageChecked) return;
+        _adminStorageChecked = true;
         toast('⚠ 数据库存储空间不足 1MB！自动备份并开启维护模式...');
         try{
           await adminBackupNow();
@@ -9865,6 +10063,8 @@ async function adminCheckStorageAndAutoBackup(){
           await adminRPC('admin_set_maintenance_mode', {enabled: true});
           applyMaintenance();
         }catch(e){}
+      } else {
+        _adminStorageChecked = false;
       }
     }
   }catch(e){}
@@ -9913,6 +10113,9 @@ function _escHTML(s){
   return String(s).replace(/[&<>"']/g, function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
+}
+function _escJSHtml(s){
+  return _escHTML(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 }
 
 
@@ -9993,22 +10196,43 @@ async function _submitApprovalRequest(permKey, actionDesc, payload){
   }
   
   return new Promise(function(resolve){
+    let done = false;
+    let poll = null;
     const timer = setTimeout(function(){
-      off(); resolve(false);
+      if(done) return;
+      done = true;
+      off();
+      resolve(false);
     }, 60*60*1000);
+    function finish(result){
+      if(done) return;
+      done = true;
+      off();
+      resolve(!!result && !!result.approved);
+    }
     function off(){
       clearTimeout(timer);
+      if(poll) clearInterval(poll);
       if(typeof removeApprovalListener === 'function'){
         removeApprovalListener(created.token);
       }
     }
+    if(cloudUsable()){
+      poll = setInterval(async function(){
+        try{
+          const r = await sbFetch('pending_approvals?token=eq.' + encodeURIComponent(created.token) + '&select=status,payload&limit=1');
+          if(!r || !r.ok) return;
+          const rows = await r.json();
+          if(rows && rows.length && rows[0].status && rows[0].status !== 'pending'){
+            finish({ approved: rows[0].status === 'approved', payload: rows[0].payload });
+          }
+        }catch(e){}
+      }, 10000);
+    }
     if(typeof addApprovalListener === 'function'){
       addApprovalListener(created.token, function(result){
-        off(); resolve(!!result && !!result.approved);
+        finish(result);
       });
-    } else {
-      
-      setTimeout(function(){ off(); resolve(false); }, 3000);
     }
   });
 }
@@ -10086,23 +10310,13 @@ async function adminPermSave(){
   };
   
   const patch = {sub_perms: perms};
-  
+
   const opt = sel.options[sel.selectedIndex];
   const lv = (opt.getAttribute('data-level') || '').toString();
-  if(lv !== 'sub' && lv !== 'super'){
-    patch.admin_level = 'sub';
-  }
+  const promote = lv !== 'sub' && lv !== 'super';
   try{
-    const r = await sbFetch('users?id=eq.' + encodeURIComponent(id), {
-      method: 'PATCH',
-      headers: {'Prefer': 'return=minimal', 'Content-Type':'application/json'},
-      body: JSON.stringify(patch)
-    });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    
-    try{
-      await adminRPC('admin_set_admin', {target_id: id, make_admin: true}).catch(()=>{});
-    }catch(_){}
+    const r = await adminRPC('admin_set_sub_perms', {target_id: id, perms: perms, promote: promote});
+    if(!(r && r.ok)) throw new Error((r && r.error) || 'HTTP 错误');
     audit('admin.perm.save', {target_id: id, perms: perms});
     toast('✓ 已保存授权：' + id);
     await adminPermRefresh();
@@ -10133,18 +10347,8 @@ async function adminSetAdmin(id, toAdmin){
   if(!confirm(hint)) return;
   try{
     
-    const patch = {is_admin: !!toAdmin, admin_level: toAdmin ? 'sub' : 'none'};
-    if(!toAdmin){
-      patch.sub_perms = Object.assign({}, DEFAULT_SUB_PERMS);
-    }
-    const r = await sbFetch('users?id=eq.' + encodeURIComponent(id), {
-      method:'PATCH',
-      headers:{'Prefer':'return=minimal','Content-Type':'application/json'},
-      body: JSON.stringify(patch)
-    });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    
-    try{ await adminRPC('admin_set_admin', { target_id: id, make_admin: !!toAdmin }).catch(()=>{}); }catch(_){}
+    const r = await adminRPC('admin_set_admin', { target_id: id, make_admin: !!toAdmin });
+    if(!(r && r.ok) && !(r && r.note)) throw new Error('RPC ' + ((r && r.error) || '失败'));
     audit(toAdmin ? 'admin.set_sub' : 'admin.unset_sub', {target_id: id});
     toast('✓ 操作成功');
     adminLoadUsers();
@@ -10189,8 +10393,14 @@ async function adminResetPass(id){
   ADM_STATE.resetTarget = id;
   const m = $('admResetModal'), u = $('admResetUser'), p = $('admResetPass');
   if(u) u.textContent = id;
+  if(p) p.value = '';  if(m){ m.classList.remove('hidden'); m.style.display='flex'; }
+}
+function adminCloseReset(){
+  const m = $('admResetModal');
+  if(m){ m.style.display = 'none'; m.classList.add('hidden'); }
+  const p = $('admResetPass');
   if(p) p.value = '';
-  if(m){ m.classList.remove('hidden'); m.style.display='flex'; }
+  ADM_STATE.resetTarget = null;
 }
 async function adminSubmitReset(){
   const passRaw = ($('admResetPass') || {}).value || '';
@@ -10235,7 +10445,7 @@ async function adminRPC(name, body, _opts){
       method: 'POST',
       signal: ctl.signal,
       headers: {
-        apikey: SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+        apikey: SB_KEY, 'Authorization': 'Bearer ' + (medAuthToken() || SB_KEY),
         'Content-Type': 'application/json', 'Accept': 'application/json'
       },
       body: JSON.stringify(payload)
@@ -10301,7 +10511,7 @@ async function adminLoadUsers(){
       const isSelf = rid === currentUser;
       const isTest = /^test_/.test(rid);
       const bindCount = typeof r.bind_count === 'number' ? r.bind_count : (r.has_bind ? 1 : 0);
-      const email = r.email ? r.email : '<span style="color:var(--muted)">—</span>';
+      const email = r.email ? _escHTML(r.email) : '<span style="color:var(--muted)">—</span>';
       const date = r.created_at ? new Date(r.created_at).toLocaleString('zh-CN') : '—';
       const isAdmTd = (rid === SUPER_ADMIN_ID)
         ? '<span class="adm-badge admin" style="background:#fcd9d9;color:#b91c1c;border:1px solid #fecaca;">最高管理员</span>'
@@ -10318,7 +10528,7 @@ async function adminLoadUsers(){
       const familyTd = roleDot(hasFamily, onlineFamily, '家属');
 
       const ops = [
-        '<button class="btn line" data-dbact="resetpass" onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>',
+        '<button class="btn line" data-dbact="resetpass" onclick="adminResetPass(\'' + _escJSHtml(rid) + '\')">重置密码</button>',
       ];
       
       
@@ -10327,15 +10537,15 @@ async function adminLoadUsers(){
           
         } else if(r.admin_level === 'sub' || r.admin_level === 'super' || r.is_admin){
           
-          ops.push('<button class="btn ghost" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',false)">取消管理员</button>');
+          ops.push('<button class="btn ghost" onclick="adminSetAdmin(\'' + _escJSHtml(rid) + '\',false)">取消管理员</button>');
         } else {
-          ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + rid.replace(/'/g,'\\\'') + '\',true)">设为管理员</button>');
+          ops.push('<button class="btn line" onclick="adminSetAdmin(\'' + _escJSHtml(rid) + '\',true)">设为管理员</button>');
         }
       } else {
         
         const dis = hasPerm('db') ? '' : ' disabled style="opacity:.55;cursor:not-allowed;border-style:dashed;" title="需要「数据库管理」长期授权或单次批准后可用"';
         
-        ops[0] = '<button class="btn line" ' + dis + ' onclick="adminResetPass(\'' + rid.replace(/'/g,'\\\'') + '\')">重置密码</button>';
+        ops[0] = '<button class="btn line" ' + dis + ' onclick="adminResetPass(\'' + _escJSHtml(rid) + '\')">重置密码</button>';
       }
       
       if(!isSelf && rid !== currentUser && rid !== SUPER_ADMIN_ID){
@@ -10344,9 +10554,9 @@ async function adminLoadUsers(){
           ? ''
           : ' disabled style="opacity:.55;cursor:not-allowed;border-style:dashed;" title="需要「数据库管理」长期授权或最高管理员单次批准后才能删除账号"';
         const delStyle = 'background:var(--surface-danger);color:var(--danger);border:1px solid var(--danger-15);';
-        ops.push('<button class="btn warn" ' + disDel + (disDel ? '' : ' style="' + delStyle + '"') + ' onclick="adminDeleteUser(\'' + rid.replace(/'/g,'\\\'') + '\')">删除</button>');
+        ops.push('<button class="btn warn" ' + disDel + (disDel ? '' : ' style="' + delStyle + '"') + ' onclick="adminDeleteUser(\'' + _escJSHtml(rid) + '\')">删除</button>');
         if(adminLevel === 'super' || hasPerm('db')){
-          ops.push('<button class="btn line sm" ' + disDel + ' style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-top:2px;" onclick="adminOpenDeleteUserDataModal(\'' + rid.replace(/'/g,'\\\'') + '\')">删除数据</button>');
+          ops.push('<button class="btn line sm" ' + disDel + ' style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;margin-top:2px;" onclick="adminOpenDeleteUserDataModal(\'' + _escJSHtml(rid) + '\')">删除数据</button>');
         }
       } else if(isSelf){
         ops.push('<span style="font-size:12px;color:var(--muted);">（当前登录）</span>');
@@ -10354,10 +10564,10 @@ async function adminLoadUsers(){
         ops.push('<span style="font-size:12px;color:var(--danger);">受保护</span>');
       }
       return '<tr>'
-        + '<td><b>' + rid + '</b>' + testBadge + '</td>'
+        + '<td><b>' + _escHTML(rid) + '</b>' + testBadge + '</td>'
         + '<td>' + elderTd + '</td>'
         + '<td>' + familyTd + '</td>'
-        + '<td>' + (r.family_code || '<span style="color:var(--muted)">—</span>') + '</td>'
+        + '<td>' + (r.family_code ? _escHTML(r.family_code) : '<span style="color:var(--muted)">—</span>') + '</td>'
         + '<td>' + bindCount + ' 位</td>'
         + '<td>' + isAdmTd + '</td>'
         + '<td>' + email + '</td>'
@@ -10689,7 +10899,7 @@ const annDataLayer = (() => {
 })();
 
 
-function annGetAll(){ return annDataLayer.cloudFetch ? [] : []; } 
+function annGetAll(){ return annDataLayer.read ? annDataLayer.read().slice() : (window._ANN_CACHE || []); }
 
 window._ANN_CACHE = [];
 window._ANN_CACHE_TS = 0;
@@ -10796,7 +11006,7 @@ async function adminRenderAnnouncements(){
     const esc = s => String(s).replace(/'/g, "\\'");
     return '<div class="ann-card' + (a.pin?' pin':'') + '">'
       + '<div class="ann-head"><svg class="icn"><use href="#ic-ann"/></svg> '
-      + (a.title || '(无标题)')
+      + _escHTML(a.title || '(无标题)')
       + ' ' + lvTag + pinTag + activeTag + popupTag + '</div>'
       + '<div class="ann-body">' + (a.body||'').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s])) + '</div>'
       + (range ? '<div class="sub" style="font-size:12px;color:var(--muted);margin-bottom:6px;">⏰ ' + range + '</div>' : '')
@@ -10978,10 +11188,8 @@ async function adminTogglePinAnn(id){
   
   const a = annGetAll().find(x => x.id === id);
   const wantPin = a ? !a.pin : true; 
-  if(wantPin){
-    const ok = await requirePerm('pin', {action:'ann.toggle_pin', actionDesc:'切换公告置顶（开启）：' + String(id).slice(0,16), payload:{id:id, title: a && a.title}});
-    if(!ok) return;
-  }
+  const okPin = await requirePerm('pin', {action:'ann.toggle_pin', actionDesc:'切换公告置顶（' + (wantPin ? '开启' : '取消') + '）：' + String(id).slice(0,16), payload:{id:id, title: a && a.title}});
+  if(!okPin) return;
   audit('admin.ann.toggle_pin', {id:id, wantPin: wantPin, title: a && a.title});
   try{
     await annDataLayer.togglePinAnn(id);
@@ -11465,7 +11673,10 @@ function renderSiteAnnBar(forceShow){
   
   
   try{ _syncAnnBarLayout(); }catch(e){ console.warn('[renderSiteAnnBar] _syncAnnBarLayout fail:', e); }
-  window.addEventListener('resize', () => { if(window.__ANN_LAYOUT_DEBOUNCE__) clearTimeout(window.__ANN_LAYOUT_DEBOUNCE__); window.__ANN_LAYOUT_DEBOUNCE__ = setTimeout(()=>{ try{ _syncAnnBarLayout(); }catch(_){} }, 80); }, { passive:true });
+  if(!window.__ANN_RESIZE_BOUND__){
+    window.__ANN_RESIZE_BOUND__ = true;
+    window.addEventListener('resize', () => { if(window.__ANN_LAYOUT_DEBOUNCE__) clearTimeout(window.__ANN_LAYOUT_DEBOUNCE__); window.__ANN_LAYOUT_DEBOUNCE__ = setTimeout(()=>{ try{ _syncAnnBarLayout(); }catch(_){} }, 80); }, { passive:true });
+  }
 }
 
 
@@ -11852,6 +12063,17 @@ async function ensureRealtimeClient(){
 }
 
 
+function _maintenanceSchedDue(){
+  const M = MAINTENANCE;
+  if(!M || !M.scheduled || !M.start_at) return null;
+  const now = Date.now();
+  const s = new Date(M.start_at).getTime();
+  if(isNaN(s)) return null;
+  const e = M.end_at ? new Date(M.end_at).getTime() : NaN;
+  if(now >= s && (isNaN(e) || now < e)) return true;
+  if(!isNaN(e) && now >= e) return false;
+  return null;
+}
 function applyMaintenance(next, source){
   if(!next || typeof next !== 'object') return;
   const prev = Object.assign({}, MAINTENANCE);
@@ -11861,6 +12083,9 @@ function applyMaintenance(next, source){
   if('end_at' in next)                       MAINTENANCE.end_at      = next.end_at || null;
   if(typeof next.message === 'string')       MAINTENANCE.message     = next.message || '';
   MAINTENANCE.last_updated_at = Date.now();
+  const schedDue = _maintenanceSchedDue();
+  if(schedDue === true) MAINTENANCE.enabled = true;
+  else if(schedDue === false && MAINTENANCE.scheduled) MAINTENANCE.enabled = false;
   
   try{ renderMaintenanceBanner(); }catch(e){}
   try{ refreshNavVisibilityForMaintenance(); }catch(e){}
@@ -11890,8 +12115,7 @@ function kickbackForMaintenance(){
   const hadUser = !!currentUser;
   if(hadUser){
     try{
-      
-      logout(true );
+      doLogout(true);
     }catch(e){
       
       ['med_user','med_role','med_is_admin','med_admin_level','med_sub_perms'].forEach(k => localStorage.removeItem(k));
@@ -12256,8 +12480,9 @@ async function _afterLoginMaintenanceGate(){
   if(!MAINTENANCE.enabled) return true;
   if(isAdminDuringMaintenance()) return true;
   
-  try{
-    try{ logout(true); }catch(_){
+    try{
+      doLogout(true);
+    }catch(_){
       ['med_user','med_role','med_is_admin','med_admin_level','med_sub_perms'].forEach(k => localStorage.removeItem(k));
       currentUser = null; myRole = 'elder'; isAdmin = false; adminLevel='none';
       subPerms = Object.assign({}, DEFAULT_SUB_PERMS);
@@ -12265,7 +12490,6 @@ async function _afterLoginMaintenanceGate(){
     
     try{ go('welcome', {skipMaintenanceCheck:true}); }catch(_){}
     updateUserUI();
-  }catch(_){}
   showMaintenancePopupForUser();
   return false;
 }
