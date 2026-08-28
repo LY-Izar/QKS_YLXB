@@ -4579,6 +4579,7 @@ async function doRegister(){
   if(email){ const ev = isValidEmail(email); if(!ev.ok){ toast(ev.msg); return; } }
 
   
+  let cloudVerified = false;
   if(cloudUsable()){
     try{
       const chk = await fetch(SB_URL + '/rest/v1/rpc/auth_check_user_exists', {
@@ -4599,11 +4600,12 @@ async function doRegister(){
           switchAuthMode(true);
           return;
         }
+        cloudVerified = true;
       }
     }catch(e){  }
   }
 
-  if(await DB.get('users', u)){ toast('该账号已存在，请直接登录'); return; }
+  if(!cloudVerified && await DB.get('users', u)){ toast('该账号已存在，请直接登录'); return; }
   const code = String(Math.floor(100000 + Math.random()*900000));
   let h = null, note = '已保存本机';
   if(cloudUsable()){
