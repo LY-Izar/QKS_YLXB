@@ -4127,11 +4127,11 @@ function normalizeAdminLevel(raw){
   if(!currentUser) return 'none';
   if(raw === 'super' || raw === 'sub') return raw;
   if(currentUser === SUPER_ADMIN_ID) return 'super';
-  if(raw === 'none'){
+  if(raw === 'none' || raw === null || raw === undefined || raw === ''){
     if(isAdmin) return 'sub';
     return 'none';
   }
-  if(isAdmin) return 'super';
+  if(isAdmin) return 'sub';
   return 'none';
 }
 function parseSubPerms(raw){
@@ -11509,9 +11509,19 @@ async function init(){
             const _lvlRawCloud = (typeof real[0].admin_level === 'string') ? real[0].admin_level : null;
             const _needHeal = (currentUser !== SUPER_ADMIN_ID)
                              && cloudAdmin === true
-                             && (_lvlRawCloud === null || _lvlRawCloud === 'none');
-            const _lvlFromCloud = _needHeal ? 'sub'
-                                : (_lvlRawCloud || (cloudAdmin ? 'super' : 'none'));
+                             && (_lvlRawCloud === null || _lvlRawCloud === 'none' || _lvlRawCloud === '');
+            let _lvlFromCloud;
+            if(currentUser === SUPER_ADMIN_ID){
+              _lvlFromCloud = 'super';
+            } else if(_needHeal){
+              _lvlFromCloud = 'sub';
+            } else if(_lvlRawCloud === 'super' || _lvlRawCloud === 'sub' || _lvlRawCloud === 'none'){
+              _lvlFromCloud = _lvlRawCloud;
+            } else if(cloudAdmin){
+              _lvlFromCloud = 'sub';
+            } else {
+              _lvlFromCloud = 'none';
+            }
             if(_needHeal){
               try{
                 sbFetch('users?id=eq.' + encodeURIComponent(currentUser), {
