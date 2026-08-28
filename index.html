@@ -9474,14 +9474,12 @@ async function updateAdminUI(){
   
   try{ adminMMReload(); }catch(e){}
   
-  // 统一门控：对所有「敏感按钮」应用 disabled 属性（禁止仅靠样式灰化但仍可点击的漏洞）
   try{
     const _isSuper = (currentUser === SUPER_ADMIN_ID || lv === 'super');
     const _hasDb = _isSuper || !!hasPerm('db');
     const _hasPin = _isSuper || !!hasPerm('pin');
     const _hasEmail = _isSuper || !!hasPerm('email_push');
     
-    // 清理测试账号按钮
     const ptb = $('purgeTestBtn');
     if(ptb){
       if(_hasDb){
@@ -9491,10 +9489,6 @@ async function updateAdminUI(){
       }
     }
     
-    // 维护模式按钮已在 adminMMReload() 中处理
-    // 公告：删 / 置顶 / 发邮件按钮等 DOM 由 adminRenderAnnouncements 生成后再批量应用
-    
-    // 应用于所有带 data-need-perm 标记的按钮（兜底）
     document.querySelectorAll('button[data-need-perm]').forEach(function(b){
       const need = b.getAttribute('data-need-perm');
       let pass = _isSuper;
