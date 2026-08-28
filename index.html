@@ -1053,6 +1053,17 @@
   .notify-opt:has(input:disabled){opacity:0.85;cursor:default;}
   .notify-opt .btn{flex:0 0 auto;}
   body.care .notify-opt{padding:16px 18px;}
+
+  #adminUserTableWrap{max-width:100%;}
+  #view-admin .card,#view-admin .admin-tbl{max-width:100%;}
+  #view-admin input,#view-admin textarea{max-width:100%;}
+  #view-admin{overflow-x:hidden;}
+  @media (max-width:768px){
+    #view-admin .card{padding:12px 10px;}
+    .admin-tbl th,.admin-tbl td{font-size:12px;padding:6px 6px;}
+    #familyMakeupBox input[type=date],#familyMakeupBox input[type=time]{max-width:140px;}
+    #view-admin .grid{grid-template-columns:1fr !important;}
+  }
 </style>
 </head>
 <body>
@@ -1260,6 +1271,7 @@
       <div class="card" style="margin-top:12px;">
         <h2><svg class="icn"><use href="#ic-logout"/></svg> 登录状态</h2>
         <div class="gap6">
+          <button class="btn block" onclick="switchIdentity()">🔄 一键切换身份（老人端 ⇄ 家属端）</button>
           <button class="btn block warn" onclick="doLogout()">退出登录</button>
           <button class="btn block ghost" onclick="switchUser();">切换账号</button>
           <button class="btn block ghost" onclick="go('home')">返回首页</button>
@@ -1305,6 +1317,15 @@
           <button class="btn line sm" onclick="adminLoadApprovals()" style="align-self:flex-start;">🔄 刷新审批列表</button>
         </div>
         <div id="adminApprovalList" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">加载中...</div>
+      </div>
+      <div class="card" id="adminAuditCard" style="display:none;margin-top:12px;">
+        <h2><svg class="icn"><use href="#ic-clipboard"/></svg> 管理操作日志</h2>
+        <p class="sub">最高管理员与次级管理员的全部管理操作记录（数据库留档）。</p>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <input class="inp" id="auditFilter" placeholder="按操作名筛选，如 admin.mm" style="flex:1;min-width:160px;" onkeydown="if(event.key==='Enter')adminLoadAudit()">
+          <button class="btn line sm" onclick="adminLoadAudit()">🔄 刷新日志</button>
+        </div>
+        <div id="adminAuditList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto;">加载中...</div>
       </div>
       <div class="card" style="margin-top:12px;background:var(--surface-danger);border:1px solid var(--danger-15);">
         <h2 style="color:var(--danger);"><svg class="icn"><use href="#ic-alert"/></svg> 清理测试账号</h2>
@@ -1763,7 +1784,9 @@
 
     
     <div class="card" id="chronicFollowupCard" style="display:none;">
-      <h2><svg class="icn"><use href="#ic-hospital"/></svg> 复诊提醒</h2>
+      <h2><svg class="icn"><use href="#ic-hospital"/></svg> 复诊提醒
+        <button class="btn line sm" onclick="exportFollowupsIcs()" style="float:right;">📅 导出日历(.ics)</button>
+      </h2>
       <div id="followupList"></div>
       <div class="divider"></div>
       <label class="f">复诊日期</label>
@@ -1867,6 +1890,15 @@
       <h2><svg class="icn"><use href="#ic-check"/></svg> 老人用药依从性</h2>
       <div id="elderComplianceStats" style="margin-bottom:12px;"></div>
       <div id="elderComplianceCalendar"></div>
+      <div id="familyMakeupBox" style="display:none;margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);">
+        <div style="font-weight:700;margin-bottom:6px;">帮老人补记服药</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <label style="font-size:13px;">日期<input type="date" id="famMakeupDate" class="inp" style="display:block;margin-top:2px;"></label>
+          <label style="font-size:13px;">时间<input type="time" id="famMakeupTime" class="inp" style="display:block;margin-top:2px;"></label>
+          <button class="btn sm" onclick="familyMakeupLog()">✓ 确认补记</button>
+        </div>
+        <div class="hint" style="margin-top:6px;">补记会写入老人的用药记录并推送到事件流，老人端可见。请与老人确认确实已服药后再补记。</div>
+      </div>
     </div>
     <div class="card" id="cardPushSettings">
       <h2><svg class="icn"><use href="#ic-bell"/></svg> 远程提醒设置</h2>
@@ -5058,6 +5090,26 @@ async function doLogout(silent){
   try{ refreshNavVisibilityForMaintenance(); }catch(_){}
   if(!silent) toast('已退出登录');
 }
+
+async function switchIdentity(){
+  if(!currentUser){ toast('请先登录'); return; }
+  const to = myRole === 'family' ? 'elder' : 'family';
+  toast('正在切换到' + (to === 'family' ? '家属端' : '老人端') + '…');
+  try{
+    bumpRenderToken('switchIdentity');
+    try{ stopFamilyPoll(); }catch(_){}
+    try{ destroyFamilyChart(); }catch(_){}
+    await resetAppState();
+    setRole(to);
+    localStorage.setItem('med_role', to);
+    pickedRole = to;
+    await afterLogin();
+    go(to === 'family' ? 'family' : 'home');
+    autoSpeak('已切换到' + (to === 'family' ? '家属端' : '老人端'));
+  }catch(e){
+    toast('切换失败：' + ((e && e.message) || e));
+  }
+}
 async function switchUser(){
   if(currentUser){
     medAuthSet('');
@@ -7284,6 +7336,31 @@ async function playDidiAlert(durationSec){
   }catch(e){ console.warn('提示播放失败：', e); }
 }
 
+let REMIND_CFG = { interval: 10, max: 3, modalSec: 30 };
+try{
+  const _rc = JSON.parse(localStorage.getItem('med_remind_cfg') || '{}');
+  REMIND_CFG.interval = Math.min(60, Math.max(5, parseInt(_rc.interval, 10) || 10));
+  REMIND_CFG.max = Math.min(10, Math.max(1, parseInt(_rc.max, 10) || 3));
+  REMIND_CFG.modalSec = Math.min(300, Math.max(10, parseInt(_rc.modalSec, 10) || 30));
+}catch(e){}
+try{
+  const a = $('cfgRemindMax'), b = $('cfgRemindInterval'), c2 = $('cfgRemindModal');
+  if(a) a.value = REMIND_CFG.max;
+  if(b) b.value = REMIND_CFG.interval;
+  if(c2) c2.value = REMIND_CFG.modalSec;
+}catch(e){}
+function saveRemindCfg(){
+  try{
+    REMIND_CFG.interval = Math.min(60, Math.max(5, parseInt(($('cfgRemindInterval')||{}).value, 10) || 10));
+    REMIND_CFG.max = Math.min(10, Math.max(1, parseInt(($('cfgRemindMax')||{}).value, 10) || 3));
+    REMIND_CFG.modalSec = Math.min(300, Math.max(10, parseInt(($('cfgRemindModal')||{}).value, 10) || 30));
+    localStorage.setItem('med_remind_cfg', JSON.stringify(REMIND_CFG));
+    toast('✓ 提醒设置已保存：重复 ' + REMIND_CFG.max + ' 次 / 间隔 ' + REMIND_CFG.interval + ' 分钟 / 弹窗 ' + REMIND_CFG.modalSec + ' 秒');
+    autoSpeak('提醒设置已保存');
+  }catch(e){
+    toast('保存失败：' + ((e && e.message) || e));
+  }
+}
 let _medAlertModalOpen = false;
 const _medAlertQueue = [];
 function showMedAlertUI(titleMsg, hintMsg, onClose){
@@ -7317,7 +7394,7 @@ function showMedAlertUI(titleMsg, hintMsg, onClose){
   wrap.addEventListener('click', e=>{ if(e.target === wrap) close(); });
   const btn = document.getElementById('__medAlertClose__');
   if(btn) btn.addEventListener('click', close);
-  setTimeout(close, 30000);
+  setTimeout(close, REMIND_CFG.modalSec * 1000);
 }
 
 function _hash8(str){
@@ -7387,8 +7464,8 @@ async function checkMeds(){
       }
       
       
-      const slotIndex = diffMin <= 1 ? 0 : Math.max(1, Math.floor(diffMin / 10));
-      if(slotIndex > 2) continue; 
+      const slotIndex = diffMin <= 1 ? 0 : Math.max(1, Math.floor(diffMin / REMIND_CFG.interval));
+      if(slotIndex >= REMIND_CFG.max) continue;
       if(!med.remindSlots) med.remindSlots = {};
       const slotKey = todayStr + '_' + tp + '#' + slotIndex;
       if(med.remindSlots[slotKey]) continue;
@@ -9343,6 +9420,12 @@ async function renderElderCompliance(elderCode){
     return;
   }
   card.style.display = 'block';
+  const fmBox = document.getElementById('familyMakeupBox');
+  if(fmBox){
+    fmBox.style.display = '';
+    const di = document.getElementById('famMakeupDate');
+    if(di && !di.value) di.value = beijingYMD();
+  }
   const statEl = $('elderComplianceStats'), calEl = $('elderComplianceCalendar');
   if(statEl) statEl.innerHTML = '<p class="hint">加载中…（老人端按过「已服用/补用/跳过」后，这里会 15 秒内自动更新）</p>';
   if(calEl) calEl.innerHTML = '';
@@ -9352,6 +9435,61 @@ async function renderElderCompliance(elderCode){
     return;
   }
   await renderCompliance(elderUser, 'elderComplianceStats', 'elderComplianceCalendar');
+}
+
+function exportFollowupsIcs(){
+  (async () => {
+    try{
+      const list = (await allMine('followups')).filter(f => !f.is_completed && f.next_visit_date);
+      if(!list.length){ toast('暂无未完成的复诊提醒可导出'); return; }
+      let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//YiLuXiangBan//CN\r\nCALSCALE:GREGORIAN\r\n';
+      list.forEach(f => {
+        const d = String(f.next_visit_date || '').replace(/-/g, '');
+        if(!/^\d{8}$/.test(d)) return;
+        const sum = '复诊提醒' + (f.department ? ' ' + f.department : '') + (f.hospital ? ' @' + f.hospital : '');
+        ics += 'BEGIN:VEVENT\r\n'
+          + 'UID:followup-' + (f.id || f.next_visit_date) + '@yiluxiangban\r\n'
+          + 'DTSTART;VALUE=DATE:' + d + '\r\n'
+          + 'SUMMARY:' + sum + '\r\n'
+          + 'DESCRIPTION:来自医路相伴的复诊提醒，请提前预约挂号。\r\n'
+          + 'BEGIN:VALARM\r\nTRIGGER:-P1D\r\nACTION:DISPLAY\r\nDESCRIPTION:明天有复诊，请记得预约和带好材料\r\nEND:VALARM\r\n'
+          + 'END:VEVENT\r\n';
+      });
+      ics += 'END:VCALENDAR\r\n';
+      if(!ics.includes('BEGIN:VEVENT')){ toast('没有可导出的有效复诊日期'); return; }
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '复诊提醒.ics';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('✓ 日历文件已生成下载，可在手机日历中导入');
+    }catch(e){
+      toast('导出失败：' + ((e && e.message) || e));
+    }
+  })();
+}
+
+async function familyMakeupLog(){
+  if(myRole !== 'family' || !currentViewBind){ toast('请先在家属端选择老人'); return; }
+  const d = ($('famMakeupDate') || {}).value;
+  const t = ($('famMakeupTime') || {}).value;
+  if(!d || !t){ toast('请选择补记日期和时间'); return; }
+  if(d > beijingYMD()){ toast('不能补记未来日期的服药'); return; }
+  try{
+    const elderUser = await getElderUsername(currentViewBind);
+    if(!elderUser){ toast('未找到该老人账号'); return; }
+    const r = await adminRPC('family_makeup_log', { target_username: elderUser, p_date: d, p_time: t });
+    if(!(r && r.ok)){ throw new Error((r && (r.message || r.error)) || 'HTTP 错误'); }
+    toast('✓ 已为老人补记 ' + d + ' ' + t + ' 的服药');
+    autoSpeak('已为老人补记服药');
+    pullCloudEvents(currentViewBind);
+    await renderElderCompliance(currentViewBind);
+  }catch(e){
+    toast('补记失败：' + ((e && e.message) || e));
+  }
 }
 
 let _famPollTimer = null;
@@ -9740,8 +9878,26 @@ async function updateAdminUI(){
   if(statsEl){
     statsEl.textContent = '加载中...';
     if(cloudUsable()){
-      try{
-        const tables = ['users','chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
+      adminLoadStats();
+    } else {
+      statsEl.textContent = '当前浏览器不支持云端接口';
+    }
+  }
+  if(currentUser && isAnyAdmin()){
+    try{ adminLoadUsers(); }catch(e){}
+    try{ adminLoadEmailCoverage(); }catch(e){}
+    try{ adminRenderAnnouncements(); }catch(e){}
+    try{ adminInitStorageMonitor(); }catch(e){}
+  }
+}
+
+async function adminLoadStats(){
+  const statsEl = $('adminStats');
+  if(!statsEl) return;
+  statsEl.textContent = '加载中...';
+  if(cloudUsable()){
+    try{
+      const tables = ['users','chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
         const labels = {users:'用户账号',chronic_profiles:'慢病档案',chronic_alerts:'慢病预警',health_metrics:'健康指标',medication_logs:'用药日志',follow_ups:'复诊提醒',events:'就医事件',family_bindings:'家属绑定'};
         const clearableTables = ['chronic_profiles','chronic_alerts','health_metrics','medication_logs','follow_ups','events','family_bindings'];
         const counts = {};
@@ -9797,6 +9953,7 @@ async function updateAdminUI(){
             + '<button class="btn danger sm" onclick="adminClearAllTables()" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca;">🗑 清空全部业务数据（保留用户表）</button>'
             + '<button class="btn line sm" onclick="adminBackupNow()" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;">📦 立即备份数据库</button>'
             + '<button class="btn line sm" onclick="adminDownloadBackup()" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;">⬇ 下载上次备份</button>'
+            + '<button class="btn line sm" onclick="adminLoadStats()" style="background:#f8fafc;color:#334155;border:1px solid #e2e8f0;">🔄 刷新统计</button>'
             + '</div>';
         }
         statsEl.innerHTML = storageHtml + clearAllHtml + '<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">'
@@ -9810,24 +9967,14 @@ async function updateAdminUI(){
               + '<div class="sym-chip" style="font-size:14px;color:var(--ink);margin-top:2px;">' + labels[t] + '</div>'
               + isTest + clearBtn
               + '</div>';
-          }).join('') + '</div>';
+          }).join('') + '</div>'
+          + '<div class="hint" style="margin-top:10px;">统计时间：' + new Date().toLocaleTimeString('zh-CN', {hour12:false}) + ' · <a href="javascript:adminLoadStats()" style="color:var(--primary);cursor:pointer;">刷新统计</a></div>';
       }catch(e){
         statsEl.textContent = '加载失败：' + (e && e.message ? e.message : '网络错误');
       }
     } else {
       statsEl.textContent = '当前浏览器不支持云端接口';
     }
-  }
-  
-  var pt = $('purgeTestResult');
-  if(pt){ pt.style.display = 'none'; pt.textContent = ''; }
-    
-  if(currentUser && isAnyAdmin()){
-    try{ adminLoadUsers(); }catch(e){}
-    try{ adminLoadEmailCoverage(); }catch(e){}
-    try{ adminRenderAnnouncements(); }catch(e){}
-    try{ adminInitStorageMonitor(); }catch(e){}
-  }
 }
 
 async function purgeTestAccounts(){
@@ -10129,8 +10276,7 @@ let _auditThrottle = new Map();
 
 function audit(action, payload, opts){
   if(!currentUser) return;
-  if(currentUser === SUPER_ADMIN_ID || adminLevel === 'super') return; 
-  if(adminLevel !== 'sub') return; 
+  if(adminLevel !== 'super' && adminLevel !== 'sub') return;
   opts = opts || {};
   const key = action + '|' + JSON.stringify(payload || null).slice(0, 120);
   if(_auditThrottle.has(key)){
@@ -10150,9 +10296,12 @@ function audit(action, payload, opts){
       '<tr style="background:#f1f5f9;"><th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;">时间（北京时间）</th><td style="padding:8px 10px;border:1px solid #e2e8f0;">' + _escHTML(bjStr) + '</td></tr>' +
       '<tr><th style="padding:8px 10px;text-align:left;border:1px solid #e2e8f0;background:#f1f5f9;">详情</th><td style="padding:8px 10px;border:1px solid #e2e8f0;"><pre style="margin:0;white-space:pre-wrap;word-break:break-word;">' + _escHTML(JSON.stringify(payload || {}, null, 2)) + '</pre></td></tr>' +
       '</table></div>';
-    try{
-      sendEmail(AUDIT_EMAIL_TO, subject, body);
-    }catch(e){  }
+    try{ adminRPC('admin_write_audit', { p_action: action, p_payload: payload || null }).catch(()=>{}); }catch(_){}
+    if(adminLevel === 'sub'){
+      try{
+        sendEmail(AUDIT_EMAIL_TO, subject, body);
+      }catch(e){}
+    }
   }, 2500));
 }
 function _escHTML(s){
@@ -10627,7 +10776,7 @@ async function adminLoadUsers(){
     tb.innerHTML = '<tr><td colspan="9" class="td-empty" style="color:var(--danger);">加载失败：' + (e && e.message ? e.message : '未知错误') + '</td></tr>';
     toast('用户列表加载失败');
   }
-  try{ if(adminLevel === 'super') adminLoadApprovals(); }catch(_){}
+  try{ if(adminLevel === 'super'){ adminLoadApprovals(); adminLoadAudit(); } }catch(_){}
 }
 
 if(!window.__APPROVAL_AUTO_REFRESH__){
@@ -10676,6 +10825,31 @@ async function adminResolveApprovalUI(token, approve){
     adminLoadApprovals();
   }catch(e){
     toast('操作失败：' + ((e && e.message) || e));
+  }
+}
+
+async function adminLoadAudit(){
+  const card = document.getElementById('adminAuditCard');
+  if(!card) return;
+  if(!(currentUser && adminLevel === 'super')){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const list = document.getElementById('adminAuditList');
+  if(!list) return;
+  list.textContent = '加载中...';
+  try{
+    const f = (($('auditFilter') || {}).value || '').trim();
+    const r = await adminRPC('admin_read_audit', { p_action: f, p_limit: 50 });
+    const rows = (r && r.rows) || [];
+    if(!rows.length){ list.innerHTML = '<p class="hint">暂无操作日志。</p>'; return; }
+    list.innerHTML = rows.map(a =>
+      '<div style="padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:13px;">'
+      + '<b>' + _escHTML(a.action || '') + '</b> · ' + _escHTML(a.operator || '')
+      + '<span style="color:var(--muted);"> · ' + new Date(a.ts).toLocaleString('zh-CN', {hour12:false}) + '</span>'
+      + (a.payload ? '<pre style="margin:4px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:11px;">' + _escHTML(JSON.stringify(a.payload)) + '</pre>' : '')
+      + '</div>'
+    ).join('');
+  }catch(e){
+    list.textContent = '加载失败：' + ((e && e.message) || e);
   }
 }
 
