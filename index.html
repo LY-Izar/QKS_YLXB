@@ -4727,30 +4727,9 @@ async function doLogin(){
       }
     }catch(e){ netFail = true; }
   }
-  if(!code && !wrongPass){
-    const rec = await DB.get('users', u);
-    if(await localVerify(rec, p)){
-      code = rec.familyCode;
-      role = rec.role || null;
-      isAdmin = !!rec.isAdmin; 
-      
-      const _lvlLocal = (typeof rec.admin_level === 'string') ? rec.admin_level
-                      : (isAdmin ? 'super' : 'none');
-      adminLevel = (u === SUPER_ADMIN_ID) ? 'super' : normalizeAdminLevel(_lvlLocal);
-      subPerms   = (rec.sub_perms && typeof rec.sub_perms === 'object')
-                 ? Object.assign({}, DEFAULT_SUB_PERMS, rec.sub_perms)
-                 : Object.assign({}, DEFAULT_SUB_PERMS);
-      localStorage.setItem('med_admin_level', adminLevel);
-      localStorage.setItem('med_sub_perms',   JSON.stringify(subPerms));
-      if(rec.boundElderCodes && Array.isArray(rec.boundElderCodes) && rec.boundElderCodes.length){
-        boundElder = rec.boundElderCodes;
-      } else if(rec.boundElderCode){
-        boundElder = [rec.boundElderCode];
-      }
-    }
-  }
   if(!code){
-    if(netFail && cloudUsable()){ toast('云端连接失败，本机也没有该账号'); autoSpeak('登录失败，请检查网络'); }
+    if(netFail && cloudUsable()){ toast('云端连接失败，请检查网络后重试'); autoSpeak('登录失败，请检查网络'); }
+    else if(wrongPass){ toast('账号或密码错误'); autoSpeak('账号或密码错误'); }
     else { toast('账号或密码错误'); autoSpeak('账号或密码错误'); }
     return;
   }
