@@ -1260,9 +1260,9 @@
           </div>
         </div>
       </div>
-      <div class="card" style="margin-top:12px;">
-        <h2><svg class="icn"><use href="#ic-gear"/></svg> 用药 OCR 识别关键词设置（仅本账号）</h2>
-        <p class="sub" style="margin-top:4px;">在这里增删自定义的 OCR 关键词/正则</p>
+      <div class="card" id="ocrRulesCard" style="margin-top:12px;display:none;">
+        <h2><svg class="icn"><use href="#ic-gear"/></svg> 用药 OCR 识别关键词设置</h2>
+        <p class="sub" style="margin-top:4px;">在这里增删自定义的 OCR 关键词/正则<span id="ocrRulesSyncNote" style="display:none;">；保存后会自动同步给您已绑定的所有老人</span></p>
         <p class="hint" style="margin-top:6px;">适用场景：如果你常拍摄某家医院处方（固定格式如"药品名称：XXX Sig：每次1片 tid"），在这里加几条正则或关键词，识别准确率会明显提升。</p>
         <div class="gap6" style="margin-top:10px;">
           <button class="btn block" onclick="openOCRRuleEditor('full')"><svg class="icn"><use href="#ic-gear"/></svg> 打开关键词编辑器（详细版）</button>
@@ -1573,8 +1573,11 @@
       <div class="body-part-grid" id="bodyPartGrid"></div>
       <div id="bodySymArea" style="margin-top:10px;"></div>
       <div class="divider"></div>
-      <h2>③ 或从列表选择</h2>
-      <div class="sym-list" id="symList"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 6px;">
+        <h2 style="margin:0;">③ 或从列表选择</h2>
+        <button class="btn line sm" id="symListToggle" onclick="toggleSymList()">展开 ▾</button>
+      </div>
+      <div class="sym-list" id="symList" style="display:none;"></div>
       <div class="divider"></div>
       <button class="btn block" id="btnSym" onclick="analyzeSym()">查看分析结果</button>
     </div>
@@ -5226,6 +5229,10 @@ function renderAccountSection(){
     if(myRole === 'family' && familyBinds.length){
       renderBoundElderList();
     }
+    var ocrCard = $('ocrRulesCard');
+    if(ocrCard) ocrCard.style.display = (myRole === 'elder') ? 'none' : '';
+    var ocrNote = $('ocrRulesSyncNote');
+    if(ocrNote) ocrNote.style.display = (myRole === 'family') ? '' : 'none';
   } else {
     sec.style.display = 'none';
     if(loginCard) loginCard.style.display = '';
@@ -5399,6 +5406,22 @@ async function toggleEmailRemind(on){
 }
 
 
+function toggleSymList(){
+  const l = $('symList'), b = $('symListToggle');
+  if(!l || !b) return;
+  const open = l.style.display !== 'none';
+  l.style.display = open ? 'none' : '';
+  b.textContent = open ? '展开 ▾' : '收起 ▴';
+  try{ localStorage.setItem('sym_list_expanded', open ? '0' : '1'); }catch(e){}
+}
+try{
+  if(localStorage.getItem('sym_list_expanded') === '1'){
+    const _sl = $('symList'), _sb = $('symListToggle');
+    if(_sl) _sl.style.display = '';
+    if(_sb) _sb.textContent = '收起 ▴';
+  }
+}catch(e){}
+
 function renderSyms(){
   const el = $('symList'); el.innerHTML = '';
   SYMPTOMS.forEach(s=>{
@@ -5503,8 +5526,41 @@ function analyzeSym(){
 }
 
 
+function flowProgressKey(){
+  return 'flow_progress_' + (currentUser || 'guest');
+}
+function flowLoadProgress(){
+  try{
+    const p = JSON.parse(localStorage.getItem(flowProgressKey()) || 'null');
+    if(p && p.date === beijingYMD() && p.started && Number.isInteger(p.idx) && p.idx >= 0 && p.idx < FLOW.length) return p;
+  }catch(e){}
+  return null;
+}
+function flowSaveProgress(){
+  try{
+    localStorage.setItem(flowProgressKey(), JSON.stringify({ date: beijingYMD(), idx: flowIndex, started: !!flowStarted }));
+  }catch(e){}
+}
+function flowClearProgress(){
+  try{ localStorage.removeItem(flowProgressKey()); }catch(e){}
+}
 function renderFlow(){
   const el = $('flowSteps'); el.innerHTML = '';
+  const total = FLOW.length;
+  const doneCount = Math.min(flowIndex, total);
+  const pct = Math.round(doneCount / total * 100);
+  if(flowStarted){
+    const bar = document.createElement('div');
+    bar.style.cssText = 'margin-bottom:10px;';
+    bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+      + '<span style="font-weight:800;color:var(--ink);">第 ' + Math.min(flowIndex + 1, total) + ' / ' + total + ' 步</span>'
+      + '<span style="font-size:13px;color:var(--muted);">已完成 ' + doneCount + ' 项</span>'
+      + '</div>'
+      + '<div style="height:10px;border-radius:999px;background:var(--surface-2);overflow:hidden;">'
+      + '<div style="height:100%;width:' + pct + '%;background:var(--primary);border-radius:999px;transition:width .3s;"></div>'
+      + '</div>';
+    el.appendChild(bar);
+  }
   FLOW.forEach((s,i)=>{
     const d = document.createElement('div');
     d.className = 'step' + (i < flowIndex ? ' done' : '') + (i === flowIndex ? ' current' : '');
@@ -5513,12 +5569,22 @@ function renderFlow(){
       '<div class="bd"><div class="sn">' + s.t + '</div><div class="sd">' + s.d + '</div></div>';
     el.appendChild(d);
   });
-  $('btnFlowNext').style.display = (flowStarted && flowIndex < FLOW.length) ? 'block' : 'none';
+  const nextBtn = $('btnFlowNext');
+  nextBtn.style.display = (flowStarted && flowIndex < total) ? 'block' : 'none';
+  nextBtn.textContent = '✓ 我完成了这一步';
 }
 function startFlow(){
   flowStarted = true;
-  flowIndex = 0; renderFlow();
+  const saved = flowLoadProgress();
+  flowIndex = saved ? saved.idx : 0;
+  renderFlow();
   $('btnFlowStart').style.display = 'none';
+  flowSaveProgress();
+  if(saved && saved.idx > 0){
+    toast('已恢复上次的进度：第 ' + (saved.idx + 1) + ' 步');
+    const el = $('step-' + flowIndex);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  }
   speakStep();
 }
 function speakStep(){
@@ -5529,12 +5595,14 @@ function speakStep(){
 function flowNext(){
   if(flowIndex < FLOW.length - 1){
     flowIndex++; renderFlow();
+    flowSaveProgress();
     speakStep();
     const el = $('step-' + flowIndex);
     if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
   } else {
     flowIndex = FLOW.length;
     flowStarted = false;
+    flowClearProgress();
     renderFlow();
     $('btnFlowNext').style.display = 'none';
     $('btnFlowStart').style.display = 'block';
@@ -6849,6 +6917,16 @@ async function loadUserOCRRules(){
   try{
     if(!DB.db) return [];
     const key = currentUser || 'guest';
+    if(myRole === 'family' && familyBinds.length && cloudUsable()){
+      const first = await getElderUsername(familyBinds[0]);
+      if(!first) return [];
+      const r = await sbFetch('family_ocr_rules?select=rules&elder_username=eq.' + encodeURIComponent(first) + '&limit=1');
+      if(r.ok){
+        const arr = await r.json();
+        if(arr && arr.length && arr[0] && Array.isArray(arr[0].rules)) return arr[0].rules.slice();
+      }
+      return [];
+    }
     const rec = await DB.get('users', key);
     if(rec && Array.isArray(rec.ocr_rules)) return rec.ocr_rules.slice();
   }catch(_){}
@@ -6857,13 +6935,50 @@ async function loadUserOCRRules(){
 
 async function saveUserOCRRules(rules){
   try{
+    rules = Array.isArray(rules) ? rules.filter(r => r && typeof r === 'object') : [];
+    if(myRole === 'family' && familyBinds.length && cloudUsable()){
+      const elders = [];
+      for(const code of familyBinds){
+        const u = await getElderUsername(code);
+        if(u) elders.push(u);
+      }
+      if(!elders.length){ toast('未找到绑定的老人账号'); return false; }
+      let allOk = true;
+      for(const u of elders){
+        const r = await sbFetch('family_ocr_rules', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=minimal,resolution=merge-duplicates', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ elder_username: u, rules: rules, updated_by: currentUser || null })
+        });
+        if(!r.ok) allOk = false;
+      }
+      if(allOk){ toast('✓ 关键词已保存并同步给 ' + elders.length + ' 位老人'); return true; }
+      toast('同步失败，请检查网络后重试');
+      return false;
+    }
     if(!DB.db) return false;
     const key = currentUser || 'guest';
     const rec = (await DB.get('users', key)) || { id: key };
-    rec.ocr_rules = Array.isArray(rules) ? rules.filter(r => r && typeof r === 'object') : [];
+    rec.ocr_rules = rules;
     await DB.put('users', rec);
     return true;
   }catch(e){ console.warn('[saveUserOCRRules] fail:', e); return false; }
+}
+
+let __familyOCRCloudCache = null;
+async function loadFamilySyncedOCRRules(){
+  try{
+    if(__familyOCRCloudCache && Date.now() - __familyOCRCloudCache.ts < 300000) return __familyOCRCloudCache.rules.slice();
+    if(!cloudUsable() || !currentUser) return [];
+    const r = await sbFetch('family_ocr_rules?select=rules&elder_username=eq.' + encodeURIComponent(currentUser) + '&limit=1');
+    if(r.ok){
+      const arr = await r.json();
+      const rules = (arr && arr.length && arr[0] && Array.isArray(arr[0].rules)) ? arr[0].rules.slice() : [];
+      __familyOCRCloudCache = { ts: Date.now(), rules };
+      return rules;
+    }
+  }catch(e){}
+  return [];
 }
 
 let __adminOCRRulesCache = null;
@@ -6916,10 +7031,12 @@ async function saveAdminOCRRules(rules){
 
 async function getMergedOCRRules(){
   const userRules = (await loadUserOCRRules()).map(r => ({ ...r, priority: (Number(r.priority)||0) + 100, id: (r.id||'u')+'_user' }));
+  let famRules = [];
+  try{ famRules = (await loadFamilySyncedOCRRules()).map(r => ({ ...r, priority: (Number(r.priority)||0) + 150, id: (r.id||'f')+'_fam_user' })); }catch(_){}
   let adminRules = [];
   try{ adminRules = (await loadAdminOCRRules()).map(r => ({ ...r, priority: (Number(r.priority)||0) + 50, id: (r.id||'a')+'_admin' })); }catch(_){}
   const builtin = (OCR_RULES_BUILTIN || []).map(r => ({ ...r, priority: Number(r.priority)||0 }));
-  return userRules.concat(adminRules).concat(builtin);
+  return famRules.concat(userRules).concat(adminRules).concat(builtin);
 }
 
 
@@ -10648,9 +10765,10 @@ async function adminRPC(name, body, _opts){
     });
     if(!res.ok){
       const txt = await res.text();
-      const m = /"message":"([^"]+)"/.exec(txt);
-      const msg = m ? m[1] : ('HTTP ' + res.status + ' ' + res.statusText);
-      throw new Error(msg);
+      let msg = '';
+      try{ const j = JSON.parse(txt); msg = j.message || j.error || ''; }catch(e){}
+      if(!msg){ const m = /"message":"([^"]+)"/.exec(txt); msg = m ? m[1] : ''; }
+      throw new Error(msg || ('HTTP ' + res.status + ' ' + res.statusText));
     }
     return res.json();
   }catch(e){
