@@ -1,3 +1,3 @@
 # QKS_YLXB
-青科赛使用项目
+医路相伴
 https://ly-izar.github.io/QKS_YLXB/
