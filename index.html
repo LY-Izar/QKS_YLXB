@@ -89,35 +89,45 @@
     --surface-danger:#ffe5e5;
     --warn:#c0560a;
     --ok:#2f7d32;
+    --radius:12px;
+    --radius-lg:16px;
+  }
+
+  body.fz-lg{
     --fs-base:23px;
     --fs-title:32px;
     --fs-h1:40px;
     --btn-h:72px;
-    --radius:12px;
-    --radius-lg:16px;
   }
-  
-  
+  body.fz-xl{
+    --fs-base:28px;
+    --fs-title:38px;
+    --fs-h1:46px;
+    --btn-h:80px;
+  }
+
+
   @media (max-width: 768px){
-    html:not(.care){ font-size: 14px; }
-    html.care      { font-size: 18px; }
-    :root:not(body.care){
+    html{ font-size: 14px; }
+    html.fz-lg{ font-size: 18px; }
+    html.fz-xl{ font-size: 22px; }
+    body{
       --fs-base:14px;
       --fs-title:18px;
       --fs-h1:20px;
       --btn-h:46px;
     }
-    body:not(.care){
-      --fs-base:14px;
-      --fs-title:18px;
-      --fs-h1:20px;
-      --btn-h:46px;
-    }
-    body.care{
+    body.fz-lg{
       --fs-base:18px;
       --fs-title:24px;
       --fs-h1:28px;
       --btn-h:60px;
+    }
+    body.fz-xl{
+      --fs-base:22px;
+      --fs-title:28px;
+      --fs-h1:32px;
+      --btn-h:68px;
     }
     body.care .nav-logo{width:26px;height:26px;font-size:13px;}
     body.care .sheet{padding:22px;}
@@ -1260,6 +1270,16 @@
           </div>
         </div>
       </div>
+      <div class="card" id="fontScaleCard" style="margin-top:12px;display:none;">
+        <h2><svg class="icn"><use href="#ic-pencil"/></svg> 字体大小</h2>
+        <p class="sub" style="margin-top:4px;">选择看着舒服的字体大小，立即生效。微信里最常用的三个档位都在这里。</p>
+        <div id="fontScaleBtns" style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn line" data-scale="std" style="flex:1;font-size:15px;" onclick="setFontScale('std')">标准</button>
+          <button class="btn line" data-scale="lg" style="flex:1;font-size:19px;" onclick="setFontScale('lg')">大</button>
+          <button class="btn line" data-scale="xl" style="flex:1;font-size:23px;" onclick="setFontScale('xl')">特大</button>
+        </div>
+        <p class="hint" style="margin-top:8px;">提示：标准档与支付宝字号一致；看不清就选「大」或「特大」。</p>
+      </div>
       <div class="card" id="ocrRulesCard" style="margin-top:12px;display:none;">
         <h2><svg class="icn"><use href="#ic-gear"/></svg> 用药 OCR 识别关键词设置</h2>
         <p class="sub" style="margin-top:4px;">在这里增删自定义的 OCR 关键词/正则<span id="ocrRulesSyncNote" style="display:none;">；保存后会自动同步给您已绑定的所有老人</span></p>
@@ -1277,6 +1297,12 @@
           <button class="btn block ghost" onclick="go('home')">返回首页</button>
         </div>
       </div>
+    </div>
+    <div class="card" id="feedbackCard" style="margin-top:12px;">
+      <h2><svg class="icn"><use href="#ic-chat"/></svg> 向管理员反馈问题</h2>
+      <p class="sub" style="margin-top:4px;">使用中遇到故障、显示异常或操作问题，在这里描述一下，将直接发送给管理员处理。</p>
+      <textarea class="inp" id="feedbackText" rows="4" maxlength="500" placeholder="请描述遇到的问题：哪个页面、做了什么操作、出现了什么异常" style="margin-top:8px;resize:vertical;"></textarea>
+      <button class="btn block" id="feedbackSubmitBtn" style="margin-top:8px;" onclick="submitFeedback()">提交反馈</button>
     </div>
   </div>
 
@@ -1320,12 +1346,43 @@
       </div>
       <div class="card" id="adminAuditCard" style="display:none;margin-top:12px;">
         <h2><svg class="icn"><use href="#ic-clipboard"/></svg> 管理操作日志</h2>
-        <p class="sub">最高管理员与次级管理员的全部管理操作记录（数据库留档）。</p>
+        <p class="sub">最高管理员与次级管理员的全部管理操作记录（数据库留档，只增防篡改）。</p>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
           <input class="inp" id="auditFilter" placeholder="按操作名筛选，如 admin.mm" style="flex:1;min-width:160px;" onkeydown="if(event.key==='Enter')adminLoadAudit()">
-          <button class="btn line sm" onclick="adminLoadAudit()">🔄 刷新日志</button>
+          <button class="btn line sm" onclick="adminLoadAudit()"><svg class="icn"><use href="#ic-refresh"/></svg> 刷新日志</button>
         </div>
-        <div id="adminAuditList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto;">加载中...</div>
+        <div id="auditStatsBar" class="sub" style="margin-top:8px;color:var(--muted);"></div>
+        <div id="adminAuditList" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto;">加载中...</div>
+        <div id="auditToolsBar" style="display:none;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);cursor:pointer;flex:none;">
+            <input type="checkbox" id="auditSelAll" style="width:18px;height:18px;cursor:pointer;" onchange="adminAuditToggleAll(this.checked)"> 全选本页
+          </label>
+          <button class="btn line sm" id="auditDelSelBtn" disabled style="flex:none;color:var(--danger);border-color:var(--danger-15);background:var(--surface-danger);opacity:0.55;cursor:not-allowed;" onclick="adminAuditDeleteSelected()"><svg class="icn"><use href="#ic-trash"/></svg> <span id="auditDelSelTxt">删除选中</span></button>
+          <span style="flex:1;"></span>
+          <input type="date" id="auditBeforeDate" class="inp" style="max-width:160px;flex:none;">
+          <button class="btn line sm" style="flex:none;" onclick="adminAuditCleanupBefore()"><svg class="icn"><use href="#ic-calendar"/></svg> 清理此日期前</button>
+        </div>
+        <p class="hint" id="auditHint" style="margin-top:6px;">日志表已设为只增防篡改：数据库层面禁止直接改删，清理只能在本卡片操作，且每次删除都会自动留一条审计记录。</p>
+      </div>
+      <div class="card" id="adminFerrCard" style="display:none;margin-top:12px;">
+        <h2><svg class="icn"><use href="#ic-alert"/></svg> 前端错误日志</h2>
+        <p class="sub">用户浏览器报错自动上报（页面脚本异常 / 未处理的异步失败），按账号、所在页面留档，方便定位线上问题。</p>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <input class="inp" id="ferrFilter" placeholder="按用户名或错误信息筛选" style="flex:1;min-width:160px;" onkeydown="if(event.key==='Enter')adminLoadFerr()">
+          <button class="btn line sm" onclick="adminLoadFerr()"><svg class="icn"><use href="#ic-refresh"/></svg> 刷新日志</button>
+        </div>
+        <div id="ferrStatsBar" class="sub" style="margin-top:8px;color:var(--muted);"></div>
+        <div id="adminFerrList" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto;">加载中...</div>
+        <div id="ferrToolsBar" style="display:none;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);cursor:pointer;flex:none;">
+            <input type="checkbox" id="ferrSelAll" style="width:18px;height:18px;cursor:pointer;" onchange="adminFerrToggleAll(this.checked)"> 全选本页
+          </label>
+          <button class="btn line sm" id="ferrDelSelBtn" disabled style="flex:none;color:var(--danger);border-color:var(--danger-15);background:var(--surface-danger);opacity:0.55;cursor:not-allowed;" onclick="adminFerrDeleteSelected()"><svg class="icn"><use href="#ic-trash"/></svg> <span id="ferrDelSelTxt">删除选中</span></button>
+          <span style="flex:1;"></span>
+          <input type="date" id="ferrBeforeDate" class="inp" style="max-width:160px;flex:none;">
+          <button class="btn line sm" style="flex:none;" onclick="adminFerrCleanupBefore()"><svg class="icn"><use href="#ic-calendar"/></svg> 清理此日期前</button>
+        </div>
+        <p class="hint" style="margin-top:6px;">上报自动限流（同一错误每会话最多 3 条、每人 5 分钟最多 20 条），不会拖慢页面；每次删除都会自动留一条审计记录。</p>
       </div>
       <div class="card" style="margin-top:12px;background:var(--surface-danger);border:1px solid var(--danger-15);">
         <h2 style="color:var(--danger);"><svg class="icn"><use href="#ic-alert"/></svg> 清理测试账号</h2>
@@ -1843,6 +1900,9 @@
   <div class="view" id="view-family">
     <h1 id="familyTitle">家属端</h1>
     <p class="lead" id="familyLead">让家人实时了解您的就医与用药情况。</p>
+    <div id="careSignalBar" style="display:none;margin-bottom:12px;padding:12px 14px;border-radius:12px;border:1px solid #fde68a;background:#fef9c3;font-size:15px;line-height:1.6;">
+      <div id="careSignalContent"></div>
+    </div>
     <div class="card" style="margin-bottom:12px;">
       <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
     </div>
@@ -3759,6 +3819,7 @@ function confirmVoice(allow){
   if($('voiceRemember') && $('voiceRemember').checked) localStorage.setItem('med_voice_allow', 'yes');
   const p = voicePending;
   voicePending = null;
+  scheduleVoskWarmup();
   if(p) startRecognize(p.prompt, p.onResult, p.grammar);
 }
 function ensureVoskScript(){
@@ -3799,6 +3860,37 @@ async function loadVoskModel(){
   }finally{
     voskModelLoading = false;
   }
+}
+
+let _voskWarmupState = '';
+function scheduleVoskWarmup(){
+  if(_voskWarmupState) return;
+  if(window.YlxbBridge && window.YlxbBridge.isNative) return;
+  if(localStorage.getItem('med_voice_allow') !== 'yes') return;
+  try{
+    const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection || {};
+    if(c.saveData) return;
+    if(c.effectiveType && /(^|\b)(slow-)?2g/i.test(c.effectiveType)) return;
+  }catch(e){}
+  _voskWarmupState = 'pending';
+  const run = async () => {
+    try{
+      if(!(await checkVoskAssets())){ _voskWarmupState = ''; return; }
+      await ensureVoskScript();
+      await loadVoskModel();
+      _voskWarmupState = 'done';
+    }catch(e){
+      _voskWarmupState = '';
+    }
+  };
+  const kick = () => {
+    if('requestIdleCallback' in window){
+      requestIdleCallback(() => setTimeout(run, 0), {timeout: 60000});
+    }else{
+      setTimeout(run, 0);
+    }
+  };
+  setTimeout(kick, 8000);
 }
 
 function startRecognize(prompt, onResult, grammar){
@@ -4015,7 +4107,45 @@ function applyMode(){
   document.body.classList.toggle('care', care);
   document.documentElement.classList.toggle('care', care);
   $('modeToggle').textContent = care ? '标准模式' : '关怀模式';
+  applyFontSize();
   applyTheme();
+}
+
+function currentFontScale(){
+  let s = '';
+  try{ s = localStorage.getItem('med_font_scale') || ''; }catch(e){}
+  if(s === 'std' || s === 'lg' || s === 'xl') return s;
+  return document.body.classList.contains('care') ? 'lg' : 'std';
+}
+function applyFontSize(){
+  const s = currentFontScale();
+  document.body.classList.toggle('fz-lg', s === 'lg');
+  document.body.classList.toggle('fz-xl', s === 'xl');
+  document.documentElement.classList.toggle('fz-lg', s === 'lg');
+  document.documentElement.classList.toggle('fz-xl', s === 'xl');
+}
+function setFontScale(scale){
+  if(scale !== 'std' && scale !== 'lg' && scale !== 'xl') return;
+  try{ localStorage.setItem('med_font_scale', scale); }catch(e){}
+  applyFontSize();
+  const name = scale === 'std' ? '标准' : (scale === 'lg' ? '大' : '特大');
+  toast('字体已切换为' + name + '，立即生效');
+  try{ autoSpeak('字体已切换为' + name); }catch(e){}
+  setTimeout(_syncAnnBarLayout, 50);
+  renderFontScaleUI();
+}
+function renderFontScaleUI(){
+  const wrap = $('fontScaleBtns');
+  if(!wrap) return;
+  const cur = currentFontScale();
+  const map = {std:'标准', lg:'大', xl:'特大'};
+  wrap.querySelectorAll('button[data-scale]').forEach(function(b){
+    const on = b.getAttribute('data-scale') === cur;
+    b.classList.toggle('btn', true);
+    b.classList.toggle('line', !on);
+    b.style.fontWeight = on ? '700' : '400';
+    b.textContent = map[b.getAttribute('data-scale')] + (on ? ' ✓' : '');
+  });
 }
 
 
@@ -4047,14 +4177,14 @@ function toggleMode(){
   localStorage.setItem('med_mode', care ? 'normal' : 'care');
   applyMode();
   const nowCare = document.body.classList.contains('care');
-  autoSpeak(nowCare ? '已开启关怀模式，字体更大更清晰' : '已切换为标准模式');
-  toast(nowCare ? '已开启关怀模式' : '已切换为标准模式');
+  autoSpeak(nowCare ? '已开启关怀模式，色彩更清晰，语音更贴心。字体大小可在账户页的字体大小设置中调整' : '已切换为标准模式');
+  toast(nowCare ? '已开启关怀模式（字体大小可在账户页调整）' : '已切换为标准模式');
   setTimeout(_syncAnnBarLayout, 50);
 }
 function enableCare(){
   localStorage.setItem('med_mode', 'care');
   applyMode();
-  autoSpeak('已为您开启关怀模式。这里字体更大、按钮更醒目，我会用语音为您播报。');
+  autoSpeak('已为您开启关怀模式。色彩更清晰、按钮更醒目，我会用语音为您播报。字体大小可在账户页调整。');
   go('home');
 }
 
@@ -4121,6 +4251,7 @@ async function go(view){
           renderElderCompliance(currentViewBind);
         }catch(e){}
       }
+      try{ checkCareSignal(true); }catch(e){}
       startFamilyPoll();
     }
   } else {
@@ -4141,10 +4272,106 @@ async function go(view){
   
   if(view === 'med'){
     try{ await renderMeds(); await renderCompliance(); }catch(e){ console.warn('[go:med] renderMeds/Compliance fail:', e); }
+    scheduleVoskWarmup();
   }
-  
+
+  if(!_suppressNavPush && myRole === 'elder') _pushNavHistory(view);
   if(myRole === 'elder' && view !== 'welcome') setTimeout(()=>speakCurrent(), 300);
 }
+
+let _navViewStack = [];
+let _suppressNavPush = false;
+let _exitHintAt = 0;
+function _activeViewName(){
+  const v = document.querySelector('.view.active');
+  return v ? String(v.id || '').replace(/^view-/,'') : '';
+}
+function _pushNavHistory(view){
+  if(!view) return;
+  if(_navViewStack.length && _navViewStack[_navViewStack.length - 1] === view) return;
+  const idx = _navViewStack.lastIndexOf(view);
+  if(idx >= 0) _navViewStack.length = idx + 1;
+  _navViewStack.push(view);
+  try{ history.pushState({ylxb:1, v:view}, ''); }catch(e){}
+}
+function _initNavHistory(){
+  const v = _activeViewName() || 'welcome';
+  _navViewStack = [v];
+  try{ history.replaceState({ylxb:1, v:v}, ''); }catch(e){}
+}
+const _OVERLAY_CLOSE_FN = {
+  authMask:'closeAuth',
+  annPopup:'closeAnnPopup',
+  pushFailMask:'closePushFailMask'
+};
+function closeTopOverlay(){
+  if(typeof navMenuOpen === 'boolean' && navMenuOpen){
+    try{ closeNavMenu(); }catch(e){}
+    return true;
+  }
+  const masks = document.querySelectorAll('.mask.show');
+  if(masks.length){
+    const m = masks[masks.length - 1];
+    const fn = _OVERLAY_CLOSE_FN[m.id] ? window[_OVERLAY_CLOSE_FN[m.id]] : null;
+    if(typeof fn === 'function'){ try{ fn(); return true; }catch(e){} }
+    m.classList.remove('show');
+    return true;
+  }
+  const ocr = $('ocrRuleEditor');
+  if(ocr && ocr.classList.contains('show')){ ocr.classList.remove('show'); return true; }
+  const modals = document.querySelectorAll('.modal');
+  for(let i = modals.length - 1; i >= 0; i--){
+    const m = modals[i];
+    if(m.style.display === 'none') continue;
+    if(getComputedStyle(m).display === 'none') continue;
+    const fn = _OVERLAY_CLOSE_FN[m.id] ? window[_OVERLAY_CLOSE_FN[m.id]] : null;
+    if(typeof fn === 'function'){ try{ fn(); return true; }catch(e){} }
+    m.style.display = 'none';
+    return true;
+  }
+  return false;
+}
+let _exitPassed = false;
+window.addEventListener('popstate', function(){
+  if(_exitPassed) return;
+  if(closeTopOverlay()){
+    try{ history.pushState({ylxb:1, v:_activeViewName()}, ''); }catch(e){}
+    return;
+  }
+  if(myRole !== 'elder') return;
+  if(_navViewStack.length > 1){
+    _navViewStack.pop();
+    const prev = _navViewStack[_navViewStack.length - 1];
+    _suppressNavPush = true;
+    const done = () => { _suppressNavPush = false; };
+    try{ Promise.resolve(go(prev)).then(done, done); }catch(e){ done(); }
+    if(_navViewStack.length === 1){
+      try{ history.pushState({ylxb:1, v:prev}, ''); }catch(e){}
+    }
+    return;
+  }
+  const now = Date.now();
+  if(_exitHintAt && now - _exitHintAt < 2200){
+    _exitHintAt = 0;
+    let exited = false;
+    try{
+      if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App && window.Capacitor.Plugins.App.exitApp){
+        window.Capacitor.Plugins.App.exitApp();
+        exited = true;
+      }
+    }catch(e){}
+    if(!exited){ try{ window.close(); }catch(e){} }
+    try{
+      _exitPassed = true;
+      history.go(-(history.length - 1));
+    }catch(e){}
+    return;
+  }
+  _exitHintAt = now;
+  toast('再按一次返回键退出', 1800);
+  try{ autoSpeak('再按一次返回键退出'); }catch(e){}
+  try{ history.pushState({ylxb:1, v:_activeViewName()}, ''); }catch(e){}
+});
 
 
 const SB_URL = 'https://hjryfgujkxuaxovftlai.supabase.co';
@@ -4198,6 +4425,54 @@ const AUDIT_EMAIL_TO = '1812139075@qq.com';
 const DEFAULT_SUB_PERMS = Object.freeze({db:false, force_popup:false, pin:false, email_push:false, mmode:false});
 let adminLevel = normalizeAdminLevel(localStorage.getItem('med_admin_level'));
 let subPerms   = parseSubPerms(localStorage.getItem('med_sub_perms'));
+
+let _ferSent = 0;
+let _ferSeen = {};
+function _ferSafe(fn){ try{ return fn(); }catch(e){ return ''; } }
+function _ferReport(message, stack){
+  try{
+    if(_ferSent >= 20) return;
+    const key = String(message || '').slice(0, 120);
+    _ferSeen[key] = (_ferSeen[key] || 0) + 1;
+    if(_ferSeen[key] > 3) return;
+    _ferSent++;
+    const v = document.querySelector('.view.active');
+    const payload = {
+      username: (typeof currentUser !== 'undefined' && currentUser) ? currentUser : '游客',
+      role: _ferSafe(function(){ return myRole || ''; }),
+      view: v ? String(v.id || '').replace(/^view-/,'') : '',
+      message: String(message || '').slice(0, 500),
+      stack: String(stack || '').slice(0, 2000),
+      ua: String(navigator.userAgent || '').slice(0, 300),
+      env: (window.YlxbBridge && window.YlxbBridge.isNative) ? 'app' : 'web'
+    };
+    const url = SB_URL + '/rest/v1/rpc/report_frontend_error';
+    let auth = SB_KEY;
+    try{ if(typeof medAuthToken === 'function') auth = medAuthToken() || SB_KEY; }catch(e){}
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        apikey: SB_KEY,
+        'Authorization': 'Bearer ' + auth,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ caller: payload.username, p_payload: payload })
+    }).catch(function(){});
+  }catch(e){}
+}
+window.addEventListener('error', function(ev){
+  try{
+    const msg = (ev && ev.message) || (ev && ev.error && ev.error.message) || '';
+    if(!msg) return;
+    _ferReport(msg, (ev && ev.error && ev.error.stack) || '');
+  }catch(e){}
+}, true);
+window.addEventListener('unhandledrejection', function(ev){
+  try{
+    const r = ev && ev.reason;
+    _ferReport((r && r.message) ? r.message : (r ? String(r) : '未处理的Promise拒绝'), (r && r.stack) || '');
+  }catch(e){}
+});
 
 function normalizeAdminLevel(raw, uid){
   const who = uid || currentUser;
@@ -4341,7 +4616,8 @@ const _LABEL_MAP = Object.freeze({
   accUserName:'用户名修改', accUserEmail:'邮箱绑定',
   accountNoteOldPw:'旧密码', accountNoteNewPw:'新密码', accountNotePw2:'确认密码',
   chronicNameText:'慢病名称', chronicNoteText:'备注',
-  hospitalSearchText:'医院搜索词', inviteCodeInput:'邀请码'
+  hospitalSearchText:'医院搜索词', inviteCodeInput:'邀请码',
+  feedbackText:'反馈内容'
 });
 
 function mountGlobalInputGuards(){
@@ -4367,6 +4643,7 @@ function setRole(r){
   myRole = r || 'elder';
   localStorage.setItem('med_role', myRole);
   pickedRole = myRole;
+  _initNavHistory();
   updateFamilyView();
 }
 
@@ -5206,6 +5483,58 @@ async function sendEmail(to, subject, body){
     return res.ok;
   }catch(e){ return false; }
 }
+let _feedbackSending = false;
+function escFeedbackHtml(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+async function submitFeedback(){
+  const ta = $('feedbackText'), btn = $('feedbackSubmitBtn');
+  if(!ta || !btn) return;
+  if(_feedbackSending) return;
+  const fv = validateText(ta.value, {required:true, max:500, label:'反馈内容'});
+  if(!fv.ok){ toast(fv.msg); return; }
+  const content = fv.value.trim();
+  if(content.length < 5){ toast('请多描述一点（至少5个字），方便定位问题'); return; }
+  const av = document.querySelector('.view.active');
+  const viewName = av ? (av.id || '').replace(/^view-/,'') : '未知';
+  const isApp = !!(window.YlxbBridge && window.YlxbBridge.isNative);
+  const when = beijingYMD(new Date()) + ' ' + beijingHMS(new Date());
+  const who = currentUser || '未登录（体验模式）';
+  const roleTxt = (myRole === 'family') ? '家属端' : '老人端';
+  const envLine = isApp ? '安卓App' : '网页版';
+  const screenTxt = (window.screen ? (screen.width + 'x' + screen.height) : '未知');
+  const subject = '【用户反馈】' + (currentUser ? currentUser : '游客') + ' · ' + when;
+  const body =
+    '<h2>用户问题反馈</h2>' +
+    '<div style="font-size:15px;line-height:1.8;">' +
+    '<p><b>反馈内容：</b></p>' +
+    '<p style="background:#f6f8f7;border-left:4px solid #0f9d8f;padding:10px 12px;border-radius:6px;">' + escFeedbackHtml(content).replace(/\n/g,'<br>') + '</p>' +
+    '<hr>' +
+    '<p><b>账号：</b>' + escFeedbackHtml(who) + '</p>' +
+    '<p><b>身份：</b>' + roleTxt + '</p>' +
+    '<p><b>所在页面：</b>' + escFeedbackHtml(viewName) + '</p>' +
+    '<p><b>提交时间：</b>' + when + '（北京时间）</p>' +
+    '<p><b>运行环境：</b>' + envLine + ' · 屏幕 ' + escFeedbackHtml(screenTxt) + '</p>' +
+    '<p style="color:#888;font-size:12px;">浏览器标识：' + escFeedbackHtml(String(navigator.userAgent || '').slice(0,200)) + '</p>' +
+    '</div>';
+  _feedbackSending = true;
+  btn.disabled = true; btn.textContent = '正在发送…';
+  try{
+    const ok = await sendEmail(AUDIT_EMAIL_TO, subject, body);
+    if(ok){
+      ta.value = '';
+      toast('反馈已发送给管理员，感谢您的支持');
+      try{ autoSpeak('反馈已发送，感谢您的支持'); }catch(e){}
+    }else{
+      toast('发送失败，请检查网络后重试');
+    }
+  }catch(e){
+    toast('发送失败，请检查网络后重试');
+  }finally{
+    _feedbackSending = false;
+    btn.disabled = false; btn.textContent = '提交反馈';
+  }
+}
 function renderAccountSection(){
   var sec = $('accountSection');
   if(!sec) return;
@@ -5217,15 +5546,17 @@ function renderAccountSection(){
     var elderSec = $('acctBoundElderSection');
     if(elderSec) elderSec.style.display = (myRole === 'family') ? '' : 'none';
     var rec = null;
-    DB.get('users', currentUser).then(function(r){
-      if(!r) return;
-      var hint = $('currentEmailHint');
-      if(hint) hint.textContent = r.email ? ('当前邮箱：' + r.email) : '尚未绑定邮箱';
-      var toggle = $('emailRemindToggle');
-      if(toggle) toggle.checked = !!r.emailRemind;
-      var beinput = $('bindEmailInput');
-      if(beinput) beinput.value = r.email || '';
-    });
+    if(DB.db){
+      DB.get('users', currentUser).then(function(r){
+        if(!r) return;
+        var hint = $('currentEmailHint');
+        if(hint) hint.textContent = r.email ? ('当前邮箱：' + r.email) : '尚未绑定邮箱';
+        var toggle = $('emailRemindToggle');
+        if(toggle) toggle.checked = !!r.emailRemind;
+        var beinput = $('bindEmailInput');
+        if(beinput) beinput.value = r.email || '';
+      }).catch(function(){});
+    }
     if(myRole === 'family' && familyBinds.length){
       renderBoundElderList();
     }
@@ -5233,6 +5564,11 @@ function renderAccountSection(){
     if(ocrCard) ocrCard.style.display = (myRole === 'elder') ? 'none' : '';
     var ocrNote = $('ocrRulesSyncNote');
     if(ocrNote) ocrNote.style.display = (myRole === 'family') ? '' : 'none';
+    var fsCard = $('fontScaleCard');
+    if(fsCard){
+      fsCard.style.display = (myRole === 'elder') ? '' : 'none';
+      if(myRole === 'elder') renderFontScaleUI();
+    }
   } else {
     sec.style.display = 'none';
     if(loginCard) loginCard.style.display = '';
@@ -8277,6 +8613,49 @@ function selectElder(code){
   toast('正在查看老人 ' + (idx + 1) + ' 的健康动态');
 }
 
+let _careCheckAt = 0;
+async function checkCareSignal(force){
+  const bar = $('careSignalBar');
+  if(!bar) return;
+  if(myRole !== 'family' || !familyBinds.length || !cloudUsable()){ bar.style.display = 'none'; return; }
+  const now = Date.now();
+  if(!force && now - _careCheckAt < 60000) return;
+  _careCheckAt = now;
+  try{
+    const lines = [];
+    for(const code of familyBinds){
+      try{
+        const elderUser = await getElderUsername(code);
+        if(!elderUser) continue;
+        const res = await sbFetch('user_sessions?user_id=eq.' + encodeURIComponent(elderUser) + '&role=eq.elder&select=last_seen_at&limit=1');
+        if(!res || !res.ok) continue;
+        const rows = await res.json();
+        if(!rows || !rows.length || !rows[0].last_seen_at) continue;
+        const seen = new Date(rows[0].last_seen_at).getTime();
+        if(!Number.isFinite(seen)) continue;
+        const hours = Math.floor((now - seen) / 3600000);
+        if(hours >= 24){
+          const timeTxt = new Date(seen).toLocaleString('zh-CN', {hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+          const durTxt = hours >= 48 ? (Math.floor(hours/24) + ' 天') : (hours + ' 小时');
+          lines.push({ name: elderUser, hours: hours, dur: durTxt, seen: timeTxt, level: hours >= 48 ? 'red' : 'yellow' });
+        }
+      }catch(e){}
+    }
+    if(!lines.length){ bar.style.display = 'none'; return; }
+    const hasRed = lines.some(l => l.level === 'red');
+    bar.style.borderColor = hasRed ? '#fecaca' : '#fde68a';
+    bar.style.background = hasRed ? '#fef2f2' : '#fef9c3';
+    const icn = '<svg class="icn"><use href="#ic-alert"/></svg>';
+    $('careSignalContent').innerHTML = lines.map(l =>
+      '<div style="display:flex;align-items:flex-start;gap:8px;font-weight:' + (l.level==='red'?'700':'600') + ';color:' + (l.level==='red'?'#991b1b':'#854d0e') + ';">'
+      + '<span style="flex:none;margin-top:2px;' + (l.level==='red'?'color:#dc2626;':'color:#ca8a04;') + '">' + icn + '</span>'
+      + '<span>' + _escHTML(l.name) + ' 已 <b>' + l.dur + '</b> 未使用医路相伴（上次在线：' + l.seen + '）。'
+      + (l.level==='red' ? '建议尽快联系确认情况。' : '请留意老人近况。') + '</span></div>'
+    ).join('');
+    bar.style.display = '';
+  }catch(e){}
+}
+
 
 function familyAssessLevel(type, v1, v2){
   v1 = Number(v1); v2 = Number(v2 || 0);
@@ -8608,6 +8987,7 @@ function unbindOne(code){
     if(currentViewBind) pullCloudEvents(currentViewBind);
     else $('familyFeed').innerHTML = '';
   }
+  try{ checkCareSignal(true); }catch(e){}
   toast('已解除绑定');
 }
 function unbindFamily(){
@@ -8617,6 +8997,7 @@ function unbindFamily(){
   saveFamilyBinds();
   $('familyFeed').innerHTML = '';
   renderBoundList();
+  try{ checkCareSignal(true); }catch(e){}
   toast('已解除所有绑定');
 }
 function bindFamily(){
@@ -8628,6 +9009,7 @@ function bindFamily(){
   $('bindCode').value = '';
   saveFamilyBinds();
   renderBoundList();
+  try{ checkCareSignal(true); }catch(e){}
   toast('已绑定邀请码 ' + code + '，正在获取家人动态');
   pullCloudEvents(code);
 }
@@ -9615,9 +9997,10 @@ function startFamilyPoll(){
   _famPollTimer = setInterval(()=>{
     try{
       const curView = (document.querySelector('.view.active') && document.querySelector('.view.active').id) || '';
-      if(curView !== 'view-family') return; 
+      if(curView !== 'view-family') return;
       if(myRole !== 'family' || !currentViewBind) return;
       pullCloudEvents(currentViewBind);
+      try{ checkCareSignal(); }catch(_){}
       
       const card = $('cardElderCompliance');
       if(!card || card.style.display === 'none') return;
@@ -10781,6 +11164,7 @@ async function adminRPC(name, body, _opts){
 
 async function adminLoadUsers(){
   if(!currentUser || !isAnyAdmin()){ toast('仅管理员可访问'); return; }
+  try{ if(adminLevel === 'super'){ adminLoadApprovals(); adminLoadAudit(); adminLoadFerr(); } }catch(_){}
   audit('admin.users.load', {filter: ADM_STATE.filter, keyword: ADM_STATE.keyword || '', offset: ADM_STATE.offset});
   const tb = $('adminUserTbody');
   if(!tb) return;
@@ -10894,7 +11278,6 @@ async function adminLoadUsers(){
     tb.innerHTML = '<tr><td colspan="9" class="td-empty" style="color:var(--danger);">加载失败：' + (e && e.message ? e.message : '未知错误') + '</td></tr>';
     toast('用户列表加载失败');
   }
-  try{ if(adminLevel === 'super'){ adminLoadApprovals(); adminLoadAudit(); } }catch(_){}
 }
 
 if(!window.__APPROVAL_AUTO_REFRESH__){
@@ -10946,6 +11329,10 @@ async function adminResolveApprovalUI(token, approve){
   }
 }
 
+let _auditRows = [];
+let _auditSel = new Set();
+let _auditV2 = false;
+
 async function adminLoadAudit(){
   const card = document.getElementById('adminAuditCard');
   if(!card) return;
@@ -10956,18 +11343,222 @@ async function adminLoadAudit(){
   list.textContent = '加载中...';
   try{
     const f = (($('auditFilter') || {}).value || '').trim();
-    const r = await adminRPC('admin_read_audit', { p_action: f, p_limit: 50 });
+    let r = null;
+    try{
+      r = await adminRPC('admin_read_audit_v2', { p_action: f, p_limit: 50 });
+      _auditV2 = true;
+    }catch(e2){
+      r = await adminRPC('admin_read_audit', { p_action: f, p_limit: 50 });
+      _auditV2 = false;
+    }
     const rows = (r && r.rows) || [];
-    if(!rows.length){ list.innerHTML = '<p class="hint">暂无操作日志。</p>'; return; }
-    list.innerHTML = rows.map(a =>
-      '<div style="padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:13px;">'
-      + '<b>' + _escHTML(a.action || '') + '</b> · ' + _escHTML(a.operator || '')
-      + '<span style="color:var(--muted);"> · ' + new Date(a.ts).toLocaleString('zh-CN', {hour12:false}) + '</span>'
-      + (a.payload ? '<pre style="margin:4px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:11px;">' + _escHTML(JSON.stringify(a.payload)) + '</pre>' : '')
-      + '</div>'
-    ).join('');
+    _auditRows = rows;
+    if(_auditV2){
+      const live = new Set(rows.map(a => String(a.id)));
+      Array.from(_auditSel).forEach(k => { if(!live.has(k)) _auditSel.delete(k); });
+    }else{
+      _auditSel.clear();
+    }
+    const statsEl = $('auditStatsBar');
+    if(statsEl){
+      statsEl.textContent = _auditV2
+        ? ('共 ' + ((r && r.total) != null ? r.total : rows.length) + ' 条记录，当前显示最新 ' + rows.length + ' 条')
+        : '当前显示最新 ' + rows.length + ' 条（日志管理 SQL 未部署，暂无总数统计与勾选删除）';
+    }
+    const hintEl = $('auditHint');
+    if(hintEl){
+      hintEl.textContent = _auditV2
+        ? '日志表已设为只增防篡改：数据库层面禁止直接改删，清理只能在本卡片操作，且每次删除都会自动留一条审计记录。'
+        : '当前为旧版只读模式：部署 audit_tamper_guard.sql 后自动启用只增防篡改保护、总数统计与勾选删除、日期清理功能。';
+    }
+    const tools = $('auditToolsBar');
+    if(tools) tools.style.display = _auditV2 ? 'flex' : 'none';
+    if(!rows.length){ list.innerHTML = '<p class="hint">暂无操作日志。</p>'; adminAuditRefreshBtn(); return; }
+    list.innerHTML = rows.map(a => {
+      const id = (a && a.id != null) ? String(a.id) : '';
+      const cb = (_auditV2 && id)
+        ? '<input type="checkbox" style="width:18px;height:18px;cursor:pointer;margin:6px 0 0;flex:none;" ' + (_auditSel.has(id) ? 'checked' : '') + ' onchange="adminAuditToggle(\'' + id + '\', this.checked)">'
+        : '';
+      return '<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:13px;">'
+        + cb
+        + '<div style="flex:1;min-width:0;">'
+        + '<b>' + _escHTML(a.action || '') + '</b> · ' + _escHTML(a.operator || '')
+        + '<span style="color:var(--muted);"> · ' + new Date(a.ts).toLocaleString('zh-CN', {hour12:false}) + '</span>'
+        + (a.payload ? '<pre style="margin:4px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:11px;">' + _escHTML(JSON.stringify(a.payload)) + '</pre>' : '')
+        + '</div></div>';
+    }).join('');
+    const selAll = $('auditSelAll');
+    if(selAll) selAll.checked = _auditV2 && rows.length > 0 && rows.every(a => _auditSel.has(String(a.id)));
+    adminAuditRefreshBtn();
   }catch(e){
     list.textContent = '加载失败：' + ((e && e.message) || e);
+  }
+}
+
+function adminAuditToggle(id, on){
+  if(on){ _auditSel.add(String(id)); } else { _auditSel.delete(String(id)); }
+  const selAll = $('auditSelAll');
+  if(selAll && _auditRows.length){
+    selAll.checked = _auditRows.every(a => _auditSel.has(String(a.id)));
+  }
+  adminAuditRefreshBtn();
+}
+
+function adminAuditToggleAll(on){
+  _auditRows.forEach(a => {
+    const id = String(a.id);
+    if(on){ _auditSel.add(id); } else { _auditSel.delete(id); }
+  });
+  document.querySelectorAll('#adminAuditList input[type=checkbox]').forEach(cb => { cb.checked = !!on; });
+  adminAuditRefreshBtn();
+}
+
+function adminAuditRefreshBtn(){
+  const b = $('auditDelSelBtn');
+  if(!b) return;
+  const t = $('auditDelSelTxt');
+  const n = _auditSel.size;
+  if(t) t.textContent = '删除选中' + (n ? '（' + n + '）' : '');
+  b.disabled = n === 0;
+  b.style.opacity = n === 0 ? '0.55' : '1';
+  b.style.cursor = n === 0 ? 'not-allowed' : 'pointer';
+}
+
+async function adminAuditDeleteSelected(){
+  if(!_auditSel.size){ toast('请先勾选要删除的日志'); return; }
+  const n = _auditSel.size;
+  if(!confirm('确认删除勾选的 ' + n + ' 条操作日志吗？\n删除后无法恢复，本次删除会自动留一条审计记录。')) return;
+  const ids = Array.from(_auditSel);
+  try{
+    const r = await adminRPC('admin_delete_audit_logs', { p_ids: ids, p_before: null });
+    toast('已删除 ' + ((r && r.deleted) || 0) + ' 条日志');
+    _auditSel.clear();
+    await adminLoadAudit();
+  }catch(e){
+    toast('删除失败：' + ((e && e.message) || e));
+  }
+}
+
+async function adminAuditCleanupBefore(){
+  const v = (($('auditBeforeDate') || {}).value || '').trim();
+  if(!v){ toast('请先选择清理截止日期'); return; }
+  if(!confirm('确认清理 ' + v + ' 之前的全部操作日志吗？\n删除后无法恢复，本次删除会自动留一条审计记录。')) return;
+  try{
+    const r = await adminRPC('admin_delete_audit_logs', { p_ids: null, p_before: v + ' 00:00:00+08' });
+    toast('已清理 ' + ((r && r.deleted) || 0) + ' 条日志');
+    _auditSel.clear();
+    await adminLoadAudit();
+  }catch(e){
+    toast('清理失败：' + ((e && e.message) || e));
+  }
+}
+
+let _ferrRows = [];
+let _ferrSel = new Set();
+
+async function adminLoadFerr(){
+  const card = document.getElementById('adminFerrCard');
+  if(!card) return;
+  if(!(currentUser && adminLevel === 'super')){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  const list = document.getElementById('adminFerrList');
+  if(!list) return;
+  list.textContent = '加载中...';
+  const toolsBar = $('ferrToolsBar');
+  if(toolsBar) toolsBar.style.display = 'none';
+  try{
+    const f = (($('ferrFilter') || {}).value || '').trim();
+    const r = await adminRPC('admin_read_frontend_errors', { p_kw: f, p_limit: 50 });
+    const rows = (r && r.rows) || [];
+    _ferrRows = rows;
+    const live = new Set(rows.map(a => String(a.id)));
+    Array.from(_ferrSel).forEach(k => { if(!live.has(k)) _ferrSel.delete(k); });
+    const statsEl = $('ferrStatsBar');
+    if(statsEl){
+      const total = (r && r.total != null) ? r.total : rows.length;
+      const today = (r && r.today != null) ? r.today : '';
+      statsEl.textContent = '共 ' + total + ' 条错误（近24小时 ' + today + ' 条），当前显示最新 ' + rows.length + ' 条';
+    }
+    if(toolsBar) toolsBar.style.display = 'flex';
+    if(!rows.length){ list.innerHTML = '<p class="hint">暂无前端错误记录。</p>'; adminFerrRefreshBtn(); return; }
+    list.innerHTML = rows.map(a => {
+      const id = (a && a.id != null) ? String(a.id) : '';
+      const cb = id
+        ? '<input type="checkbox" style="width:18px;height:18px;cursor:pointer;margin:6px 0 0;flex:none;" ' + (_ferrSel.has(id) ? 'checked' : '') + ' onchange="adminFerrToggle(\'' + id + '\', this.checked)">'
+        : '';
+      const who = _escHTML(a.username || '') + (a.role ? '（' + _escHTML(a.role === 'family' ? '家属端' : '老人端') + '）' : '');
+      const envTxt = a.env === 'app' ? '安卓App' : '网页';
+      return '<div style="display:flex;align-items:flex-start;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:13px;">'
+        + cb
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="color:var(--danger);font-weight:700;word-break:break-word;">' + _escHTML(a.message || '') + '</div>'
+        + '<span style="color:var(--muted);font-size:12px;">' + who + ' · ' + (a.view ? _escHTML(a.view) + ' 页 · ' : '') + envTxt + ' · ' + new Date(a.ts).toLocaleString('zh-CN', {hour12:false}) + '</span>'
+        + (a.stack ? '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--muted);font-size:12px;">错误堆栈</summary><pre style="margin:4px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--muted);font-size:11px;">' + _escHTML(a.stack) + '</pre></details>' : '')
+        + '</div></div>';
+    }).join('');
+    const selAll = $('ferrSelAll');
+    if(selAll) selAll.checked = rows.length > 0 && rows.every(a => _ferrSel.has(String(a.id)));
+    adminFerrRefreshBtn();
+  }catch(e){
+    list.innerHTML = '<p class="hint">加载失败（错误上报 SQL 未部署或网络异常）：' + _escHTML(((e && e.message) || String(e))) + '</p>';
+  }
+}
+
+function adminFerrToggle(id, on){
+  if(on){ _ferrSel.add(String(id)); } else { _ferrSel.delete(String(id)); }
+  const selAll = $('ferrSelAll');
+  if(selAll && _ferrRows.length){
+    selAll.checked = _ferrRows.every(a => _ferrSel.has(String(a.id)));
+  }
+  adminFerrRefreshBtn();
+}
+
+function adminFerrToggleAll(on){
+  _ferrRows.forEach(a => {
+    const id = String(a.id);
+    if(on){ _ferrSel.add(id); } else { _ferrSel.delete(id); }
+  });
+  document.querySelectorAll('#adminFerrList input[type=checkbox]').forEach(cb => { cb.checked = !!on; });
+  adminFerrRefreshBtn();
+}
+
+function adminFerrRefreshBtn(){
+  const b = $('ferrDelSelBtn');
+  if(!b) return;
+  const t = $('ferrDelSelTxt');
+  const n = _ferrSel.size;
+  if(t) t.textContent = '删除选中' + (n ? '（' + n + '）' : '');
+  b.disabled = n === 0;
+  b.style.opacity = n === 0 ? '0.55' : '1';
+  b.style.cursor = n === 0 ? 'not-allowed' : 'pointer';
+}
+
+async function adminFerrDeleteSelected(){
+  if(!_ferrSel.size){ toast('请先勾选要删除的错误记录'); return; }
+  const n = _ferrSel.size;
+  if(!confirm('确认删除勾选的 ' + n + ' 条错误记录吗？\n删除后无法恢复，本次删除会自动留一条审计记录。')) return;
+  const ids = Array.from(_ferrSel);
+  try{
+    const r = await adminRPC('admin_delete_frontend_errors', { p_ids: ids, p_before: null });
+    toast('已删除 ' + ((r && r.deleted) || 0) + ' 条记录');
+    _ferrSel.clear();
+    await adminLoadFerr();
+  }catch(e){
+    toast('删除失败：' + ((e && e.message) || e));
+  }
+}
+
+async function adminFerrCleanupBefore(){
+  const v = (($('ferrBeforeDate') || {}).value || '').trim();
+  if(!v){ toast('请先选择清理截止日期'); return; }
+  if(!confirm('确认清理 ' + v + ' 之前的全部错误记录吗？\n删除后无法恢复，本次删除会自动留一条审计记录。')) return;
+  try{
+    const r = await adminRPC('admin_delete_frontend_errors', { p_ids: null, p_before: v + ' 00:00:00+08' });
+    toast('已清理 ' + ((r && r.deleted) || 0) + ' 条记录');
+    _ferrSel.clear();
+    await adminLoadFerr();
+  }catch(e){
+    toast('清理失败：' + ((e && e.message) || e));
   }
 }
 
@@ -12087,6 +12678,7 @@ function heartbeatTouch(){
 async function init(){
   applyMode();
   updateUserUI();
+  _initNavHistory();
   await calibrateTime();
   startBeijingClock();
   renderSyms();
