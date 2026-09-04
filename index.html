@@ -655,6 +655,19 @@
   body.dark .grid .tile:nth-child(5) .ic{background:rgba(80,200,140,.18);}
   body.dark .grid .tile:nth-child(6) .ic{background:rgba(170,130,250,.18);}
   .tile .nm{font-weight:700;font-size:19px;}
+  #view-home{text-align:center;}
+  #view-home h1{justify-content:center;}
+  #view-home h1::before{display:none;}
+  #view-home .lead{margin-left:auto;margin-right:auto;}
+  #view-home .grid{justify-content:center;}
+  #view-home .tile{align-items:center;text-align:center;}
+  #view-home.active{display:flex;flex-direction:column;}
+  .home-brand{display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0 14px;flex:none;}
+  .home-brand svg{width:46px;height:46px;flex:none;}
+  .home-brand b{font-size:25px;font-weight:800;color:var(--ink);letter-spacing:2px;}
+  #view-home .home-body{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:var(--home-center-h,58vh);}
+  body.care .home-brand svg{width:58px;height:58px;}
+  body.care .home-brand b{font-size:31px;}
   body.care .tile .nm{font-size:26px;}
   .tile .ds{font-size:14px;color:var(--muted);}
   body.care .tile .ds{font-size:18px;}
@@ -1139,7 +1152,7 @@
   <symbol id="ic-thermometer" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 a2 2 0 0 1 2 2 v9 a3.5 3.5 0 1 1 -4 0 V5 a2 2 0 0 1 2 -2 Z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none"/></g></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g></symbol>
   <symbol id="ic-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 A8 8 0 0 1 18 7 L20 9"/><path d="M20 5 V9 H16"/><path d="M20 12 A8 8 0 0 1 6 17 L4 15"/><path d="M4 19 V15 H8"/></g></symbol>
-  <symbol id="ic-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2 V4 M12 20 V22 M2 12 H4 M20 12 H22 M4.5 4.5 L6 6 M18 18 L19.5 19.5 M4.5 19.5 L6 18 M18 6 L19.5 4.5"/></g></symbol>
+  <symbol id="ic-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></g></symbol>
   <symbol id="ic-logout" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 17 L20 12 L15 7"/><line x1="20" y1="12" x2="10" y2="12"/><path d="M10 4 H6 A2 2 0 0 0 4 6 V18 A2 2 0 0 0 6 20 H10"/></g></symbol>
   <symbol id="ic-trash" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7 H20"/><path d="M9 7 V5 A2 2 0 0 1 11 3 H13 A2 2 0 0 1 15 5 V7"/><path d="M6 7 V19 A2 2 0 0 0 8 21 H16 A2 2 0 0 0 18 19 V7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></g></symbol>
   <symbol id="ic-users" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20 a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 15 a5 5 0 0 1 7 0"/></g></symbol>
@@ -1206,9 +1219,14 @@
 
   
   <div class="view" id="view-home">
+    <div class="home-brand">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="2" y="2" width="44" height="44" rx="13" fill="#17362b"/><path d="M14 25.5 L24 17 L34 25.5 M17.5 22.6 V33.5 M30.5 22.6 V33.5 M24 23.8 V32.2 M20.6 28 H27.4" fill="none" stroke="#5ad6a8" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <b>医路相伴</b>
+    </div>
+    <div class="home-body">
     <h1 id="homeHi">您好</h1>
     <p class="lead">今天身体感觉怎么样？需要什么帮助？</p>
-    
+
     <div id="voiceStatusBanner" style="margin:10px 0 16px;"></div>
     <div class="card" style="margin-bottom:12px;">
       <button class="btn block line sm" onclick="speakCurrent()"><svg class="icn"><use href="#ic-volume"/></svg> 语音说明当前页面</button>
@@ -1224,9 +1242,10 @@
     <div id="homeAccountEntry" style="display:none;margin-top:14px;">
       <button class="btn block ghost" onclick="go('account')"><svg class="icn"><use href="#ic-gear"/></svg> 账户设置 →</button>
     </div>
+    </div>
   </div>
 
-  
+
   <div class="view" id="view-account">
     <h1 id="accountTitle">账户功能</h1>
     <p class="lead" id="accountLead">管理您的账号、密码与绑定信息。</p>
@@ -12481,6 +12500,7 @@ function _syncAnnBarLayout(){
   if(main){
     const basePad = document.body.classList.contains('navhide') ? 12 : 76;
     main.style.paddingTop = (basePad + wrapperH) + 'px';
+    try{ document.documentElement.style.setProperty('--home-center-h', Math.max(300, window.innerHeight - basePad - wrapperH - 104) + 'px'); }catch(_){}
   }
 
   
@@ -12489,6 +12509,11 @@ function _syncAnnBarLayout(){
     requestAnimationFrame(() => { try{ _syncAnnBarLayout(); }catch(_){} });
     setTimeout(() => { try{ _syncAnnBarLayout(); }catch(_){ window.__ANN_LAYOUT_RERAN__=false; } }, 300);
   }
+}
+
+if(!window.__HOME_CENTER_RESIZE_BOUND__){
+  window.__HOME_CENTER_RESIZE_BOUND__ = true;
+  window.addEventListener('resize', () => { setTimeout(()=>{ try{ _syncAnnBarLayout(); }catch(_){} }, 90); }, { passive:true });
 }
 
 
