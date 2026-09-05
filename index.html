@@ -10,7 +10,8 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%230f9d8f'/%3E%3Ctext x='50%25' y='55%25' font-size='108' fill='white' text-anchor='middle' font-family='serif'%3E%E5%8C%BB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="vendor/rapidocr/ort.min.js"></script>
+<script src="vendor/rapidocr/ppocr.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{
@@ -7655,23 +7656,8 @@ async function _ocrPreprocessImage(file){
           cv.width = w; cv.height = h;
           const ctx = cv.getContext('2d', { willReadFrequently: true });
           ctx.drawImage(img, 0, 0, w, h);
-          
-          try{
-            const imgData = ctx.getImageData(0, 0, w, h);
-            const d = imgData.data;
-            const brightness = 1.12, contrast = 1.35, intercept = 128 * (1 - contrast);
-            for(let i=0;i<d.length;i+=4){
-              let g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
-              g = g * brightness * contrast + intercept;
-              
-              if(g < 90) g = 0; else if(g > 210) g = 255;
-              g = Math.max(0, Math.min(255, g));
-              d[i] = d[i+1] = d[i+2] = g;
-            }
-            ctx.putImageData(imgData, 0, 0);
-          }catch(_){}
           URL.revokeObjectURL(url);
-          cv.toBlob(blob => resolve(blob || file), 'image/png', 0.92);
+          cv.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.95);
         }catch(err){ reject(err); }
       };
       img.onerror = e => { URL.revokeObjectURL(url); reject(e); };
@@ -7722,66 +7708,40 @@ async function scanMed(){
       });
     }).then(async file => {
       
-      if(typeof Tesseract === 'undefined'){
-        toast('OCR 组件未加载（Tesseract.js），请检查网络后重试');
+      if(typeof RapidOCR === 'undefined' || typeof ort === 'undefined'){
+        toast('OCR 组件未加载，请检查后重试');
         return;
       }
-      
+
       toast('图片预处理中…');
       let preparedBlob = file;
       try{ preparedBlob = await _ocrPreprocessImage(file); }catch(_){ preparedBlob = file; }
-      
+
       const progressOverlay = document.createElement('div');
       progressOverlay.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:18px;padding:18px 22px;box-shadow:0 12px 40px rgba(0,0,0,.2);z-index:73;width:min(420px,86vw);';
       progressOverlay.innerHTML = `<div style="font-weight:800;margin-bottom:8px;">🔍 正在识别（中/英双语）…</div>
-        <div id="ocrProgressTxt" style="font-size:13px;color:var(--muted);margin-bottom:8px;">加载语言包… 0%</div>
+        <div id="ocrProgressTxt" style="font-size:13px;color:var(--muted);margin-bottom:8px;">加载识别引擎…</div>
         <div style="height:6px;background:var(--surface-2);border-radius:999px;overflow:hidden;">
           <div id="ocrProgressBar" style="height:100%;width:0%;background:var(--primary);transition:width .2s;"></div>
         </div>`;
       document.body.appendChild(progressOverlay);
       let ocrText = '';
       try{
-        
-        let worker = null;
-        try{
-          if(typeof Tesseract.createWorker === 'function'){
-            worker = await Tesseract.createWorker(['chi_sim','eng'], 1, {
-              logger: m => {
-                try{
-                  const bar = $('ocrProgressBar');
-                  const txt = $('ocrProgressTxt');
-                  if(bar){
-                    const stage = String(m.status || 'processing').replace(/^tesseract\s*/i,'');
-                    const pct = Math.round(Number(m.progress || 0) * 100);
-                    bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-                    if(txt) txt.textContent = stage + '… ' + pct + '%';
-                  }
-                }catch(_){}
-              }
-            });
-            const { data } = await worker.recognize(preparedBlob);
-            ocrText = (data && data.text) || '';
-          } else {
-            
-            const { data } = await Tesseract.recognize(preparedBlob, 'chi_sim+eng', {
-              logger: m => {
-                const bar = $('ocrProgressBar');
-                const txt = $('ocrProgressTxt');
-                if(bar){
-                  const pct = Math.round(Number(m && m.progress || 0) * 100);
-                  bar.style.width = pct + '%';
-                  if(txt) txt.textContent = (String(m && m.status || '识别中')) + ' ' + pct + '%';
-                }
-              }
-            });
-            ocrText = (data && data.text) || '';
-          }
-        }finally{
-          if(worker){ try{ await worker.terminate(); }catch(_){} }
-        }
+        const ocrResult = await RapidOCR.recognize(preparedBlob, m => {
+          try{
+            const bar = $('ocrProgressBar');
+            const txt = $('ocrProgressTxt');
+            if(bar){
+              const pct = Math.round(Math.max(0, Math.min(1, Number(m && m.progress || 0))) * 100);
+              bar.style.width = pct + '%';
+              if(txt) txt.textContent = (m && m.stage ? m.stage : '识别中') + '… ' + pct + '%';
+            }
+          }catch(_){}
+        });
+        ocrText = (ocrResult && ocrResult.text) || '';
       }catch(err){
         console.warn('[scanMed] OCR fail:', err);
-        toast('识别失败，请手动填写（常见原因：图片模糊 / 手写字过多 / 语言包下载被拦截）');
+        toast('识别失败，请手动填写（常见原因：图片模糊 / 手写字过多）');
         ocrText = '';
       }finally{
         try{ document.body.removeChild(progressOverlay); }catch(_){}
