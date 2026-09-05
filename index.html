@@ -4506,8 +4506,55 @@ function _ferReport(message, stack){
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ caller: payload.username, p_payload: payload })
+    }).then(function(res){
+      if(!res || !res.ok) return;
+      res.json().then(function(d){
+        if(d && d.ok) _ferMailQueue(payload);
+      }).catch(function(){});
     }).catch(function(){});
   }catch(e){}
+}
+let _ferMailBuf = [];
+let _ferMailTimer = null;
+function _ferMailQueue(payload){
+  _ferMailBuf.push(payload);
+  if(_ferMailTimer) return;
+  _ferMailTimer = setTimeout(_ferMailSend, 60000);
+}
+function _ferMailSend(){
+  _ferMailTimer = null;
+  const buf = _ferMailBuf;
+  _ferMailBuf = [];
+  if(!buf.length) return;
+  let last = 0;
+  try{ last = Number(localStorage.getItem('ylxb_fer_mail_ts') || '0') || 0; }catch(e){}
+  const now = Date.now();
+  if(now - last < 1800000) return;
+  try{ localStorage.setItem('ylxb_fer_mail_ts', String(now)); }catch(e){}
+  const envs = {}, views = {};
+  buf.forEach(function(x){
+    envs[x.env === 'app' ? '安卓App' : '网页'] = 1;
+    if(x.view) views[x.view] = 1;
+  });
+  const rows = buf.slice(0, 8).map(function(x, i){
+    return '<tr>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;vertical-align:top;">' + (i + 1) + '</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;vertical-align:top;">'
+      + _escHTML(x.username || '游客') + (x.role === 'family' ? '（家属端）' : '（老人端）') + '<br>'
+      + (x.view ? _escHTML(x.view) + '页 · ' : '') + (x.env === 'app' ? '安卓App' : '网页') + '<br>'
+      + '<span style="color:#b91c1c;font-weight:700;word-break:break-word;">' + _escHTML(x.message || '') + '</span>'
+      + '</td></tr>';
+  }).join('');
+  const body = '<div style="font-family:system-ui,Arial,sans-serif;max-width:680px;margin:0 auto;">'
+    + '<h2 style="margin:0 0 12px;">🚨 医路相伴 · 前端错误自动汇总</h2>'
+    + '<p>触发时间：' + new Date().toLocaleString('zh-CN') + '</p>'
+    + '<p>本次合并 <b style="color:#b91c1c;">' + buf.length + '</b> 条错误，来自：' + Object.keys(envs).join(' / ')
+    + (Object.keys(views).length ? '（涉及页面：' + Object.keys(views).join('、') + '）' : '') + '</p>'
+    + '<table style="border-collapse:collapse;width:100%;margin:8px 0;">' + rows + '</table>'
+    + (buf.length > 8 ? '<p style="color:#6b7280;font-size:12px;">另有 ' + (buf.length - 8) + ' 条未列出。</p>' : '')
+    + '<p style="color:#6b7280;font-size:12px;">同一浏览器 30 分钟内多条错误自动合并为一封；可登录管理台「前端错误日志」卡片查看完整明细与堆栈。</p>'
+    + '</div>';
+  Promise.resolve(sendEmail(SUPER_ADMIN_EMAIL, '[医路相伴·错误] 前端报错 ' + buf.length + ' 条（' + new Date().toLocaleDateString('zh-CN') + '）', body)).catch(function(){});
 }
 window.addEventListener('error', function(ev){
   try{
