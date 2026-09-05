@@ -13,3 +13,6 @@ playwright-report/
 .zcode/
 login_tmp.json
 RUN_THIS_SQL.sql
+MAINTENANCE.md
+项目说明文档.md
+supabase/
