@@ -1,0 +1,60 @@
+name: Supabase Keep-Alive
+
+# Supabase 免费版项目在 7 天无 API 请求后会被自动暂停（paused）。
+# 本工作流每天用与 index.html 相同的公开 anon key 请求一次 REST API，
+# 产生一次真实的数据库活动，使项目始终保持活跃、不被暂停。
+# 若某天运行失败（HTTP 540 = 项目已暂停），请到 https://supabase.com/dashboard 手动 Restore。
+
+on:
+  schedule:
+    - cron: '30 1 * * *' # 每天 UTC 01:30（北京时间 09:30）执行
+  workflow_dispatch: # 支持在 Actions 页面手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          SUPABASE_URL: https://hjryfgujkxuaxovftlai.supabase.co
+          # anon key 本就随前端公开（受 RLS 保护），与 index.html 中一致
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqcnlmZ3Vqa3h1YXhvdmZ0bGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NTcwNjUsImV4cCI6MjEwMzEzMzA2NX0.VsGxfhBt1J6iVYiZNyWhaeI_MSYnxSCaVFHgco1wKbc
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            code=$(curl -sS -o /tmp/ping_body.txt -w '%{http_code}' \
+              --max-time 30 \
+              -H "apikey: $SUPABASE_ANON_KEY" \
+              "$SUPABASE_URL/rest/v1/" 2>/dev/null || echo 000)
+            echo "第 ${i} 次尝试：HTTP ${code}"
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            sleep 15
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::Supabase 保活请求失败（最后一次 HTTP ${code}）。"
+            echo "::error::若状态码为 540 表示项目已被暂停，请到 https://supabase.com/dashboard 手动 Restore。"
+            head -c 400 /tmp/ping_body.txt 2>/dev/null || true
+            exit 1
+          fi
+          echo "Supabase 后端保活成功（HTTP 200），本次请求已重置 7 天不活跃计时器。"
+
+      # GitHub 会对连续 60 天无提交的仓库自动停用定时工作流；
+      # 此步骤仅在临近 60 天时自动补一个空提交，平时不产生任何痕迹。
+      - uses: actions/checkout@v4
+      - name: Keep scheduled workflow enabled
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          age=$((now - last))
+          echo "距离最近一次提交已 ${age} 秒"
+          if [ "$age" -gt 4320000 ]; then # 50 天
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "chore: 自动空提交，防止 GitHub 停用保活定时任务"
+            git push
+          else
+            echo "提交记录仍在 50 天内，无需补提交"
+          fi
