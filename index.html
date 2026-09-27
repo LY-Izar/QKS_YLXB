@@ -4436,6 +4436,78 @@ function medAuthSet(token){
     else localStorage.removeItem('med_auth_token');
   }catch(e){}
 }
+function medAuthPayload(){
+  try{
+    const t = medAuthToken();
+    if(!t) return null;
+    const seg = t.split('.');
+    if(seg.length < 2) return null;
+    let b64 = seg[1].replace(/-/g, '+').replace(/_/g, '/');
+    while(b64.length % 4) b64 += '=';
+    return JSON.parse(atob(b64));
+  }catch(e){ return null; }
+}
+function medAuthExp(){
+  const p = medAuthPayload();
+  return (p && typeof p.exp === 'number') ? p.exp : 0;
+}
+let _medAuthRenewInflight = null;
+function medAuthRenew(){
+  if(_medAuthRenewInflight) return _medAuthRenewInflight;
+  if(!cloudUsable() || !medAuthToken()) return Promise.resolve(false);
+  _medAuthRenewInflight = (async function(){
+    const ctl = new AbortController();
+    const tm = setTimeout(function(){ ctl.abort(); }, 15000);
+    try{
+      const res = await fetch(SB_EDGE_AUTH, {
+        method: 'POST',
+        signal: ctl.signal,
+        headers: { 'Content-Type': 'application/json', apikey: SB_KEY, 'Authorization': 'Bearer ' + medAuthToken() },
+        body: JSON.stringify({ action: 'check' })
+      });
+      if(res.status === 404) return false;
+      const j = await res.json().catch(function(){ return {}; });
+      if(res.ok && j && j.ok && j.token){ medAuthSet(j.token); return true; }
+      return false;
+    }catch(e){ return false; }
+    finally{
+      clearTimeout(tm);
+      setTimeout(function(){ _medAuthRenewInflight = null; }, 3000);
+    }
+  })();
+  return _medAuthRenewInflight;
+}
+let _medAuthExpireHintAt = 0;
+function medAuthHandleExpired(){
+  const now = Date.now();
+  if(now - _medAuthExpireHintAt < 10 * 60 * 1000) return;
+  _medAuthExpireHintAt = now;
+  try{ toast('登录已过期，云端数据暂时无法同步，请重新登录', 6000); }catch(e){}
+  try{ medAuthShowReloginBar(); }catch(e){}
+}
+function medAuthShowReloginBar(){
+  let bar = document.getElementById('medAuthExpiredBar');
+  if(bar) return;
+  bar = document.createElement('div');
+  bar.id = 'medAuthExpiredBar';
+  bar.style.cssText = 'position:fixed;top:64px;left:12px;right:12px;z-index:99999;display:flex;gap:10px;align-items:center;justify-content:space-between;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;border-radius:14px;padding:10px 14px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.12)';
+  const tip = document.createElement('span');
+  tip.textContent = '登录已过期，云端数据暂停同步';
+  const btn = document.createElement('button');
+  btn.textContent = '重新登录';
+  btn.style.cssText = 'background:#0d9488;color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:14px;flex-shrink:0;cursor:pointer;';
+  btn.onclick = function(){ try{ bar.remove(); }catch(e){} try{ openAuth(); }catch(e){} };
+  const close = document.createElement('button');
+  close.textContent = '×';
+  close.setAttribute('aria-label', '关闭提示');
+  close.style.cssText = 'background:transparent;border:none;color:#9a3412;font-size:20px;line-height:1;cursor:pointer;padding:0 2px;';
+  close.onclick = function(){ try{ bar.remove(); }catch(e){} };
+  const wrap = document.createElement('span');
+  wrap.style.cssText = 'display:flex;gap:8px;align-items:center;flex-shrink:0;';
+  wrap.appendChild(btn); wrap.appendChild(close);
+  bar.appendChild(tip); bar.appendChild(wrap);
+  document.body.appendChild(bar);
+}
 function cloudUsable(){
   return !!(window.fetch && window.crypto && crypto.subtle);
 }
@@ -4443,7 +4515,7 @@ async function hashPass(p){
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(p));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-async function sbFetch(path, opts){
+async function _sbFetchRaw(path, opts){
   opts = opts || {};
   const timeout_ms = Number.isFinite(opts.timeout) ? opts.timeout : 20000;
   const ctl = (opts.signal && opts.signal instanceof AbortController) ? null : new AbortController();
@@ -4463,6 +4535,22 @@ async function sbFetch(path, opts){
   }finally{
     if(tm) clearTimeout(tm);
   }
+}
+async function sbFetch(path, opts){
+  const res = await _sbFetchRaw(path, opts);
+  try{
+    if(res && res.status === 401 && medAuthToken() && !(opts && opts._authRetried)){
+      let expired = false;
+      try{ expired = /JWT expired|PGRST301/i.test(await res.clone().text()); }catch(e){}
+      if(expired){
+        if(await medAuthRenew()){
+          return _sbFetchRaw(path, Object.assign({}, opts || {}, {_authRetried: true}));
+        }
+        medAuthHandleExpired();
+      }
+    }
+  }catch(e){}
+  return res;
 }
 
 
@@ -11204,9 +11292,17 @@ async function adminRPC(name, body, _opts){
     });
     if(!res.ok){
       const txt = await res.text();
+      if(res.status === 401 && medAuthToken() && /JWT expired|PGRST301/i.test(txt) && !(_opts && _opts._authRetried)){
+        if(await medAuthRenew()){
+          return adminRPC(name, body, Object.assign({}, _opts || {}, {_authRetried: true}));
+        }
+        medAuthHandleExpired();
+        throw new Error('登录已过期，请重新登录');
+      }
       let msg = '';
       try{ const j = JSON.parse(txt); msg = j.message || j.error || ''; }catch(e){}
       if(!msg){ const m = /"message":"([^"]+)"/.exec(txt); msg = m ? m[1] : ''; }
+      if(res.status === 401 && /JWT expired|PGRST301/i.test(txt)) msg = '登录已过期，请重新登录';
       throw new Error(msg || ('HTTP ' + res.status + ' ' + res.statusText));
     }
     return res.json();
@@ -12744,6 +12840,21 @@ async function init(){
   _initNavHistory();
   await calibrateTime();
   startBeijingClock();
+  try{
+    if(medAuthToken()){
+      const _authExp = medAuthExp();
+      if(_authExp && (_authExp - Math.floor(Date.now() / 1000)) < 36 * 3600){
+        await medAuthRenew();
+      }
+      setInterval(function(){
+        try{
+          if(!medAuthToken()) return;
+          const _e = medAuthExp();
+          if(_e && (_e - Math.floor(Date.now() / 1000)) < 36 * 3600) medAuthRenew();
+        }catch(e){}
+      }, 6 * 3600 * 1000);
+    }
+  }catch(e){}
   renderSyms();
   renderFlow();
   $('drugCount').textContent = DRUG_DB.length;
