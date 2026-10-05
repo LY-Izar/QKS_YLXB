@@ -24,11 +24,16 @@ jobs:
           SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqcnlmZ3Vqa3h1YXhvdmZ0bGFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NTcwNjUsImV4cCI6MjEwMzEzMzA2NX0.VsGxfhBt1J6iVYiZNyWhaeI_MSYnxSCaVFHgco1wKbc
         run: |
           ok=0
+          # 不能再打 "$SUPABASE_URL/rest/v1/" 根端点：Supabase 已禁止 anon key 访问 PostgREST 根/OpenAPI 端点，会回
+          # 401 {"message":"Invalid API key","hint":"Only the `service_role` API key can be used for this endpoint."}
+          # 故改为 GET 一张前端同样用 anon key 读的表（RLS 只把行过滤成 []，仍回 200，无副作用）；
+          # 备选（若 users 表权限有变）：POST /rest/v1/rpc/auth_check_user_exists，index.html 登录前就用 anon key 调它。
           for i in 1 2 3; do
             code=$(curl -sS -o /tmp/ping_body.txt -w '%{http_code}' \
               --max-time 30 \
               -H "apikey: $SUPABASE_ANON_KEY" \
-              "$SUPABASE_URL/rest/v1/" 2>/dev/null || echo 000)
+              -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+              "$SUPABASE_URL/rest/v1/users?select=id&limit=1" 2>/dev/null || echo 000)
             echo "第 ${i} 次尝试：HTTP ${code}"
             if [ "$code" = "200" ]; then ok=1; break; fi
             sleep 15
